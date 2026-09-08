@@ -11,6 +11,7 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
+    "email-validator>=2.2",
     "python-multipart>=0.0.12",
     "scikit-learn>=1.5",
     "numpy>=1.26",
@@ -48,6 +49,9 @@ markers = [
 line-length = 100
 target-version = "py311"
 src = ["backend"]
+# Alembic revisions are generated; reformatting them obscures the diff against
+# what autogenerate actually produced.
+extend-exclude = ["backend/alembic/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
