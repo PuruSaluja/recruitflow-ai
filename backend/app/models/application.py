@@ -19,7 +19,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
-from app.models.enums import ApplicationStatus
+from app.models.enums import ApplicationStatus, enum_values
 
 if TYPE_CHECKING:
     from app.models.candidate import Candidate
@@ -43,7 +43,12 @@ class Application(Base, TimestampMixin):
     )
 
     status: Mapped[ApplicationStatus] = mapped_column(
-        SAEnum(ApplicationStatus, name="application_status", native_enum=True),
+        SAEnum(
+            ApplicationStatus,
+            name="application_status",
+            native_enum=True,
+            values_callable=enum_values,
+        ),
         nullable=False,
         default=ApplicationStatus.APPLIED,
         index=True,

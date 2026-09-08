@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
-from app.models.enums import EducationLevel, EmploymentType, JobStatus, SeniorityLevel
+from app.models.enums import EducationLevel, EmploymentType, JobStatus, SeniorityLevel, enum_values
 
 if TYPE_CHECKING:
     from app.models.application import Application
@@ -36,22 +36,42 @@ class Job(Base, TimestampMixin):
     location: Mapped[str | None] = mapped_column(String(150))
 
     employment_type: Mapped[EmploymentType] = mapped_column(
-        SAEnum(EmploymentType, name="employment_type", native_enum=True),
+        SAEnum(
+            EmploymentType,
+            name="employment_type",
+            native_enum=True,
+            values_callable=enum_values,
+        ),
         nullable=False,
         default=EmploymentType.FULL_TIME,
     )
     seniority: Mapped[SeniorityLevel] = mapped_column(
-        SAEnum(SeniorityLevel, name="seniority_level", native_enum=True),
+        SAEnum(
+            SeniorityLevel,
+            name="seniority_level",
+            native_enum=True,
+            values_callable=enum_values,
+        ),
         nullable=False,
         default=SeniorityLevel.MID,
     )
     education_required: Mapped[EducationLevel] = mapped_column(
-        SAEnum(EducationLevel, name="education_level", native_enum=True),
+        SAEnum(
+            EducationLevel,
+            name="education_level",
+            native_enum=True,
+            values_callable=enum_values,
+        ),
         nullable=False,
         default=EducationLevel.BACHELOR,
     )
     status: Mapped[JobStatus] = mapped_column(
-        SAEnum(JobStatus, name="job_status", native_enum=True),
+        SAEnum(
+            JobStatus,
+            name="job_status",
+            native_enum=True,
+            values_callable=enum_values,
+        ),
         nullable=False,
         default=JobStatus.OPEN,
         index=True,

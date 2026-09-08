@@ -2,17 +2,27 @@
 
 from __future__ import annotations
 
-import enum
+from enum import StrEnum
 
 
-class EmploymentType(str, enum.Enum):
+def enum_values(enum_cls: type[StrEnum]) -> list[str]:
+    """Return member *values* for SQLAlchemy's ``values_callable``.
+
+    Without this, SQLAlchemy stores member *names* as the PostgreSQL enum
+    labels (``FULL_TIME``) while the API serialises values (``full_time``),
+    so a raw SQL query and an API response disagree about the same row.
+    """
+    return [member.value for member in enum_cls]
+
+
+class EmploymentType(StrEnum):
     FULL_TIME = "full_time"
     PART_TIME = "part_time"
     CONTRACT = "contract"
     INTERNSHIP = "internship"
 
 
-class SeniorityLevel(str, enum.Enum):
+class SeniorityLevel(StrEnum):
     INTERN = "intern"
     JUNIOR = "junior"
     MID = "mid"
@@ -26,7 +36,7 @@ class SeniorityLevel(str, enum.Enum):
         return _SENIORITY_ORDER[self]
 
 
-class EducationLevel(str, enum.Enum):
+class EducationLevel(StrEnum):
     HIGH_SCHOOL = "high_school"
     ASSOCIATE = "associate"
     BACHELOR = "bachelor"
@@ -39,14 +49,14 @@ class EducationLevel(str, enum.Enum):
         return _EDUCATION_ORDER[self]
 
 
-class JobStatus(str, enum.Enum):
+class JobStatus(StrEnum):
     DRAFT = "draft"
     OPEN = "open"
     PAUSED = "paused"
     CLOSED = "closed"
 
 
-class ApplicationStatus(str, enum.Enum):
+class ApplicationStatus(StrEnum):
     APPLIED = "applied"
     SCREENING = "screening"
     INTERVIEW = "interview"

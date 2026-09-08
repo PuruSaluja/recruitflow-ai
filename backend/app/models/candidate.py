@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
-from app.models.enums import EducationLevel, SeniorityLevel
+from app.models.enums import EducationLevel, SeniorityLevel, enum_values
 
 if TYPE_CHECKING:
     from app.models.application import Application
@@ -34,12 +34,22 @@ class Candidate(Base, TimestampMixin):
     current_title: Mapped[str | None] = mapped_column(String(200))
     years_experience: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     seniority: Mapped[SeniorityLevel] = mapped_column(
-        SAEnum(SeniorityLevel, name="seniority_level", native_enum=True),
+        SAEnum(
+            SeniorityLevel,
+            name="seniority_level",
+            native_enum=True,
+            values_callable=enum_values,
+        ),
         nullable=False,
         default=SeniorityLevel.MID,
     )
     education_level: Mapped[EducationLevel] = mapped_column(
-        SAEnum(EducationLevel, name="education_level", native_enum=True),
+        SAEnum(
+            EducationLevel,
+            name="education_level",
+            native_enum=True,
+            values_callable=enum_values,
+        ),
         nullable=False,
         default=EducationLevel.BACHELOR,
     )
