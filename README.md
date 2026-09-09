@@ -4,8 +4,9 @@ A full-stack recruiting platform: FastAPI backend, PostgreSQL data layer, React
 frontend, and a scikit-learn matching layer that scores applicants against job
 descriptions.
 
-> **Status:** in development. The data layer is in place; API, matching model,
-> PDF reporting, and frontend are landing incrementally.
+> **Status:** in development. The data layer and job requisition API are in
+> place; candidate/application endpoints, the matching model, PDF reporting,
+> and the frontend are landing incrementally.
 
 ## Tech stack
 
@@ -44,6 +45,26 @@ Create the schema:
 ```bash
 alembic upgrade head
 ```
+
+Run the API:
+
+```bash
+uvicorn app.main:app --reload --app-dir backend
+```
+
+Interactive docs are then at `http://localhost:8000/docs`.
+
+## API
+
+| Method | Path | |
+| --- | --- | --- |
+| `GET` | `/api/v1/health` | Liveness, including a real database round-trip |
+| `GET` | `/api/v1/jobs` | List with pagination and filters |
+| `POST` | `/api/v1/jobs` | Create a requisition |
+| `GET` | `/api/v1/jobs/{id}` | Fetch one |
+| `PATCH` | `/api/v1/jobs/{id}` | Partial update |
+| `POST` | `/api/v1/jobs/{id}/close` | Close a requisition (idempotent) |
+| `DELETE` | `/api/v1/jobs/{id}` | Delete, cascading to applications and scores |
 
 ## License
 
