@@ -32,6 +32,17 @@ class Settings(BaseSettings):
         "postgresql+psycopg://postgres:postgres@localhost:5432/recruitflow_test"
     )
 
+    #: Seconds to wait for a TCP connection to PostgreSQL before giving up.
+    #: Without this, an unreachable database makes requests hang indefinitely
+    #: instead of failing fast, which defeats the point of /health.
+    #:
+    #: Worst-case response time is roughly *twice* this value: pool_pre_ping
+    #: retries once when a connection attempt fails. Kept at 3s so a failing
+    #: /health still answers inside a typical 5-10s orchestrator probe timeout.
+    db_connect_timeout: int = 3
+    #: Seconds to wait for a free connection when the pool is saturated.
+    db_pool_timeout: int = 10
+
     api_prefix: str = "/api/v1"
     cors_origins: str = "http://localhost:5173"
 

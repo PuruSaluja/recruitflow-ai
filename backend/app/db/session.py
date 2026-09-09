@@ -17,15 +17,28 @@ _engine: Engine | None = None
 _session_factory: sessionmaker[Session] | None = None
 
 
+def _build_engine(database_url: str) -> Engine:
+    """Create an engine that fails fast when PostgreSQL is unreachable.
+
+    ``connect_timeout`` is the important one: without it a dead database makes
+    every request hang on the TCP connect instead of returning an error, so
+    /health never gets to report 503 and an orchestrator has nothing to act on.
+    """
+    settings = get_settings()
+    return create_engine(
+        database_url,
+        pool_pre_ping=True,
+        pool_timeout=settings.db_pool_timeout,
+        connect_args={"connect_timeout": settings.db_connect_timeout},
+        future=True,
+    )
+
+
 def get_engine() -> Engine:
     """Return the process-wide engine, creating it on first use."""
     global _engine
     if _engine is None:
-        _engine = create_engine(
-            get_settings().database_url,
-            pool_pre_ping=True,
-            future=True,
-        )
+        _engine = _build_engine(get_settings().database_url)
     return _engine
 
 
@@ -44,7 +57,7 @@ def configure_engine(database_url: str) -> Engine:
     global _engine, _session_factory
     if _engine is not None:
         _engine.dispose()
-    _engine = create_engine(database_url, pool_pre_ping=True, future=True)
+    _engine = _build_engine(database_url)
     _session_factory = sessionmaker(bind=_engine, autoflush=False, expire_on_commit=False)
     return _engine
 
