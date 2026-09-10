@@ -83,6 +83,15 @@ class CandidateRead(CandidateBase):
     updated_at: datetime
 
 
+class ResumePreview(BaseModel):
+    """Result of parsing a resume upload without storing it."""
+
+    filename: str | None = None
+    characters: int = Field(description="Length of the extracted text")
+    words: int = Field(description="Whitespace-delimited token count")
+    text: str
+
+
 class CandidateSummary(BaseModel):
     """Trimmed projection used inside match listings and PDF reports."""
 

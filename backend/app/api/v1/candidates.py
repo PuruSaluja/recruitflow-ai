@@ -1,9 +1,10 @@
-"""Candidate endpoints."""
+"""Candidate endpoints, including resume file ingestion."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi import status as http_status
+from fastapi.responses import PlainTextResponse
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
@@ -11,8 +12,9 @@ from app.api.deps import Pagination, pagination
 from app.db.session import get_db
 from app.models.candidate import Candidate
 from app.models.enums import EducationLevel, SeniorityLevel
-from app.schemas.candidate import CandidateCreate, CandidateRead, CandidateUpdate
+from app.schemas.candidate import CandidateCreate, CandidateRead, CandidateUpdate, ResumePreview
 from app.schemas.common import Page
+from app.services.resume import MAX_UPLOAD_BYTES, ResumeIngestError, extract_text
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
@@ -145,6 +147,25 @@ def create_candidate(payload: CandidateCreate, db: Session = Depends(get_db)) ->
     return candidate
 
 
+@router.post(
+    "/resume-preview",
+    response_model=ResumePreview,
+    summary="Parse a resume file without storing anything",
+)
+async def preview_resume(file: UploadFile = File(...)) -> ResumePreview:
+    """Extract text from an upload so a client can show it before committing.
+
+    Declared before ``/{candidate_id}`` so the literal path wins the match.
+    """
+    text = await _read_resume(file)
+    return ResumePreview(
+        filename=file.filename,
+        characters=len(text),
+        words=len(text.split()),
+        text=text,
+    )
+
+
 @router.get("/{candidate_id}", response_model=CandidateRead, summary="Fetch one candidate")
 def get_candidate(candidate_id: int, db: Session = Depends(get_db)) -> Candidate:
     return _get_or_404(db, candidate_id)
@@ -178,3 +199,46 @@ def delete_candidate(candidate_id: int, db: Session = Depends(get_db)) -> None:
     candidate = _get_or_404(db, candidate_id)
     db.delete(candidate)
     db.commit()
+
+
+@router.get(
+    "/{candidate_id}/resume",
+    response_class=PlainTextResponse,
+    summary="Fetch the stored resume text",
+)
+def get_resume(candidate_id: int, db: Session = Depends(get_db)) -> str:
+    return _get_or_404(db, candidate_id).resume_text
+
+
+@router.put(
+    "/{candidate_id}/resume",
+    response_model=CandidateRead,
+    summary="Upload a resume file, replacing the stored text",
+)
+async def upload_resume(
+    candidate_id: int,
+    file: UploadFile = File(..., description="PDF, .txt or .md, up to 2 MB"),
+    db: Session = Depends(get_db),
+) -> Candidate:
+    """Ingest a PDF or plain-text resume into ``resume_text``.
+
+    PUT rather than POST: the stored text is replaced wholesale, so re-uploading
+    the same file twice leaves the candidate in the same state.
+    """
+    candidate = _get_or_404(db, candidate_id)
+    candidate.resume_text = await _read_resume(file)
+    db.commit()
+    db.refresh(candidate)
+    return candidate
+
+
+async def _read_resume(file: UploadFile) -> str:
+    """Read an upload and extract text, mapping ingest failures to 400."""
+    # UploadFile is unbounded, so cap the read rather than trusting the
+    # advertised size: content-length is client-supplied.
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
+    await file.close()
+    try:
+        return extract_text(file.filename, data)
+    except ResumeIngestError as exc:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
