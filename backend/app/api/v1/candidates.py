@@ -1,0 +1,180 @@
+"""Candidate endpoints."""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import status as http_status
+from sqlalchemy import Select, func, select
+from sqlalchemy.orm import Session
+
+from app.api.deps import Pagination, pagination
+from app.db.session import get_db
+from app.models.candidate import Candidate
+from app.models.enums import EducationLevel, SeniorityLevel
+from app.schemas.candidate import CandidateCreate, CandidateRead, CandidateUpdate
+from app.schemas.common import Page
+
+router = APIRouter(prefix="/candidates", tags=["candidates"])
+
+
+def _get_or_404(db: Session, candidate_id: int) -> Candidate:
+    candidate = db.get(Candidate, candidate_id)
+    if candidate is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail=f"Candidate {candidate_id} not found",
+        )
+    return candidate
+
+
+def _has_skill(skill: str) -> object:
+    """Case-insensitive membership test against the JSONB ``skills`` array.
+
+    JSONB containment (``@>``) would be index-friendly but is case- and
+    whitespace-exact, and skills arrive from resumes as "Python", "python" and
+    "PYTHON" alike. Unnesting the array and comparing lowercased is correct at
+    the pool sizes this endpoint pages over; if the candidate table outgrows a
+    sequential scan the fix is a normalised skills table, not a stricter filter.
+    """
+    element = func.jsonb_array_elements_text(Candidate.skills).table_valued("value")
+    return (
+        select(1)
+        .select_from(element)
+        .where(func.lower(element.c.value) == skill.strip().lower())
+        .exists()
+    )
+
+
+def _apply_filters(
+    stmt: Select,
+    *,
+    seniority: SeniorityLevel | None,
+    education_level: EducationLevel | None,
+    min_years_experience: int | None,
+    max_years_experience: int | None,
+    location: str | None,
+    skill: list[str] | None,
+    q: str | None,
+) -> Select:
+    """Apply the same predicates to both the page query and the count query.
+
+    Shared so ``total`` stays honest: a filtered page whose total was computed
+    unfiltered would silently break pagination in the UI.
+    """
+    if seniority is not None:
+        stmt = stmt.where(Candidate.seniority == seniority)
+    if education_level is not None:
+        stmt = stmt.where(Candidate.education_level == education_level)
+    if min_years_experience is not None:
+        stmt = stmt.where(Candidate.years_experience >= min_years_experience)
+    if max_years_experience is not None:
+        stmt = stmt.where(Candidate.years_experience <= max_years_experience)
+    if location:
+        stmt = stmt.where(Candidate.location.ilike(f"%{location}%"))
+    for wanted in skill or []:
+        if wanted.strip():
+            # Repeated ?skill= narrows conjunctively: every listed skill must
+            # be present, which is how a recruiter reads a "must have" list.
+            stmt = stmt.where(_has_skill(wanted))
+    if q:
+        pattern = f"%{q}%"
+        stmt = stmt.where(
+            Candidate.full_name.ilike(pattern)
+            | Candidate.email.ilike(pattern)
+            | Candidate.current_title.ilike(pattern)
+        )
+    return stmt
+
+
+@router.get("", response_model=Page[CandidateRead], summary="List candidates")
+def list_candidates(
+    db: Session = Depends(get_db),
+    page: Pagination = Depends(pagination),
+    seniority: SeniorityLevel | None = Query(None, description="Filter by seniority level"),
+    education_level: EducationLevel | None = Query(None, description="Filter by education level"),
+    min_years_experience: int | None = Query(None, ge=0, le=60),
+    max_years_experience: int | None = Query(None, ge=0, le=60),
+    location: str | None = Query(None, description="Case-insensitive substring match"),
+    skill: list[str] | None = Query(
+        None, description="Repeatable; a candidate must have every skill listed"
+    ),
+    q: str | None = Query(None, description="Substring match on name, email or current title"),
+) -> Page[CandidateRead]:
+    filters = {
+        "seniority": seniority,
+        "education_level": education_level,
+        "min_years_experience": min_years_experience,
+        "max_years_experience": max_years_experience,
+        "location": location,
+        "skill": skill,
+        "q": q,
+    }
+
+    total = db.execute(
+        _apply_filters(select(func.count()).select_from(Candidate), **filters)
+    ).scalar_one()
+
+    stmt = _apply_filters(select(Candidate), **filters)
+    stmt = (
+        stmt.order_by(Candidate.created_at.desc(), Candidate.id.desc())
+        .limit(page.limit)
+        .offset(page.offset)
+    )
+    candidates = db.execute(stmt).scalars().all()
+
+    return Page[CandidateRead](
+        items=[CandidateRead.model_validate(c) for c in candidates],
+        total=total,
+        limit=page.limit,
+        offset=page.offset,
+    )
+
+
+@router.post(
+    "",
+    response_model=CandidateRead,
+    status_code=http_status.HTTP_201_CREATED,
+    summary="Create a candidate",
+)
+def create_candidate(payload: CandidateCreate, db: Session = Depends(get_db)) -> Candidate:
+    """Create a candidate. A duplicate email is a 409, not a 500."""
+    candidate = Candidate(**payload.model_dump())
+    db.add(candidate)
+    db.commit()
+    db.refresh(candidate)
+    return candidate
+
+
+@router.get("/{candidate_id}", response_model=CandidateRead, summary="Fetch one candidate")
+def get_candidate(candidate_id: int, db: Session = Depends(get_db)) -> Candidate:
+    return _get_or_404(db, candidate_id)
+
+
+@router.patch("/{candidate_id}", response_model=CandidateRead, summary="Partially update")
+def update_candidate(
+    candidate_id: int, payload: CandidateUpdate, db: Session = Depends(get_db)
+) -> Candidate:
+    candidate = _get_or_404(db, candidate_id)
+
+    # exclude_unset distinguishes "field omitted" from "field set to null", so
+    # a PATCH only touches what the caller actually sent.
+    updates = payload.model_dump(exclude_unset=True)
+    for field, value in updates.items():
+        setattr(candidate, field, value)
+
+    if updates:
+        db.commit()
+        db.refresh(candidate)
+    return candidate
+
+
+@router.delete(
+    "/{candidate_id}",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    summary="Delete a candidate",
+)
+def delete_candidate(candidate_id: int, db: Session = Depends(get_db)) -> None:
+    """Hard-delete a candidate; applications and cached match scores cascade."""
+    candidate = _get_or_404(db, candidate_id)
+    db.delete(candidate)
+    db.commit()
