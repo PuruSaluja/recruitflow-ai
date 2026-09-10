@@ -4,10 +4,28 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.enums import EducationLevel, EmploymentType, JobStatus, SeniorityLevel
+from app.schemas.common import reject_null_fields
+
+#: Columns the database declares NOT NULL, so a PATCH may omit them but must
+#: never send an explicit null.
+REQUIRED_JOB_FIELDS = frozenset(
+    {
+        "title",
+        "employment_type",
+        "seniority",
+        "education_required",
+        "min_years_experience",
+        "description",
+        "required_skills",
+        "preferred_skills",
+        "status",
+    }
+)
 
 
 class JobBase(BaseModel):
@@ -43,6 +61,11 @@ class JobUpdate(BaseModel):
     """Partial update; every field is optional."""
 
     model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_required_nulls(cls, data: Any) -> Any:
+        return reject_null_fields(data, REQUIRED_JOB_FIELDS)
 
     title: str | None = Field(default=None, min_length=2, max_length=200)
     department: str | None = Field(default=None, max_length=100)

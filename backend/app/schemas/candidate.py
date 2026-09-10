@@ -3,10 +3,26 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from app.models.enums import EducationLevel, SeniorityLevel
+from app.schemas.common import reject_null_fields
+
+#: Columns the database declares NOT NULL, so a PATCH may omit them but must
+#: never send an explicit null.
+REQUIRED_CANDIDATE_FIELDS = frozenset(
+    {
+        "full_name",
+        "email",
+        "years_experience",
+        "seniority",
+        "education_level",
+        "resume_text",
+        "skills",
+    }
+)
 
 
 def _tidy_skills(value: list[str] | None) -> list[str] | None:
@@ -57,6 +73,11 @@ class CandidateUpdate(BaseModel):
     """Partial update; every field is optional."""
 
     model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_required_nulls(cls, data: Any) -> Any:
+        return reject_null_fields(data, REQUIRED_CANDIDATE_FIELDS)
 
     full_name: str | None = Field(default=None, min_length=2, max_length=200)
     email: EmailStr | None = None
