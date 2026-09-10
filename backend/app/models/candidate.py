@@ -55,7 +55,12 @@ class Candidate(Base, TimestampMixin):
     )
 
     resume_text: Mapped[str] = mapped_column(Text, nullable=False)
-    skills: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    # none_as_null so a Python None becomes SQL NULL and trips the NOT NULL
+    # constraint. Without it JSONB stores the JSON scalar `null`, which the
+    # constraint accepts and which then fails to deserialise on every read.
+    skills: Mapped[list[str]] = mapped_column(
+        JSONB(none_as_null=True), nullable=False, default=list
+    )
 
     applications: Mapped[list[Application]] = relationship(
         back_populates="candidate", cascade="all, delete-orphan"

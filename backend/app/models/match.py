@@ -61,7 +61,9 @@ class MatchScore(Base):
 
     #: Per-feature contributions, kept so the UI and PDF report can explain
     #: *why* a candidate ranked where they did.
-    features: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    features: Mapped[dict] = mapped_column(
+        JSONB(none_as_null=True), nullable=False, default=dict
+    )
     model_version: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
 
     scored_at: Mapped[datetime] = mapped_column(

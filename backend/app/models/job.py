@@ -82,8 +82,15 @@ class Job(Base, TimestampMixin):
 
     # Skill lists are stored as JSONB so they can be queried with containment
     # operators without a join table; the taxonomy is small and read-mostly.
-    required_skills: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
-    preferred_skills: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    # none_as_null so a Python None becomes SQL NULL and trips the NOT NULL
+    # constraint. Without it JSONB stores the JSON scalar `null`, which the
+    # constraint accepts and which then fails to deserialise on every read.
+    required_skills: Mapped[list[str]] = mapped_column(
+        JSONB(none_as_null=True), nullable=False, default=list
+    )
+    preferred_skills: Mapped[list[str]] = mapped_column(
+        JSONB(none_as_null=True), nullable=False, default=list
+    )
 
     salary_min: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     salary_max: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
