@@ -13,7 +13,7 @@ from app.db.session import get_db
 from app.models.candidate import Candidate
 from app.models.enums import EducationLevel, SeniorityLevel
 from app.schemas.candidate import CandidateCreate, CandidateRead, CandidateUpdate, ResumePreview
-from app.schemas.common import Page
+from app.schemas.common import Page, contains_pattern
 from app.services.resume import MAX_UPLOAD_BYTES, ResumeIngestError, extract_text
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
@@ -72,18 +72,18 @@ def _apply_filters(
     if max_years_experience is not None:
         stmt = stmt.where(Candidate.years_experience <= max_years_experience)
     if location:
-        stmt = stmt.where(Candidate.location.ilike(f"%{location}%"))
+        stmt = stmt.where(Candidate.location.ilike(contains_pattern(location), escape="\\"))
     for wanted in skill or []:
         if wanted.strip():
             # Repeated ?skill= narrows conjunctively: every listed skill must
             # be present, which is how a recruiter reads a "must have" list.
             stmt = stmt.where(_has_skill(wanted))
     if q:
-        pattern = f"%{q}%"
+        pattern = contains_pattern(q)
         stmt = stmt.where(
-            Candidate.full_name.ilike(pattern)
-            | Candidate.email.ilike(pattern)
-            | Candidate.current_title.ilike(pattern)
+            Candidate.full_name.ilike(pattern, escape="\\")
+            | Candidate.email.ilike(pattern, escape="\\")
+            | Candidate.current_title.ilike(pattern, escape="\\")
         )
     return stmt
 

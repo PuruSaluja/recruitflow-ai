@@ -9,6 +9,17 @@ from pydantic import BaseModel, Field
 T = TypeVar("T")
 
 
+def contains_pattern(text: str) -> str:
+    """Build a ``LIKE``/``ILIKE`` substring pattern from user-supplied text.
+
+    ``%`` and ``_`` are wildcards, so an unescaped search box quietly lies:
+    searching "100%" matches "1000 users" and a lone "_" matches everything.
+    Callers must pair this with ``escape="\\\\"`` on the ilike() call.
+    """
+    escaped = text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
 def reject_null_fields(data: Any, fields: frozenset[str]) -> Any:
     """Reject an explicit ``null`` for a column the database declares NOT NULL.
 

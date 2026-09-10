@@ -11,7 +11,7 @@ from app.api.deps import Pagination, pagination
 from app.db.session import get_db
 from app.models.enums import EmploymentType, JobStatus, SeniorityLevel
 from app.models.job import Job
-from app.schemas.common import Page
+from app.schemas.common import Page, contains_pattern
 from app.schemas.job import JobCreate, JobRead, JobUpdate
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -49,7 +49,7 @@ def _apply_filters(
     if department is not None:
         stmt = stmt.where(Job.department == department)
     if q:
-        stmt = stmt.where(Job.title.ilike(f"%{q}%"))
+        stmt = stmt.where(Job.title.ilike(contains_pattern(q), escape="\\"))
     return stmt
 
 
