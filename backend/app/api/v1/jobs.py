@@ -113,6 +113,18 @@ def update_job(job_id: int, payload: JobUpdate, db: Session = Depends(get_db)) -
     # exclude_unset distinguishes "field omitted" from "field set to null", so
     # a PATCH only touches what the caller actually sent.
     updates = payload.model_dump(exclude_unset=True)
+
+    # JobUpdate can only compare the band when both ends arrive together.
+    # Raising just the minimum can still invert the band stored on the row, and
+    # the check constraint would then report it as a misleading 409 conflict.
+    salary_min = updates.get("salary_min", job.salary_min)
+    salary_max = updates.get("salary_max", job.salary_max)
+    if salary_min is not None and salary_max is not None and salary_max < salary_min:
+        raise HTTPException(
+            status_code=http_status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="salary_max must be greater than or equal to salary_min",
+        )
+
     for field, value in updates.items():
         setattr(job, field, value)
 
