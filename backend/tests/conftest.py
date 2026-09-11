@@ -16,8 +16,10 @@ request these fixtures and run without PostgreSQL.
 
 from __future__ import annotations
 
+import itertools
 import os
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
@@ -103,3 +105,40 @@ def client(app: FastAPI, clean_db: Engine) -> Iterator[TestClient]:
     base_url = f"http://testserver{get_settings().api_prefix}"
     with TestClient(app, base_url=base_url) as test_client:
         yield test_client
+
+
+@pytest.fixture
+def make_job(client: TestClient) -> Callable[..., dict[str, Any]]:
+    """Create a job through the API; keyword arguments override the defaults."""
+
+    def _make(**overrides: Any) -> dict[str, Any]:
+        payload = {
+            "title": "Data Analyst",
+            "description": "Own the weekly metrics review and the dashboards behind it.",
+            **overrides,
+        }
+        response = client.post("/jobs", json=payload)
+        assert response.status_code == 201, response.text
+        return response.json()
+
+    return _make
+
+
+@pytest.fixture
+def make_candidate(client: TestClient) -> Callable[..., dict[str, Any]]:
+    """Create a candidate through the API, with a unique email unless one is given."""
+    serial = itertools.count(1)
+
+    def _make(**overrides: Any) -> dict[str, Any]:
+        n = next(serial)
+        payload = {
+            "full_name": f"Candidate {n}",
+            "email": f"candidate{n}@example.com",
+            "resume_text": "Built reporting pipelines in SQL and Python for a retail team.",
+            **overrides,
+        }
+        response = client.post("/candidates", json=payload)
+        assert response.status_code == 201, response.text
+        return response.json()
+
+    return _make
