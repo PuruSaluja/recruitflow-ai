@@ -55,6 +55,31 @@ uvicorn app.main:app --reload --app-dir backend
 
 Interactive docs are then at `http://localhost:8000/docs`.
 
+## Tests
+
+```bash
+pytest
+```
+
+API tests run against a separate database, `RECRUITFLOW_TEST_DATABASE_URL`
+(`recruitflow_test` in `.env.example`). Create it once; the suite applies the
+Alembic migrations itself.
+
+Every database test empties all tables first, so the suite refuses to start
+unless the test database's name ends in `_test` and differs from
+`RECRUITFLOW_DATABASE_URL`.
+
+The resume normaliser's unit tests need no database:
+
+```bash
+pytest backend/tests/test_resume_service.py
+```
+
+`backend/tests/test_regressions.py` pins bugs found by probing the API with
+awkward input — explicit nulls on required fields, JSONB storing a JSON `null`,
+and `%`/`_` in search text acting as wildcards. Each pin fails if its fix is
+reverted.
+
 ## API
 
 | Method | Path | |
