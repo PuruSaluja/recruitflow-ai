@@ -81,7 +81,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.exception_handler(SQLAlchemyError)
     def _handle_db_error(request: Request, exc: SQLAlchemyError) -> JSONResponse:
-        logger.exception("database error on %s", request.url.path)
+        # exc_info=exc rather than logger.exception: a handler runs outside the
+        # except block, so there is no active exception for it to pick up and
+        # the traceback logged only ever read "NoneType: None".
+        logger.error("database error on %s", request.url.path, exc_info=exc)
         return JSONResponse(
             status_code=503,
             content={"detail": "Database unavailable", "code": "db_unavailable"},
