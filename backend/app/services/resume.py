@@ -139,7 +139,7 @@ def extract_text(filename: str | None, data: bytes) -> str:
 
 def _extract_pdf(data: bytes) -> str:
     from pypdf import PdfReader
-    from pypdf.errors import PdfReadError
+    from pypdf.errors import DependencyError, PyPdfError
 
     try:
         reader = PdfReader(io.BytesIO(data))
@@ -150,7 +150,11 @@ def _extract_pdf(data: bytes) -> str:
         pages = [page.extract_text() or "" for page in reader.pages]
     except ResumeIngestError:
         raise
-    except (PdfReadError, ValueError, KeyError, TypeError) as exc:
+    # PyPdfError covers the library's own tree (ParseError and LimitReachedError
+    # among them, which PdfReadError alone missed). DependencyError has to be
+    # named separately: it subclasses Exception directly, outside that tree, and
+    # is what an AES-encrypted PDF raises where `cryptography` is absent.
+    except (PyPdfError, DependencyError, ValueError, KeyError, TypeError) as exc:
         raise ResumeIngestError(f"The PDF could not be read: {exc}") from exc
 
     if not pages:
