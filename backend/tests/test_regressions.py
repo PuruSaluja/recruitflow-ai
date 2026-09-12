@@ -18,10 +18,14 @@ from sqlalchemy import Engine
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import StaleDataError
 
 import app.models  # noqa: F401  (registers every table on Base.metadata)
+from app.api.v1 import applications as applications_api
 from app.db.base import Base
 from app.models import Candidate, Job
+from app.models.application import Application
+from app.models.enums import ApplicationStatus
 from app.schemas.candidate import CandidateUpdate
 from app.schemas.job import JobUpdate
 
@@ -230,3 +234,114 @@ def test_a_backslash_in_search_text_is_harmless(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert response.json()["items"] == []
+
+
+# --- 4. a stage change overwriting a simultaneous one (found 2026-09-12) -----
+#
+# Was: two recruiters moving the same application at the same moment both got
+# 200 in 11 of 12 races. Each move was legal on its own, so no constraint
+# objected; the later write won and the loser's action vanished. Once stage
+# history landed, both moves also left an event behind, so the trail claimed
+# the application left the same stage twice and stage durations double-counted.
+#
+# The fix is the version counter on applications: SQLAlchemy adds
+# "WHERE version = <value read>" to the UPDATE, so the losing write matches no
+# row. These pins inject the interfering write deliberately rather than racing
+# threads, so they fail the same way every time.
+
+
+def _interfere(engine: Engine, application_id: int) -> None:
+    """Move an application from another connection, as a second recruiter would."""
+    with Session(engine) as other:
+        application = other.get(Application, application_id)
+        application.status = ApplicationStatus.REJECTED
+        other.commit()
+
+
+def test_a_stage_change_that_lost_a_race_is_refused(
+    client: TestClient,
+    clean_db: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+    make_job: Factory,
+    make_candidate: Factory,
+    make_application: Factory,
+) -> None:
+    application = make_application(job_id=make_job()["id"], candidate_id=make_candidate()["id"])
+    client.patch(f"/applications/{application['id']}", json={"status": "screening"})
+
+    # Fires after the endpoint has read the row and checked the transition,
+    # which is exactly the window the two recruiters raced in.
+    real_record = applications_api.record_stage_event
+
+    def record_then_interfere(*args: Any, **kwargs: Any) -> Any:
+        event = real_record(*args, **kwargs)
+        _interfere(clean_db, application["id"])
+        return event
+
+    monkeypatch.setattr(applications_api, "record_stage_event", record_then_interfere)
+
+    response = client.patch(f"/applications/{application['id']}", json={"status": "interview"})
+
+    assert response.status_code == 409, response.text
+    assert "changed by someone else" in response.json()["detail"]
+
+
+def test_a_stage_change_that_lost_a_race_leaves_no_event(
+    client: TestClient,
+    clean_db: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+    make_job: Factory,
+    make_candidate: Factory,
+    make_application: Factory,
+) -> None:
+    application = make_application(job_id=make_job()["id"], candidate_id=make_candidate()["id"])
+    client.patch(f"/applications/{application['id']}", json={"status": "screening"})
+
+    real_record = applications_api.record_stage_event
+
+    def record_then_interfere(*args: Any, **kwargs: Any) -> Any:
+        event = real_record(*args, **kwargs)
+        _interfere(clean_db, application["id"])
+        return event
+
+    monkeypatch.setattr(applications_api, "record_stage_event", record_then_interfere)
+    client.patch(f"/applications/{application['id']}", json={"status": "interview"})
+
+    events = client.get(f"/applications/{application['id']}/stage-events").json()
+    moves = [(event["from_status"], event["to_status"]) for event in events]
+
+    # The refused move must not appear, and nothing may leave a stage twice.
+    assert ("screening", "interview") not in moves
+    departures = [move[0] for move in moves if move[0] is not None]
+    assert len(departures) == len(set(departures)), moves
+
+
+def test_two_sessions_cannot_both_write_the_same_application(
+    clean_db: Engine, make_job: Factory, make_candidate: Factory, make_application: Factory
+) -> None:
+    """The mechanism itself, without the endpoint in the way."""
+    application = make_application(job_id=make_job()["id"], candidate_id=make_candidate()["id"])
+
+    with Session(clean_db) as first, Session(clean_db) as second:
+        mine = first.get(Application, application["id"])
+        theirs = second.get(Application, application["id"])
+
+        mine.status = ApplicationStatus.SCREENING
+        first.commit()
+
+        theirs.status = ApplicationStatus.REJECTED
+        with pytest.raises(StaleDataError):
+            second.commit()
+
+
+def test_version_is_not_part_of_the_api_contract(
+    client: TestClient, make_job: Factory, make_candidate: Factory, make_application: Factory
+) -> None:
+    """It is a concurrency mechanism, not a field clients are meant to send back."""
+    application = make_application(job_id=make_job()["id"], candidate_id=make_candidate()["id"])
+
+    assert "version" not in application
+
+    response = client.patch(f"/applications/{application['id']}", json={"version": 99})
+
+    assert response.status_code == 422, response.text
