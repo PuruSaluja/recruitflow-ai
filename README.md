@@ -145,6 +145,13 @@ only ever attached to a stage event, never stored on the application itself.
 A move that is refused or a no-op (resending the current status, a PATCH that
 only touches `notes`/`source`) records nothing.
 
+Two recruiters acting on the same application at the same moment used to end
+with the later write winning silently and both moves recorded in the trail.
+Applications now carry a version counter, so the update that lost the race
+matches no row and comes back as a **409** asking the caller to re-read and
+retry; its stage event is rolled back with it. The counter is internal — it is
+not in the API responses and cannot be sent in a `PATCH`.
+
 ## Resume ingestion
 
 `PUT /api/v1/candidates/{id}/resume` accepts a PDF or a plain-text/Markdown
