@@ -7,6 +7,7 @@ from fastapi import status as http_status
 from sqlalchemy import Select, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import StaleDataError
 
 from app.api.deps import Pagination, pagination
 from app.db.session import get_db
@@ -221,7 +222,20 @@ def update_application(
         setattr(application, field, value)
 
     if updates:
-        db.commit()
+        try:
+            db.commit()
+        except StaleDataError as exc:
+            # Someone else wrote this application between our read and our
+            # write. Rolling back drops our stage event too, so the trail never
+            # records a move that did not take effect.
+            db.rollback()
+            raise HTTPException(
+                status_code=http_status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Application {application_id} was changed by someone else while this "
+                    "update was in flight. Re-read it and retry."
+                ),
+            ) from exc
         db.refresh(application)
     return application
 
