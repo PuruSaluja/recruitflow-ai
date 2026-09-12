@@ -121,3 +121,16 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_candidates_email'), table_name='candidates')
     op.drop_table('candidates')
     # ### end Alembic commands ###
+
+    # create_table created these enum types implicitly, and autogenerate does
+    # not drop them. Left behind, they made the next `upgrade head` on the same
+    # database fail with 'type "seniority_level" already exists', so downgrade
+    # to base did not actually return the database to an empty state.
+    for type_name in (
+        'application_status',
+        'education_level',
+        'employment_type',
+        'job_status',
+        'seniority_level',
+    ):
+        op.execute(f'DROP TYPE IF EXISTS {type_name}')
