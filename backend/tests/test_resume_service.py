@@ -223,6 +223,26 @@ def test_a_corrupt_pdf_is_rejected_rather_than_crashing() -> None:
         extract_text("resume.pdf", b"%PDF-1.7\nthis is not really a pdf body at all")
 
 
+def test_a_pdf_needing_an_uninstalled_crypto_backend_is_rejected_not_a_crash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """pypdf raises DependencyError, which subclasses Exception directly.
+
+    It sits outside the PyPdfError tree, so neither PdfReadError nor PyPdfError
+    catches it and it has to be named. Reachable whenever an AES-encrypted PDF
+    arrives on an install without `cryptography`, where it escaped as a 500.
+    """
+    from pypdf.errors import DependencyError
+
+    def missing_backend(*args: object, **kwargs: object) -> None:
+        raise DependencyError("cryptography>=3.1 is required for AES algorithm")
+
+    monkeypatch.setattr("pypdf.PdfReader", missing_backend)
+
+    with pytest.raises(ResumeIngestError, match="could not be read"):
+        extract_text("resume.pdf", _pdf(["Built reporting pipelines in SQL"]))
+
+
 # --- extract_text: rejections -------------------------------------------------
 
 
