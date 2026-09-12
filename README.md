@@ -27,6 +27,8 @@ Four tables, with native PostgreSQL enums and JSONB skill lists:
 - **`jobs`** — requisitions: title, seniority, required/preferred skills, salary band, status.
 - **`candidates`** — talent pool: resume text, skills, years of experience, education.
 - **`applications`** — candidate → job pipeline state, unique per (job, candidate).
+- **`application_stage_events`** — append-only audit trail of every pipeline
+  move: from-status, to-status, when, and an optional free-text `changed_by`.
 - **`match_scores`** — cached model output per (job, candidate, model version),
   including the per-feature breakdown used to explain a ranking.
 
@@ -103,6 +105,7 @@ reverted.
 | `POST` | `/api/v1/applications` | Apply a candidate to a job |
 | `GET` | `/api/v1/applications/{id}` | Fetch one |
 | `PATCH` | `/api/v1/applications/{id}` | Update notes, source or pipeline stage |
+| `GET` | `/api/v1/applications/{id}/stage-events` | Full pipeline history, oldest first |
 | `DELETE` | `/api/v1/applications/{id}` | Delete an application |
 
 Candidate listings filter on `seniority`, `education_level`,
@@ -132,6 +135,15 @@ applications, and a candidate can apply to a given job only once. That second
 rule is enforced by a unique constraint rather than a pre-check, so two
 simultaneous requests cannot both succeed. Closing a job stops new applications
 but leaves the ones already in flight editable.
+
+Every move — including the opening one at creation — appends a row to
+`application_stage_events`, retrievable through
+`GET /api/v1/applications/{id}/stage-events`. A `changed_by` string can
+accompany a `POST` or a status-changing `PATCH` to record who acted; there is
+no user system yet, so it is free text rather than a foreign key, and it is
+only ever attached to a stage event, never stored on the application itself.
+A move that is refused or a no-op (resending the current status, a PATCH that
+only touches `notes`/`source`) records nothing.
 
 ## Resume ingestion
 
