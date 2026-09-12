@@ -22,7 +22,7 @@ descriptions.
 
 ## Data model
 
-Four tables, with native PostgreSQL enums and JSONB skill lists:
+Five tables, with native PostgreSQL enums and JSONB skill lists:
 
 - **`jobs`** — requisitions: title, seniority, required/preferred skills, salary band, status.
 - **`candidates`** — talent pool: resume text, skills, years of experience, education.
