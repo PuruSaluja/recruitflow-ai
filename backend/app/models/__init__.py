@@ -15,9 +15,11 @@ from app.models.enums import (
 )
 from app.models.job import Job
 from app.models.match import MatchScore
+from app.models.stage_event import ApplicationStageEvent
 
 __all__ = [
     "Application",
+    "ApplicationStageEvent",
     "ApplicationStatus",
     "Candidate",
     "EducationLevel",

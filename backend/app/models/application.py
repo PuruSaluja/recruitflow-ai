@@ -24,6 +24,7 @@ from app.models.enums import ApplicationStatus, enum_values
 if TYPE_CHECKING:
     from app.models.candidate import Candidate
     from app.models.job import Job
+    from app.models.stage_event import ApplicationStageEvent
 
 
 class Application(Base, TimestampMixin):
@@ -61,6 +62,11 @@ class Application(Base, TimestampMixin):
 
     job: Mapped[Job] = relationship(back_populates="applications")
     candidate: Mapped[Candidate] = relationship(back_populates="applications")
+    stage_events: Mapped[list[ApplicationStageEvent]] = relationship(
+        back_populates="application",
+        cascade="all, delete-orphan",
+        order_by="ApplicationStageEvent.occurred_at",
+    )
 
     def __repr__(self) -> str:  # pragma: no cover - debugging helper
         return (
