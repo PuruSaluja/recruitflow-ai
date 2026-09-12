@@ -36,9 +36,13 @@ class Settings(BaseSettings):
     #: Without this, an unreachable database makes requests hang indefinitely
     #: instead of failing fast, which defeats the point of /health.
     #:
-    #: Worst-case response time is roughly *twice* this value: pool_pre_ping
-    #: retries once when a connection attempt fails. Kept at 3s so a failing
-    #: /health still answers inside a typical 5-10s orchestrator probe timeout.
+    #: This bounds one connection attempt, not the response: a refused port
+    #: comes back at once, and pool_pre_ping can spend a second attempt when
+    #: the connection it is checking was already in the pool. Measured against
+    #: an unroutable host on a cold pool, /jobs answered 503 in 3.1s at this
+    #: setting -- and still in 3.0s at 6s, the network having given up first,
+    #: so do not read the setting as a predictor of worst-case latency. Kept at
+    #: 3s so a failing /health answers inside a 5-10s orchestrator probe.
     db_connect_timeout: int = 3
     #: Seconds to wait for a free connection when the pool is saturated.
     db_pool_timeout: int = 10
