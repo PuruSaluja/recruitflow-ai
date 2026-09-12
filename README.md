@@ -99,6 +99,11 @@ reverted.
 | `GET` | `/api/v1/candidates/{id}/resume` | Stored resume text, as `text/plain` |
 | `PUT` | `/api/v1/candidates/{id}/resume` | Upload a resume file, replacing the text |
 | `POST` | `/api/v1/candidates/resume-preview` | Parse a resume file without storing it |
+| `GET` | `/api/v1/applications` | List with pagination and filters |
+| `POST` | `/api/v1/applications` | Apply a candidate to a job |
+| `GET` | `/api/v1/applications/{id}` | Fetch one |
+| `PATCH` | `/api/v1/applications/{id}` | Update notes, source or pipeline stage |
+| `DELETE` | `/api/v1/applications/{id}` | Delete an application |
 
 Candidate listings filter on `seniority`, `education_level`,
 `min_years_experience`, `max_years_experience`, `location` (substring), `q`
@@ -106,6 +111,27 @@ Candidate listings filter on `seniority`, `education_level`,
 conjunctive — `?skill=python&skill=airflow` returns only candidates who have
 both — and matching is case-insensitive, so stored `"Python"` answers
 `?skill=python`.
+
+Application listings filter on `job_id`, `candidate_id`, `status` and `source`.
+
+## Hiring pipeline
+
+An application moves `applied` → `screening` → `interview` → `offer` → `hired`.
+`rejected` and `withdrawn` are reachable from any live stage, and all three
+end states are final.
+
+Stages change through `PATCH /api/v1/applications/{id}`. A move that skips a
+stage, goes backwards, or leaves a finished application is refused with **409**
+and a message naming the stages that *are* reachable; re-sending the current
+stage is a no-op, so retries are safe. Backwards moves are deliberately not
+allowed — reopening a candidate is a new application, which keeps stage timings
+answerable from the data.
+
+Two more 409s guard creation: only an **open** requisition accepts new
+applications, and a candidate can apply to a given job only once. That second
+rule is enforced by a unique constraint rather than a pre-check, so two
+simultaneous requests cannot both succeed. Closing a job stops new applications
+but leaves the ones already in flight editable.
 
 ## Resume ingestion
 
