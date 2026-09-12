@@ -345,3 +345,58 @@ def test_version_is_not_part_of_the_api_contract(
     response = client.patch(f"/applications/{application['id']}", json={"version": 99})
 
     assert response.status_code == 422, response.text
+
+
+# --- 5. non-positive ids in a path (found 2026-09-12) ------------------------
+#
+# Was: /applications/0 and /applications/-1 answered 404 "Application -1 not
+# found", claiming to have looked for a row that could never exist. Body and
+# query ids already answered 422 about the payload; path ids did not, because
+# no route declared gt=0.
+
+
+@pytest.mark.parametrize("bad_id", [0, -1])
+@pytest.mark.parametrize(
+    ("method", "template"),
+    [
+        pytest.param("get", "/jobs/{id}", id="get-job"),
+        pytest.param("patch", "/jobs/{id}", id="patch-job"),
+        pytest.param("post", "/jobs/{id}/close", id="close-job"),
+        pytest.param("delete", "/jobs/{id}", id="delete-job"),
+        pytest.param("get", "/candidates/{id}", id="get-candidate"),
+        pytest.param("patch", "/candidates/{id}", id="patch-candidate"),
+        pytest.param("delete", "/candidates/{id}", id="delete-candidate"),
+        pytest.param("get", "/candidates/{id}/resume", id="get-resume"),
+        pytest.param("get", "/applications/{id}", id="get-application"),
+        pytest.param("patch", "/applications/{id}", id="patch-application"),
+        pytest.param("delete", "/applications/{id}", id="delete-application"),
+        pytest.param("get", "/applications/{id}/stage-events", id="stage-events"),
+    ],
+)
+def test_a_non_positive_path_id_is_a_payload_error(
+    client: TestClient, method: str, template: str, bad_id: int
+) -> None:
+    path = template.format(id=bad_id)
+    request = getattr(client, method)
+
+    response = request(path, json={}) if method in {"patch", "post"} else request(path)
+
+    assert response.status_code == 422, f"{method.upper()} {path} -> {response.status_code}"
+
+
+@pytest.mark.parametrize(
+    ("method", "template"),
+    [
+        pytest.param("get", "/applications/{id}", id="get-application"),
+        pytest.param("get", "/applications/{id}/stage-events", id="stage-events"),
+        pytest.param("get", "/jobs/{id}", id="get-job"),
+        pytest.param("get", "/candidates/{id}", id="get-candidate"),
+    ],
+)
+def test_a_plausible_but_absent_id_is_still_a_404(
+    client: TestClient, method: str, template: str
+) -> None:
+    """Guards against over-correcting: gt=0 must not swallow genuine 404s."""
+    response = getattr(client, method)(template.format(id=999999))
+
+    assert response.status_code == 404

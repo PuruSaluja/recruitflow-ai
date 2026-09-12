@@ -180,6 +180,46 @@ def test_changed_by_alone_with_no_status_move_is_a_no_op(
     assert len(_events(client, application["id"])) == 1
 
 
+# --- changed_by is tidied on the way in -------------------------------------
+
+
+@pytest.mark.parametrize("blank", ["", "   ", "\t\n "])
+def test_a_blank_changed_by_is_recorded_as_absent(
+    client: TestClient, job: dict[str, Any], candidate: dict[str, Any], blank: str
+) -> None:
+    """Crediting whitespace reads as an author when there is none."""
+    response = client.post(
+        "/applications",
+        json={"job_id": job["id"], "candidate_id": candidate["id"], "changed_by": blank},
+    )
+
+    assert _events(client, response.json()["id"])[0]["changed_by"] is None
+
+
+def test_a_padded_changed_by_is_trimmed(
+    client: TestClient, job: dict[str, Any], candidate: dict[str, Any], make_application: Factory
+) -> None:
+    application = make_application(job_id=job["id"], candidate_id=candidate["id"])
+    client.patch(
+        f"/applications/{application['id']}",
+        json={"status": "screening", "changed_by": "  recruiter_a  "},
+    )
+
+    assert _events(client, application["id"])[-1]["changed_by"] == "recruiter_a"
+
+
+def test_inner_whitespace_in_changed_by_is_collapsed(
+    client: TestClient, job: dict[str, Any], candidate: dict[str, Any], make_application: Factory
+) -> None:
+    application = make_application(job_id=job["id"], candidate_id=candidate["id"])
+    client.patch(
+        f"/applications/{application['id']}",
+        json={"status": "screening", "changed_by": "Dana   Q.\tRivera"},
+    )
+
+    assert _events(client, application["id"])[-1]["changed_by"] == "Dana Q. Rivera"
+
+
 # --- lifecycle and errors ----------------------------------------------------
 
 
