@@ -60,6 +60,15 @@ class Application(Base, TimestampMixin):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
+    # Bumped by SQLAlchemy on every UPDATE, which then carries
+    # "WHERE version = <the value we read>". A write that raced another one
+    # matches no row and raises StaleDataError instead of silently overwriting
+    # it. A database constraint cannot do this job: each of two simultaneous
+    # stage changes is legal on its own, and it is only the pair that loses a
+    # recruiter's action and leaves two stage events leaving the same stage.
+    version: Mapped[int] = mapped_column(nullable=False, server_default="1")
+    __mapper_args__ = {"version_id_col": version}
+
     job: Mapped[Job] = relationship(back_populates="applications")
     candidate: Mapped[Candidate] = relationship(back_populates="applications")
     stage_events: Mapped[list[ApplicationStageEvent]] = relationship(
