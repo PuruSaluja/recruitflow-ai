@@ -4,10 +4,10 @@ A full-stack recruiting platform: FastAPI backend, PostgreSQL data layer, React
 frontend, and a scikit-learn matching layer that scores applicants against job
 descriptions.
 
-> **Status:** in development. The data layer, job requisition API and candidate
-> API (including resume file ingestion) are in place; application endpoints,
-> the matching model, PDF reporting, and the frontend are landing
-> incrementally.
+> **Status:** in development. The data layer and the job, candidate and
+> application APIs are in place, including resume file ingestion and the
+> pipeline stage-history trail; the matching model, PDF reporting, and the
+> frontend are landing incrementally.
 
 ## Tech stack
 
