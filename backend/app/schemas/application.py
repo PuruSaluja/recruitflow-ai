@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.enums import ApplicationStatus
 from app.schemas.common import reject_null_fields
@@ -14,6 +14,18 @@ from app.schemas.common import reject_null_fields
 #: never send an explicit null. ``source`` and ``notes`` are nullable and can
 #: legitimately be cleared.
 REQUIRED_APPLICATION_FIELDS = frozenset({"status"})
+
+
+def _tidy_changed_by(value: str | None) -> str | None:
+    """Collapse whitespace and treat a blank label as absent.
+
+    An audit row crediting three spaces says nothing, and it reads as a real
+    author rather than a missing one. Same treatment the candidate schemas
+    give skill lists, for the same reason: this is free text typed by people.
+    """
+    if value is None:
+        return None
+    return " ".join(value.split()) or None
 
 
 class ApplicationCreate(BaseModel):
@@ -26,6 +38,11 @@ class ApplicationCreate(BaseModel):
     #: Who opened this application, recorded on the opening stage event only.
     #: Not a column on the application itself.
     changed_by: str | None = Field(default=None, max_length=120)
+
+    @field_validator("changed_by")
+    @classmethod
+    def _normalise_changed_by(cls, value: str | None) -> str | None:
+        return _tidy_changed_by(value)
 
 
 class ApplicationUpdate(BaseModel):
@@ -44,6 +61,11 @@ class ApplicationUpdate(BaseModel):
     #: Who made this change. Only recorded when it accompanies an actual
     #: status move; otherwise there is no stage event to attach it to.
     changed_by: str | None = Field(default=None, max_length=120)
+
+    @field_validator("changed_by")
+    @classmethod
+    def _normalise_changed_by(cls, value: str | None) -> str | None:
+        return _tidy_changed_by(value)
 
 
 class ApplicationRead(BaseModel):
