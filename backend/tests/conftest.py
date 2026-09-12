@@ -125,6 +125,34 @@ def make_job(client: TestClient) -> Callable[..., dict[str, Any]]:
 
 
 @pytest.fixture
+def make_application(client: TestClient) -> Callable[..., dict[str, Any]]:
+    """Create an application through the API; job_id and candidate_id are required."""
+
+    def _make(**overrides: Any) -> dict[str, Any]:
+        response = client.post("/applications", json=overrides)
+        assert response.status_code == 201, response.text
+        return response.json()
+
+    return _make
+
+
+@pytest.fixture
+def advance(client: TestClient) -> Callable[..., dict[str, Any]]:
+    """Walk an application through a sequence of stages, asserting each move lands."""
+
+    def _advance(application_id: int, *stages: str) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        for stage in stages:
+            response = client.patch(f"/applications/{application_id}", json={"status": stage})
+            assert response.status_code == 200, response.text
+            payload = response.json()
+            assert payload["status"] == stage
+        return payload
+
+    return _advance
+
+
+@pytest.fixture
 def make_candidate(client: TestClient) -> Callable[..., dict[str, Any]]:
     """Create a candidate through the API, with a unique email unless one is given."""
     serial = itertools.count(1)
