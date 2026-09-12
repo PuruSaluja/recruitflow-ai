@@ -23,6 +23,9 @@ class ApplicationCreate(BaseModel):
     candidate_id: int = Field(gt=0)
     source: str | None = Field(default=None, max_length=80)
     notes: str | None = None
+    #: Who opened this application, recorded on the opening stage event only.
+    #: Not a column on the application itself.
+    changed_by: str | None = Field(default=None, max_length=120)
 
 
 class ApplicationUpdate(BaseModel):
@@ -38,6 +41,9 @@ class ApplicationUpdate(BaseModel):
     status: ApplicationStatus | None = None
     source: str | None = Field(default=None, max_length=80)
     notes: str | None = None
+    #: Who made this change. Only recorded when it accompanies an actual
+    #: status move; otherwise there is no stage event to attach it to.
+    changed_by: str | None = Field(default=None, max_length=120)
 
 
 class ApplicationRead(BaseModel):
@@ -52,3 +58,14 @@ class ApplicationRead(BaseModel):
     applied_at: datetime
     created_at: datetime
     updated_at: datetime
+
+
+class ApplicationStageEventRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    application_id: int
+    from_status: ApplicationStatus | None
+    to_status: ApplicationStatus
+    changed_by: str | None
+    occurred_at: datetime

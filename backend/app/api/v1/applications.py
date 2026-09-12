@@ -14,9 +14,15 @@ from app.models.application import Application
 from app.models.candidate import Candidate
 from app.models.enums import ApplicationStatus, JobStatus
 from app.models.job import Job
-from app.schemas.application import ApplicationCreate, ApplicationRead, ApplicationUpdate
+from app.schemas.application import (
+    ApplicationCreate,
+    ApplicationRead,
+    ApplicationStageEventRead,
+    ApplicationUpdate,
+)
 from app.schemas.common import Page
 from app.services.pipeline import TransitionError, check_transition
+from app.services.stage_history import record_stage_event
 
 router = APIRouter(prefix="/applications", tags=["applications"])
 
@@ -125,10 +131,12 @@ def create_application(payload: ApplicationCreate, db: Session = Depends(get_db)
             ),
         )
 
-    application = Application(**payload.model_dump())
+    data = payload.model_dump()
+    changed_by = data.pop("changed_by")
+    application = Application(**data)
     db.add(application)
     try:
-        db.commit()
+        db.flush()
     except IntegrityError as exc:
         # The unique constraint is the real guard against a double-apply: two
         # simultaneous requests both pass the checks above, and the database
@@ -143,6 +151,11 @@ def create_application(payload: ApplicationCreate, db: Session = Depends(get_db)
             ),
         ) from exc
 
+    # from_status=None marks this as the opening event: there is no prior stage.
+    record_stage_event(
+        db, application, from_status=None, to_status=application.status, changed_by=changed_by
+    )
+    db.commit()
     db.refresh(application)
     return application
 
@@ -150,6 +163,22 @@ def create_application(payload: ApplicationCreate, db: Session = Depends(get_db)
 @router.get("/{application_id}", response_model=ApplicationRead, summary="Fetch one application")
 def get_application(application_id: int, db: Session = Depends(get_db)) -> Application:
     return _get_or_404(db, application_id)
+
+
+@router.get(
+    "/{application_id}/stage-events",
+    response_model=list[ApplicationStageEventRead],
+    summary="Full pipeline history for one application",
+)
+def list_stage_events(application_id: int, db: Session = Depends(get_db)) -> list:
+    """Every status move this application has made, oldest first.
+
+    Answers "how long did screening take" and similar questions without
+    reconstructing history from ``updated_at``. A handful of rows per
+    application, so this returns the whole list rather than a page.
+    """
+    application = _get_or_404(db, application_id)
+    return application.stage_events
 
 
 @router.patch(
@@ -172,14 +201,21 @@ def update_application(
     # a PATCH only touches what the caller actually sent.
     updates = payload.model_dump(exclude_unset=True)
     target = updates.pop("status", None)
+    # Not a column on Application; only meaningful when it accompanies a real
+    # status move below, so it never reaches the setattr loop.
+    changed_by = updates.pop("changed_by", None)
 
     if target is not None and target != application.status:
         try:
             check_transition(application.status, target)
         except TransitionError as exc:
             raise HTTPException(status_code=http_status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        previous_status = application.status
         application.status = target
         updates["status"] = target
+        record_stage_event(
+            db, application, from_status=previous_status, to_status=target, changed_by=changed_by
+        )
 
     for field, value in updates.items():
         setattr(application, field, value)
