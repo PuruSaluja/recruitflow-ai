@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Path, Query, UploadFile
 from fastapi import status as http_status
 from fastapi.responses import PlainTextResponse
 from sqlalchemy import Select, func, select
@@ -167,13 +167,15 @@ async def preview_resume(file: UploadFile = File(...)) -> ResumePreview:
 
 
 @router.get("/{candidate_id}", response_model=CandidateRead, summary="Fetch one candidate")
-def get_candidate(candidate_id: int, db: Session = Depends(get_db)) -> Candidate:
+def get_candidate(candidate_id: int = Path(gt=0), db: Session = Depends(get_db)) -> Candidate:
     return _get_or_404(db, candidate_id)
 
 
 @router.patch("/{candidate_id}", response_model=CandidateRead, summary="Partially update")
 def update_candidate(
-    candidate_id: int, payload: CandidateUpdate, db: Session = Depends(get_db)
+    payload: CandidateUpdate,
+    candidate_id: int = Path(gt=0),
+    db: Session = Depends(get_db),
 ) -> Candidate:
     candidate = _get_or_404(db, candidate_id)
 
@@ -194,7 +196,7 @@ def update_candidate(
     status_code=http_status.HTTP_204_NO_CONTENT,
     summary="Delete a candidate",
 )
-def delete_candidate(candidate_id: int, db: Session = Depends(get_db)) -> None:
+def delete_candidate(candidate_id: int = Path(gt=0), db: Session = Depends(get_db)) -> None:
     """Hard-delete a candidate; applications and cached match scores cascade."""
     candidate = _get_or_404(db, candidate_id)
     db.delete(candidate)
@@ -206,7 +208,7 @@ def delete_candidate(candidate_id: int, db: Session = Depends(get_db)) -> None:
     response_class=PlainTextResponse,
     summary="Fetch the stored resume text",
 )
-def get_resume(candidate_id: int, db: Session = Depends(get_db)) -> str:
+def get_resume(candidate_id: int = Path(gt=0), db: Session = Depends(get_db)) -> str:
     return _get_or_404(db, candidate_id).resume_text
 
 
@@ -216,7 +218,7 @@ def get_resume(candidate_id: int, db: Session = Depends(get_db)) -> str:
     summary="Upload a resume file, replacing the stored text",
 )
 async def upload_resume(
-    candidate_id: int,
+    candidate_id: int = Path(gt=0),
     file: UploadFile = File(..., description="PDF, .txt or .md, up to 2 MB"),
     db: Session = Depends(get_db),
 ) -> Candidate:

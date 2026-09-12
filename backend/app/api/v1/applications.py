@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi import status as http_status
 from sqlalchemy import Select, func, select
 from sqlalchemy.exc import IntegrityError
@@ -162,7 +162,7 @@ def create_application(payload: ApplicationCreate, db: Session = Depends(get_db)
 
 
 @router.get("/{application_id}", response_model=ApplicationRead, summary="Fetch one application")
-def get_application(application_id: int, db: Session = Depends(get_db)) -> Application:
+def get_application(application_id: int = Path(gt=0), db: Session = Depends(get_db)) -> Application:
     return _get_or_404(db, application_id)
 
 
@@ -171,7 +171,7 @@ def get_application(application_id: int, db: Session = Depends(get_db)) -> Appli
     response_model=list[ApplicationStageEventRead],
     summary="Full pipeline history for one application",
 )
-def list_stage_events(application_id: int, db: Session = Depends(get_db)) -> list:
+def list_stage_events(application_id: int = Path(gt=0), db: Session = Depends(get_db)) -> list:
     """Every status move this application has made, oldest first.
 
     Answers "how long did screening take" and similar questions without
@@ -188,7 +188,9 @@ def list_stage_events(application_id: int, db: Session = Depends(get_db)) -> lis
     summary="Update an application, including its pipeline stage",
 )
 def update_application(
-    application_id: int, payload: ApplicationUpdate, db: Session = Depends(get_db)
+    payload: ApplicationUpdate,
+    application_id: int = Path(gt=0),
+    db: Session = Depends(get_db),
 ) -> Application:
     """Partially update an application.
 
@@ -245,7 +247,7 @@ def update_application(
     status_code=http_status.HTTP_204_NO_CONTENT,
     summary="Delete an application",
 )
-def delete_application(application_id: int, db: Session = Depends(get_db)) -> None:
+def delete_application(application_id: int = Path(gt=0), db: Session = Depends(get_db)) -> None:
     """Hard-delete an application.
 
     Withdrawing a candidate is a status change; this is for removing a record

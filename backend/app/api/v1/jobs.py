@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi import status as http_status
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
@@ -102,12 +102,12 @@ def create_job(payload: JobCreate, db: Session = Depends(get_db)) -> Job:
 
 
 @router.get("/{job_id}", response_model=JobRead, summary="Fetch one job requisition")
-def get_job(job_id: int, db: Session = Depends(get_db)) -> Job:
+def get_job(job_id: int = Path(gt=0), db: Session = Depends(get_db)) -> Job:
     return _get_or_404(db, job_id)
 
 
 @router.patch("/{job_id}", response_model=JobRead, summary="Partially update a job")
-def update_job(job_id: int, payload: JobUpdate, db: Session = Depends(get_db)) -> Job:
+def update_job(payload: JobUpdate, job_id: int = Path(gt=0), db: Session = Depends(get_db)) -> Job:
     job = _get_or_404(db, job_id)
 
     # exclude_unset distinguishes "field omitted" from "field set to null", so
@@ -135,7 +135,7 @@ def update_job(job_id: int, payload: JobUpdate, db: Session = Depends(get_db)) -
 
 
 @router.post("/{job_id}/close", response_model=JobRead, summary="Close a job requisition")
-def close_job(job_id: int, db: Session = Depends(get_db)) -> Job:
+def close_job(job_id: int = Path(gt=0), db: Session = Depends(get_db)) -> Job:
     """Close a requisition. Idempotent: closing a closed job is a no-op."""
     job = _get_or_404(db, job_id)
     if job.status is not JobStatus.CLOSED:
@@ -150,7 +150,7 @@ def close_job(job_id: int, db: Session = Depends(get_db)) -> Job:
     status_code=http_status.HTTP_204_NO_CONTENT,
     summary="Delete a job requisition",
 )
-def delete_job(job_id: int, db: Session = Depends(get_db)) -> None:
+def delete_job(job_id: int = Path(gt=0), db: Session = Depends(get_db)) -> None:
     """Hard-delete a job; applications and cached match scores cascade."""
     job = _get_or_404(db, job_id)
     db.delete(job)
