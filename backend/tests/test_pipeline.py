@@ -7,9 +7,12 @@ import pytest
 from app.models.enums import ApplicationStatus as S
 from app.services.pipeline import (
     ALLOWED_TRANSITIONS,
+    REOPEN_TARGET,
+    REOPENABLE_STATUSES,
     TERMINAL_STATUSES,
     TransitionError,
     can_transition,
+    check_reopen,
     check_transition,
     next_statuses,
 )
@@ -126,3 +129,58 @@ def test_the_refusal_message_lists_what_is_allowed_instead() -> None:
 def test_the_terminal_message_names_the_status() -> None:
     with pytest.raises(TransitionError, match="hired"):
         check_transition(S.HIRED, S.REJECTED)
+
+
+# --- reopening --------------------------------------------------------------
+
+
+def test_only_rejected_and_withdrawn_can_be_reopened() -> None:
+    assert set(REOPENABLE_STATUSES) == {S.REJECTED, S.WITHDRAWN}
+
+
+def test_every_reopenable_status_is_a_finished_one() -> None:
+    assert REOPENABLE_STATUSES <= TERMINAL_STATUSES
+
+
+def test_a_reopened_application_lands_where_it_can_move_again() -> None:
+    assert REOPEN_TARGET is S.APPLIED
+    assert next_statuses(REOPEN_TARGET)
+
+
+@pytest.mark.parametrize("current", sorted(REOPENABLE_STATUSES, key=str))
+def test_rejected_and_withdrawn_pass_the_reopen_check(current: S) -> None:
+    check_reopen(current)
+
+
+def test_a_hired_application_cannot_be_reopened() -> None:
+    with pytest.raises(TransitionError) as caught:
+        check_reopen(S.HIRED)
+    message = str(caught.value)
+    assert "hired" in message
+    assert "rejected or withdrawn" in message
+
+
+@pytest.mark.parametrize("current", LIVE_STATUSES)
+def test_a_live_application_has_nothing_to_reopen(current: S) -> None:
+    with pytest.raises(TransitionError, match="has not finished"):
+        check_reopen(current)
+
+
+@pytest.mark.parametrize("current", sorted(REOPENABLE_STATUSES, key=str))
+def test_reopening_does_not_loosen_the_transition_table(current: S) -> None:
+    """The way back is the reopen check alone; a status PATCH stays refused."""
+    assert next_statuses(current) == frozenset()
+    with pytest.raises(TransitionError):
+        check_transition(current, S.APPLIED)
+
+
+@pytest.mark.parametrize("current", sorted(REOPENABLE_STATUSES, key=str))
+def test_the_patch_refusal_points_a_reopenable_application_at_reopening(current: S) -> None:
+    with pytest.raises(TransitionError, match="Reopen it"):
+        check_transition(current, S.SCREENING)
+
+
+def test_the_patch_refusal_for_hired_does_not_suggest_reopening() -> None:
+    with pytest.raises(TransitionError) as caught:
+        check_transition(S.HIRED, S.SCREENING)
+    assert "Reopen" not in str(caught.value)
