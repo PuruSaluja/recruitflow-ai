@@ -68,6 +68,20 @@ class ApplicationUpdate(BaseModel):
         return _tidy_changed_by(value)
 
 
+class ApplicationReopen(BaseModel):
+    """Body for reopening a rejected or withdrawn application. Every field is optional."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Who reopened it, recorded on the stage event the reopen writes.
+    changed_by: str | None = Field(default=None, max_length=120)
+
+    @field_validator("changed_by")
+    @classmethod
+    def _normalise_changed_by(cls, value: str | None) -> str | None:
+        return _tidy_changed_by(value)
+
+
 class ApplicationRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
