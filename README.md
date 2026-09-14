@@ -106,6 +106,7 @@ reverted.
 | `GET` | `/api/v1/applications/{id}` | Fetch one |
 | `PATCH` | `/api/v1/applications/{id}` | Update notes, source or pipeline stage |
 | `GET` | `/api/v1/applications/{id}/stage-events` | Full pipeline history, oldest first |
+| `POST` | `/api/v1/applications/{id}/reopen` | Put a rejected/withdrawn application back to `applied` |
 | `DELETE` | `/api/v1/applications/{id}` | Delete an application |
 
 Candidate listings filter on `seniority`, `education_level`,
@@ -126,9 +127,17 @@ end states are final.
 Stages change through `PATCH /api/v1/applications/{id}`. A move that skips a
 stage, goes backwards, or leaves a finished application is refused with **409**
 and a message naming the stages that *are* reachable; re-sending the current
-stage is a no-op, so retries are safe. Backwards moves are deliberately not
-allowed — reopening a candidate is a new application, which keeps stage timings
-answerable from the data.
+stage is a no-op, so retries are safe.
+
+A rejected or withdrawn application can be put back into play through
+`POST /api/v1/applications/{id}/reopen`, which is deliberately a separate
+action rather than a loosened `PATCH` rule — the 409 for a rejected/withdrawn
+`PATCH` names it as the way back in. Reopening returns the same application to
+`applied` instead of creating a new one, since a candidate holds only one
+application per job; the stage event it writes carries the real `from_status`
+(`rejected` or `withdrawn`), so that stint's duration stays answerable from the
+data. A `hired` application cannot be reopened, and reopening still needs the
+requisition to be **open** — both refuse with 409.
 
 Two more 409s guard creation: only an **open** requisition accepts new
 applications, and a candidate can apply to a given job only once. That second
