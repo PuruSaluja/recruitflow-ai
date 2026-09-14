@@ -122,12 +122,12 @@ Application listings filter on `job_id`, `candidate_id`, `status` and `source`.
 
 An application moves `applied` → `screening` → `interview` → `offer` → `hired`.
 `rejected` and `withdrawn` are reachable from any live stage, and all three
-end states are final.
+end states are final for ordinary moves.
 
 Stages change through `PATCH /api/v1/applications/{id}`. A move that skips a
 stage, goes backwards, or leaves a finished application is refused with **409**
-and a message naming the stages that *are* reachable; re-sending the current
-stage is a no-op, so retries are safe.
+and a message saying which moves *are* possible; re-sending the current stage
+is a no-op, so retries are safe.
 
 A rejected or withdrawn application can be put back into play through
 `POST /api/v1/applications/{id}/reopen`, which is deliberately a separate
@@ -148,9 +148,10 @@ but leaves the ones already in flight editable.
 Every move — including the opening one at creation — appends a row to
 `application_stage_events`, retrievable through
 `GET /api/v1/applications/{id}/stage-events`. A `changed_by` string can
-accompany a `POST` or a status-changing `PATCH` to record who acted; there is
-no user system yet, so it is free text rather than a foreign key, and it is
-only ever attached to a stage event, never stored on the application itself.
+accompany the `POST` that opens an application, a status-changing `PATCH` or a
+reopen, to record who acted; there is no user system yet, so it is free text
+rather than a foreign key, and it is only ever attached to a stage event, never
+stored on the application itself.
 A move that is refused or a no-op (resending the current status, a PATCH that
 only touches `notes`/`source`) records nothing.
 
