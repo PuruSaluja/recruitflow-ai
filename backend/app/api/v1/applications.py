@@ -38,6 +38,26 @@ def _get_or_404(db: Session, application_id: int) -> Application:
     return application
 
 
+def _commit_or_conflict(db: Session, application_id: int) -> None:
+    """Commit a write to one application, answering 409 if it lost a race.
+
+    The version column makes an UPDATE that raced another write match no row.
+    Rolling back drops any stage event added alongside it, so the trail never
+    records a move that did not take effect.
+    """
+    try:
+        db.commit()
+    except StaleDataError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail=(
+                f"Application {application_id} was changed by someone else while this "
+                "update was in flight. Re-read it and retry."
+            ),
+        ) from exc
+
+
 def _apply_filters(
     stmt: Select,
     *,
@@ -224,20 +244,7 @@ def update_application(
         setattr(application, field, value)
 
     if updates:
-        try:
-            db.commit()
-        except StaleDataError as exc:
-            # Someone else wrote this application between our read and our
-            # write. Rolling back drops our stage event too, so the trail never
-            # records a move that did not take effect.
-            db.rollback()
-            raise HTTPException(
-                status_code=http_status.HTTP_409_CONFLICT,
-                detail=(
-                    f"Application {application_id} was changed by someone else while this "
-                    "update was in flight. Re-read it and retry."
-                ),
-            ) from exc
+        _commit_or_conflict(db, application_id)
         db.refresh(application)
     return application
 
