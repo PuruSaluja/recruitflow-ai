@@ -315,6 +315,186 @@ def test_invalid_query_parameters_are_rejected(client: TestClient, params: dict[
     assert client.get("/applications", params=params).status_code == 422
 
 
+# --- reopening ------------------------------------------------------------
+
+
+def _events(client: TestClient, application_id: int) -> list[dict[str, Any]]:
+    response = client.get(f"/applications/{application_id}/stage-events")
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+@pytest.mark.parametrize("ending", ["rejected", "withdrawn"])
+def test_a_finished_application_can_be_reopened(
+    client: TestClient, application: dict[str, Any], advance: Factory, ending: str
+) -> None:
+    advance(application["id"], "screening", ending)
+
+    response = client.post(f"/applications/{application['id']}/reopen", json={})
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "applied"
+    assert client.get(f"/applications/{application['id']}").json()["status"] == "applied"
+
+
+def test_reopen_records_the_real_from_status_and_who_did_it(
+    client: TestClient, application: dict[str, Any], advance: Factory
+) -> None:
+    advance(application["id"], "screening", "interview", "rejected")
+
+    client.post(f"/applications/{application['id']}/reopen", json={"changed_by": "  recruiter_a "})
+
+    last = _events(client, application["id"])[-1]
+    assert (last["from_status"], last["to_status"]) == ("rejected", "applied")
+    assert last["changed_by"] == "recruiter_a"
+
+
+def test_the_trail_stays_a_connected_chain_across_a_reopen(
+    client: TestClient, application: dict[str, Any], advance: Factory
+) -> None:
+    """The rejected stint is kept, not rewritten, so its duration stays answerable."""
+    advance(application["id"], "screening", "withdrawn")
+    client.post(f"/applications/{application['id']}/reopen")
+    advance(application["id"], "screening", "interview")
+
+    moves = [(e["from_status"], e["to_status"]) for e in _events(client, application["id"])]
+    assert moves == [
+        (None, "applied"),
+        ("applied", "screening"),
+        ("screening", "withdrawn"),
+        ("withdrawn", "applied"),
+        ("applied", "screening"),
+        ("screening", "interview"),
+    ]
+
+
+def test_a_reopened_application_can_go_all_the_way_to_hired(
+    client: TestClient, application: dict[str, Any], advance: Factory
+) -> None:
+    advance(application["id"], "rejected")
+    client.post(f"/applications/{application['id']}/reopen")
+
+    final = advance(application["id"], "screening", "interview", "offer", "hired")
+
+    assert final["status"] == "hired"
+
+
+def test_reopen_works_without_a_body(
+    client: TestClient, application: dict[str, Any], advance: Factory
+) -> None:
+    advance(application["id"], "rejected")
+
+    response = client.post(f"/applications/{application['id']}/reopen")
+
+    assert response.status_code == 200, response.text
+    assert _events(client, application["id"])[-1]["changed_by"] is None
+
+
+def test_a_hired_application_cannot_be_reopened(
+    client: TestClient, application: dict[str, Any], advance: Factory
+) -> None:
+    advance(application["id"], "screening", "interview", "offer", "hired")
+
+    response = client.post(f"/applications/{application['id']}/reopen")
+
+    assert response.status_code == 409
+    assert "hired" in response.json()["detail"]
+
+
+@pytest.mark.parametrize("stages", [(), ("screening",), ("screening", "interview", "offer")])
+def test_a_live_application_cannot_be_reopened(
+    client: TestClient, application: dict[str, Any], advance: Factory, stages: tuple[str, ...]
+) -> None:
+    advance(application["id"], *stages)
+
+    response = client.post(f"/applications/{application['id']}/reopen")
+
+    assert response.status_code == 409
+    assert "has not finished" in response.json()["detail"]
+
+
+def test_reopen_needs_the_requisition_to_be_open(
+    client: TestClient, application: dict[str, Any], advance: Factory
+) -> None:
+    advance(application["id"], "rejected")
+    assert client.post(f"/jobs/{application['job_id']}/close").status_code == 200
+
+    response = client.post(f"/applications/{application['id']}/reopen")
+
+    assert response.status_code == 409
+    assert "closed" in response.json()["detail"]
+    assert client.get(f"/applications/{application['id']}").json()["status"] == "rejected"
+
+
+def test_a_refused_reopen_records_no_event(
+    client: TestClient, application: dict[str, Any], advance: Factory
+) -> None:
+    advance(application["id"], "screening", "interview", "offer", "hired")
+    before = len(_events(client, application["id"]))
+
+    client.post(f"/applications/{application['id']}/reopen", json={"changed_by": "recruiter_a"})
+
+    assert len(_events(client, application["id"])) == before
+
+
+def test_the_patch_refusal_on_a_rejected_application_points_at_reopening(
+    client: TestClient, application: dict[str, Any], advance: Factory
+) -> None:
+    advance(application["id"], "rejected")
+
+    response = client.patch(f"/applications/{application['id']}", json={"status": "screening"})
+
+    assert response.status_code == 409
+    assert "Reopen it" in response.json()["detail"]
+
+
+def test_reopening_an_unknown_application_is_404(client: TestClient) -> None:
+    assert client.post("/applications/999999/reopen").status_code == 404
+
+
+def test_an_unknown_field_in_the_reopen_body_is_rejected(
+    client: TestClient, application: dict[str, Any], advance: Factory
+) -> None:
+    advance(application["id"], "rejected")
+
+    response = client.post(f"/applications/{application['id']}/reopen", json={"status": "offer"})
+
+    assert response.status_code == 422
+
+
+def test_a_reopen_that_lost_a_race_is_refused_and_leaves_no_event(
+    client: TestClient,
+    clean_db: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    application: dict[str, Any],
+    advance: Factory,
+) -> None:
+    """Two recruiters reopening at once must not both succeed and double the event."""
+    from sqlalchemy.orm import Session
+
+    from app.api.v1 import applications as applications_api
+    from app.models.application import Application
+    from app.models.enums import ApplicationStatus
+
+    advance(application["id"], "rejected")
+    real_record = applications_api.record_stage_event
+
+    def record_then_interfere(*args: Any, **kwargs: Any) -> Any:
+        event = real_record(*args, **kwargs)
+        with Session(clean_db) as other:
+            other.get(Application, application["id"]).status = ApplicationStatus.APPLIED
+            other.commit()
+        return event
+
+    monkeypatch.setattr(applications_api, "record_stage_event", record_then_interfere)
+
+    response = client.post(f"/applications/{application['id']}/reopen")
+
+    assert response.status_code == 409, response.text
+    moves = [(e["from_status"], e["to_status"]) for e in _events(client, application["id"])]
+    assert ("rejected", "applied") not in moves
+
+
 # --- deleting -------------------------------------------------------------
 
 

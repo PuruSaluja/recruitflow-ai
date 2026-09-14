@@ -371,6 +371,7 @@ def test_version_is_not_part_of_the_api_contract(
         pytest.param("patch", "/applications/{id}", id="patch-application"),
         pytest.param("delete", "/applications/{id}", id="delete-application"),
         pytest.param("get", "/applications/{id}/stage-events", id="stage-events"),
+        pytest.param("post", "/applications/{id}/reopen", id="reopen-application"),
     ],
 )
 def test_a_non_positive_path_id_is_a_payload_error(
