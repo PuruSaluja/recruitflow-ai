@@ -462,6 +462,19 @@ def test_an_unknown_field_in_the_reopen_body_is_rejected(
     assert response.status_code == 422
 
 
+@pytest.mark.parametrize(("length", "expected"), [(120, 200), (121, 422)])
+def test_changed_by_on_a_reopen_is_capped_at_the_column_length(
+    client: TestClient, application: dict[str, Any], advance: Factory, length: int, expected: int
+) -> None:
+    advance(application["id"], "rejected")
+
+    response = client.post(
+        f"/applications/{application['id']}/reopen", json={"changed_by": "x" * length}
+    )
+
+    assert response.status_code == expected, response.text
+
+
 def test_a_reopen_that_lost_a_race_is_refused_and_leaves_no_event(
     client: TestClient,
     clean_db: Any,
