@@ -18,11 +18,12 @@ from app.models.job import Job
 from app.schemas.application import (
     ApplicationCreate,
     ApplicationRead,
+    ApplicationReopen,
     ApplicationStageEventRead,
     ApplicationUpdate,
 )
 from app.schemas.common import Page
-from app.services.pipeline import TransitionError, check_transition
+from app.services.pipeline import REOPEN_TARGET, TransitionError, check_reopen, check_transition
 from app.services.stage_history import record_stage_event
 
 router = APIRouter(prefix="/applications", tags=["applications"])
@@ -246,6 +247,54 @@ def update_application(
     if updates:
         _commit_or_conflict(db, application_id)
         db.refresh(application)
+    return application
+
+
+@router.post(
+    "/{application_id}/reopen",
+    response_model=ApplicationRead,
+    summary="Reopen a rejected or withdrawn application",
+)
+def reopen_application(
+    payload: ApplicationReopen | None = None,
+    application_id: int = Path(gt=0),
+    db: Session = Depends(get_db),
+) -> Application:
+    """Put a rejected or withdrawn application back at the start of the pipeline.
+
+    Deliberately separate from a status PATCH, which still cannot move a
+    finished application. The stage event records the real ``from_status``, so
+    the rejected or withdrawn stint keeps its duration. The same row is reopened
+    rather than a new one created, since a candidate holds one application per
+    job; and like applying in the first place, it needs the requisition open.
+    """
+    application = _get_or_404(db, application_id)
+    try:
+        check_reopen(application.status)
+    except TransitionError as exc:
+        raise HTTPException(status_code=http_status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+    job = application.job
+    if job.status is not JobStatus.OPEN:
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail=(
+                f"Job {job.id} is {job.status.value}; only an open requisition can take "
+                "a reopened application"
+            ),
+        )
+
+    previous_status = application.status
+    application.status = REOPEN_TARGET
+    record_stage_event(
+        db,
+        application,
+        from_status=previous_status,
+        to_status=REOPEN_TARGET,
+        changed_by=payload.changed_by if payload else None,
+    )
+    _commit_or_conflict(db, application_id)
+    db.refresh(application)
     return application
 
 
