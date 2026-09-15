@@ -411,3 +411,15 @@ def test_historical_bias_only_ever_withholds_womens_advancement() -> None:
 def test_an_impossible_config_is_refused(changes: dict[str, float]) -> None:
     with pytest.raises(ValueError):
         CorpusConfig(**changes)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"n_candidates": 50, "slate_size": 50},
+        {"n_candidates": 200, "same_family_share": 1.0},
+    ],
+)
+def test_a_slate_the_pool_cannot_fill_is_refused_with_the_reason(changes: dict[str, float]) -> None:
+    with pytest.raises(ValueError, match="cannot fill a slate"):
+        generate_corpus(CorpusConfig(seed=SEED, n_jobs=2, **changes))
