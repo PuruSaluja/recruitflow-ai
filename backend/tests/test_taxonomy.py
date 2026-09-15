@@ -24,10 +24,17 @@ def test_every_skill_has_a_known_category() -> None:
     assert {skill.category for skill in SKILLS} <= CATEGORIES
 
 
-def test_every_spelling_resolves_to_its_own_skill() -> None:
+def test_every_spelling_resolves_to_its_own_skill_whatever_its_case_or_spacing() -> None:
     for skill in SKILLS:
         for spelling in (skill.name, *skill.aliases):
-            assert canonical_skill(spelling) == skill.name, spelling
+            variants = (
+                spelling,
+                spelling.upper(),
+                f"  {spelling.lower()}\t",
+                spelling.replace(" ", "  "),
+            )
+            for variant in variants:
+                assert canonical_skill(variant) == skill.name, variant
 
 
 @pytest.mark.parametrize(
