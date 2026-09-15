@@ -743,15 +743,23 @@ def label_pairs(
         by_family[candidate.family].append(candidate)
     outsiders = {key: [c for c in candidates if c.family != key] for key in by_family}
     n_same = round(config.slate_size * config.same_family_share)
+    n_other = config.slate_size - n_same
 
     pairs: list[LabelledPair] = []
     for job in jobs:
         family = by_family[job.family]
+        if len(family) < n_same or len(outsiders[job.family]) < n_other:
+            raise ValueError(
+                f"The pool cannot fill a slate of {config.slate_size} for {job.ref}: it needs "
+                f"{n_same} {job.family} candidates and {n_other} from other families but has "
+                f"{len(family)} and {len(outsiders[job.family])}. Generate more candidates or "
+                "use a smaller slate."
+            )
         near = [c for c in family if abs(c.seniority.rank - job.seniority.rank) <= 1]
         slate = slates.sample(near, min(round(n_same * _NEAR_LEVEL_SHARE), len(near)))
         picked = {c.ref for c in slate}
         slate += slates.sample([c for c in family if c.ref not in picked], n_same - len(slate))
-        slate += slates.sample(outsiders[job.family], config.slate_size - n_same)
+        slate += slates.sample(outsiders[job.family], n_other)
         for candidate in slate:
             # Both draws happen for every pair, so historical_bias changes no other label.
             fit = ground_truth_fit(job, candidate, noise=outcomes.gauss(0.0, _FIT_NOISE))
