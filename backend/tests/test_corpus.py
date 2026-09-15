@@ -28,6 +28,7 @@ from app.ml.corpus import (
     generate_corpus,
     generate_jobs,
     ground_truth_fit,
+    label_pairs,
     relevance_grade,
 )
 from app.ml.taxonomy import SKILLS, canonical_skill, normalise_skills
@@ -423,3 +424,37 @@ def test_an_impossible_config_is_refused(changes: dict[str, float]) -> None:
 def test_a_slate_the_pool_cannot_fill_is_refused_with_the_reason(changes: dict[str, float]) -> None:
     with pytest.raises(ValueError, match="cannot fill a slate"):
         generate_corpus(CorpusConfig(seed=SEED, n_jobs=2, **changes))
+
+
+# With these configs a slate of 10 takes 4 candidates from the job's family and 6 from others.
+def _pool(
+    job: SyntheticJob, candidates: list[SyntheticCandidate], same_family: int, other_families: int
+) -> list[SyntheticCandidate]:
+    family = [candidate for candidate in candidates if candidate.family == job.family]
+    others = [candidate for candidate in candidates if candidate.family != job.family]
+    return family[:same_family] + others[:other_families]
+
+
+def test_a_pool_that_exactly_fills_a_slate_is_used_whole(
+    jobs: list[SyntheticJob], candidates: list[SyntheticCandidate]
+) -> None:
+    config = CorpusConfig(seed=SEED, n_jobs=1, n_candidates=10, slate_size=10)
+    pool = _pool(jobs[0], candidates, same_family=4, other_families=6)
+
+    pairs = label_pairs([jobs[0]], pool, config)
+
+    assert {pair.candidate_ref for pair in pairs} == {candidate.ref for candidate in pool}
+
+
+@pytest.mark.parametrize(("same_family", "other_families"), [(3, 6), (4, 5)])
+def test_a_pool_one_candidate_short_is_refused_with_the_reason(
+    jobs: list[SyntheticJob],
+    candidates: list[SyntheticCandidate],
+    same_family: int,
+    other_families: int,
+) -> None:
+    config = CorpusConfig(seed=SEED, n_jobs=1, n_candidates=10, slate_size=10)
+    pool = _pool(jobs[0], candidates, same_family, other_families)
+
+    with pytest.raises(ValueError, match="cannot fill a slate"):
+        label_pairs([jobs[0]], pool, config)
