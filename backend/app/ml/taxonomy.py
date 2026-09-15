@@ -2,7 +2,8 @@
 
 Profiles and job descriptions name one skill many ways ("Postgres", "PostgreSQL",
 "postgresql"), so the matcher compares skills by canonical name. A spelling the
-taxonomy does not know is kept as written, since an unknown skill is still evidence.
+taxonomy does not know is kept, with its whitespace tidied, since an unknown skill
+is still evidence.
 """
 
 from __future__ import annotations
