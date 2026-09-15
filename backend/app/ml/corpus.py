@@ -1,4 +1,4 @@
-"""Synthetic jobs and candidates for training and auditing the matcher.
+"""Synthetic labelled corpus for training and auditing the matcher.
 
 Everything here is generated; there is no real hiring data behind this project.
 What the generator controls, so that nothing measured on it is read as a
@@ -14,10 +14,18 @@ finding about real people:
   model can learn as a proxy for gender. It is planted so the fairness audit
   has a known proxy to find. Every resume carries a community line at the same
   rate; only the wording differs.
+* A labelled pair's ``fit`` is ground truth computed from the true profile
+  alone, plus a random term for what no profile shows; it never sees
+  demographics. ``relevance`` grades it for ranking metrics.
+* ``advanced`` is a simulated past recruiter decision, the kind of label a real
+  system learns from. It follows ``fit``, but women were advanced at
+  ``1 - historical_bias`` times the rate of equally fit candidates -- a second
+  planted bias, which ``historical_bias=0`` removes.
 """
 
 from __future__ import annotations
 
+import math
 import random
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -619,3 +627,143 @@ def _community_line(rng: random.Random, gender: str, proxy_share: float) -> str 
     if not has_line:
         return None
     return f"Community: {womens if gender == 'woman' and names_group else neutral}."
+
+
+#: ``fit`` at or above these grades a pair 2 (strong) or 1 (partial); below both it is 0.
+STRONG_FIT = 0.6
+PARTIAL_FIT = 0.35
+#: Spread of the random term in ``fit`` that stands in for what no profile shows.
+_FIT_NOISE = 0.5
+#: Share of a slate's same-family picks drawn from within one level of the job.
+_NEAR_LEVEL_SHARE = 0.6
+
+
+@dataclass(frozen=True)
+class LabelledPair:
+    job_ref: str
+    candidate_ref: str
+    #: Ground truth in (0, 1), from the true profile and never from demographics.
+    fit: float
+    #: ``fit`` graded for ranking metrics: 2 strong, 1 partial, 0 not a fit.
+    relevance: int
+    #: Whether a past recruiter moved the candidate forward; carries the planted bias.
+    advanced: bool
+
+
+@dataclass(frozen=True)
+class CorpusConfig:
+    seed: int = 42
+    n_jobs: int = 200
+    n_candidates: int = 4000
+    slate_size: int = 50
+    #: Share of each slate drawn from the job's own role family.
+    same_family_share: float = 0.4
+    #: How much less often women were advanced than equally fit candidates.
+    historical_bias: float = 0.25
+    #: Share of women's community lines that name a women-in-tech group.
+    proxy_share: float = 0.6
+
+    def __post_init__(self) -> None:
+        if min(self.n_jobs, self.n_candidates, self.slate_size) < 1:
+            raise ValueError("n_jobs, n_candidates and slate_size must all be at least 1")
+        if self.slate_size > self.n_candidates:
+            raise ValueError("slate_size cannot be larger than n_candidates")
+        if not 0.0 <= self.same_family_share <= 1.0:
+            raise ValueError("same_family_share must be between 0 and 1")
+        if not 0.0 <= self.historical_bias <= 1.0:
+            raise ValueError("historical_bias must be between 0 and 1")
+
+
+@dataclass(frozen=True)
+class Corpus:
+    config: CorpusConfig
+    jobs: tuple[SyntheticJob, ...]
+    candidates: tuple[SyntheticCandidate, ...]
+    pairs: tuple[LabelledPair, ...]
+
+
+def generate_corpus(config: CorpusConfig | None = None) -> Corpus:
+    """Jobs, candidates and labelled pairs; the same config always gives the same corpus."""
+    config = config or CorpusConfig()
+    jobs = generate_jobs(config.n_jobs, seed=config.seed)
+    candidates = generate_candidates(
+        config.n_candidates, seed=config.seed, proxy_share=config.proxy_share
+    )
+    pairs = label_pairs(jobs, candidates, config)
+    return Corpus(config, tuple(jobs), tuple(candidates), tuple(pairs))
+
+
+def ground_truth_fit(
+    job: SyntheticJob, candidate: SyntheticCandidate, *, noise: float = 0.0
+) -> float:
+    """How well ``candidate`` truly meets ``job``, in (0, 1).
+
+    Reads only the true profile -- skill coverage, a shortfall in years, distance
+    in seniority and missing education -- while ``noise`` stands in for what no
+    profile shows.
+    """
+    skills = candidate.true_skills
+    required = sum(name in skills for name in job.required_skills) / len(job.required_skills)
+    preferred = sum(name in skills for name in job.preferred_skills) / len(job.preferred_skills)
+    shortfall = min(max(job.min_years_experience - candidate.years_experience, 0) / 5, 1.0)
+    seniority_gap = abs(job.seniority.rank - candidate.seniority.rank)
+    education_gap = max(job.education_required.rank - candidate.education_level.rank, 0)
+    score = (
+        4.0 * required
+        + 1.0 * preferred
+        - 2.0 * shortfall
+        - 0.8 * seniority_gap
+        - 0.7 * education_gap
+        + noise
+        - 3.0
+    )
+    return 1.0 / (1.0 + math.exp(-score))
+
+
+def relevance_grade(fit: float) -> int:
+    """Grade ``fit`` for ranking metrics: 2 strong, 1 partial, 0 not a fit."""
+    if fit >= STRONG_FIT:
+        return 2
+    return 1 if fit >= PARTIAL_FIT else 0
+
+
+def label_pairs(
+    jobs: Sequence[SyntheticJob], candidates: Sequence[SyntheticCandidate], config: CorpusConfig
+) -> list[LabelledPair]:
+    """Label every job against a slate of candidates, sourced the way a recruiter would.
+
+    A slate takes ``same_family_share`` of its candidates from the job's role
+    family, most of those from within one level of the job, and the rest from
+    other families.
+    """
+    slates = random.Random(f"{config.seed}:slates")
+    outcomes = random.Random(f"{config.seed}:outcomes")
+    by_family: dict[str, list[SyntheticCandidate]] = {family.key: [] for family in FAMILIES}
+    for candidate in candidates:
+        by_family[candidate.family].append(candidate)
+    outsiders = {key: [c for c in candidates if c.family != key] for key in by_family}
+    n_same = round(config.slate_size * config.same_family_share)
+
+    pairs: list[LabelledPair] = []
+    for job in jobs:
+        family = by_family[job.family]
+        near = [c for c in family if abs(c.seniority.rank - job.seniority.rank) <= 1]
+        slate = slates.sample(near, min(round(n_same * _NEAR_LEVEL_SHARE), len(near)))
+        picked = {c.ref for c in slate}
+        slate += slates.sample([c for c in family if c.ref not in picked], n_same - len(slate))
+        slate += slates.sample(outsiders[job.family], config.slate_size - n_same)
+        for candidate in slate:
+            # Both draws happen for every pair, so historical_bias changes no other label.
+            fit = ground_truth_fit(job, candidate, noise=outcomes.gauss(0.0, _FIT_NOISE))
+            draw = outcomes.random()
+            chance = _advance_chance(fit)
+            if candidate.gender == "woman":
+                chance *= 1.0 - config.historical_bias
+            pairs.append(
+                LabelledPair(job.ref, candidate.ref, fit, relevance_grade(fit), draw < chance)
+            )
+    return pairs
+
+
+def _advance_chance(fit: float) -> float:
+    return 1.0 / (1.0 + math.exp(-6.0 * (fit - 0.5)))
