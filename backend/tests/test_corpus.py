@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import dataclasses
+import math
 import os
 import subprocess
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 from statistics import mean
 
 import pytest
@@ -17,13 +18,20 @@ from app.ml.corpus import (
     COMMUNITY_RATE,
     FAMILIES,
     JOB_MIN_YEARS,
+    PARTIAL_FIT,
+    STRONG_FIT,
+    Corpus,
+    CorpusConfig,
     SyntheticCandidate,
     SyntheticJob,
     generate_candidates,
+    generate_corpus,
     generate_jobs,
+    ground_truth_fit,
+    relevance_grade,
 )
 from app.ml.taxonomy import SKILLS, canonical_skill, normalise_skills
-from app.models.enums import EmploymentType, SeniorityLevel
+from app.models.enums import EducationLevel, EmploymentType, SeniorityLevel
 from app.schemas.candidate import CandidateCreate
 from app.schemas.job import JobCreate
 
@@ -77,8 +85,10 @@ def test_generation_does_not_depend_on_hash_randomisation() -> None:
     """Set iteration order changes from one process to the next; the corpus must not."""
     script = (
         "import dataclasses, json\n"
-        "from app.ml.corpus import generate_candidates, generate_jobs\n"
-        "rows = generate_jobs(30, seed=7) + generate_candidates(60, seed=7)\n"
+        "from app.ml.corpus import CorpusConfig, generate_corpus\n"
+        "config = CorpusConfig(seed=7, n_jobs=20, n_candidates=400, slate_size=20)\n"
+        "corpus = generate_corpus(config)\n"
+        "rows = corpus.jobs + corpus.candidates + corpus.pairs\n"
         "print(json.dumps([dataclasses.asdict(row) for row in rows], default=sorted))\n"
     )
     outputs = set()
@@ -236,3 +246,168 @@ def test_proxy_share_changes_nothing_but_the_wording_of_womens_community_lines()
 def test_an_out_of_range_proxy_share_is_refused(proxy_share: float) -> None:
     with pytest.raises(ValueError, match="proxy_share"):
         generate_candidates(1, seed=SEED, proxy_share=proxy_share)
+
+
+# --- labelled pairs ---------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def corpus() -> Corpus:
+    return generate_corpus(CorpusConfig(seed=SEED, n_jobs=120, n_candidates=3000))
+
+
+def _slates(corpus: Corpus) -> dict[str, list[str]]:
+    slates: dict[str, list[str]] = defaultdict(list)
+    for pair in corpus.pairs:
+        slates[pair.job_ref].append(pair.candidate_ref)
+    return slates
+
+
+def _genders(corpus: Corpus) -> dict[str, str]:
+    return {candidate.ref: candidate.gender for candidate in corpus.candidates}
+
+
+def test_the_same_config_gives_the_same_labels(corpus: Corpus) -> None:
+    assert generate_corpus(corpus.config) == corpus
+
+
+def test_every_job_gets_a_full_slate_of_distinct_candidates(corpus: Corpus) -> None:
+    slates = _slates(corpus)
+    assert set(slates) == {job.ref for job in corpus.jobs}
+    for refs in slates.values():
+        assert len(refs) == len(set(refs)) == corpus.config.slate_size
+
+
+def test_a_slate_draws_its_family_share_mostly_from_near_the_jobs_level(corpus: Corpus) -> None:
+    jobs = {job.ref: job for job in corpus.jobs}
+    people = {candidate.ref: candidate for candidate in corpus.candidates}
+    expected = round(corpus.config.slate_size * corpus.config.same_family_share)
+    for job_ref, refs in _slates(corpus).items():
+        job = jobs[job_ref]
+        family = [people[ref] for ref in refs if people[ref].family == job.family]
+        assert len(family) == expected, job_ref
+        near_pool = [
+            c
+            for c in corpus.candidates
+            if c.family == job.family and abs(c.seniority.rank - job.seniority.rank) <= 1
+        ]
+        near_picks = sum(abs(c.seniority.rank - job.seniority.rank) <= 1 for c in family)
+        assert near_picks >= min(round(expected * 0.6), len(near_pool)), job_ref
+
+
+def test_relevance_grades_fit_at_the_documented_thresholds(corpus: Corpus) -> None:
+    assert all(pair.relevance == relevance_grade(pair.fit) for pair in corpus.pairs)
+    assert {pair.relevance for pair in corpus.pairs} == {0, 1, 2}
+    assert relevance_grade(STRONG_FIT) == 2
+    assert relevance_grade(math.nextafter(STRONG_FIT, 0.0)) == 1
+    assert relevance_grade(PARTIAL_FIT) == 1
+    assert relevance_grade(math.nextafter(PARTIAL_FIT, 0.0)) == 0
+
+
+def test_fit_ignores_demographics_and_the_visible_profile(corpus: Corpus) -> None:
+    job = corpus.jobs[0]
+    twins = (("woman", "40_and_over"), ("man", "under_40"), ("nonbinary", "under_40"))
+    for candidate in corpus.candidates[:300]:
+        expected = ground_truth_fit(job, candidate)
+        for gender, age_band in twins:
+            twin = dataclasses.replace(
+                candidate, gender=gender, age_band=age_band, resume_text="", skills=()
+            )
+            assert ground_truth_fit(job, twin) == expected
+
+
+def test_fit_rises_with_skills_and_falls_with_each_gap(
+    jobs: list[SyntheticJob], candidates: list[SyntheticCandidate]
+) -> None:
+    job = dataclasses.replace(
+        jobs[0],
+        seniority=SeniorityLevel.MID,
+        min_years_experience=3,
+        education_required=EducationLevel.BACHELOR,
+    )
+    qualified = dataclasses.replace(
+        candidates[0],
+        true_skills=frozenset(job.required_skills + job.preferred_skills),
+        years_experience=4,
+        seniority=SeniorityLevel.MID,
+        education_level=EducationLevel.BACHELOR,
+    )
+    best = ground_truth_fit(job, qualified)
+    assert best >= STRONG_FIT
+    for gap in (
+        {"true_skills": frozenset(job.preferred_skills)},
+        {"years_experience": 0},
+        {"seniority": SeniorityLevel.PRINCIPAL},
+        {"education_level": EducationLevel.HIGH_SCHOOL},
+    ):
+        assert ground_truth_fit(job, dataclasses.replace(qualified, **gap)) < best, gap
+    assert ground_truth_fit(job, qualified, noise=-1.0) < best
+    assert ground_truth_fit(job, qualified, noise=1.0) > best
+
+
+def test_same_family_pairs_are_far_more_often_relevant(corpus: Corpus) -> None:
+    jobs = {job.ref: job for job in corpus.jobs}
+    people = {candidate.ref: candidate for candidate in corpus.candidates}
+    relevant: dict[bool, list[bool]] = {True: [], False: []}
+    for pair in corpus.pairs:
+        same_family = people[pair.candidate_ref].family == jobs[pair.job_ref].family
+        relevant[same_family].append(pair.relevance >= 1)
+    assert mean(relevant[True]) > 5 * mean(relevant[False])
+
+
+def test_advancement_follows_fit(corpus: Corpus) -> None:
+    rates = [mean(p.advanced for p in corpus.pairs if p.relevance == grade) for grade in (0, 1, 2)]
+    assert rates[0] < rates[1] < rates[2]
+
+
+def test_ground_truth_relevance_is_alike_across_genders(corpus: Corpus) -> None:
+    genders = _genders(corpus)
+    relevance = {
+        gender: mean(p.relevance for p in corpus.pairs if genders[p.candidate_ref] == gender)
+        for gender in ("woman", "man")
+    }
+    assert abs(relevance["woman"] - relevance["man"]) < 0.06
+
+
+def test_with_the_default_bias_women_are_advanced_less_often_than_men(corpus: Corpus) -> None:
+    genders = _genders(corpus)
+    advanced = {
+        gender: mean(p.advanced for p in corpus.pairs if genders[p.candidate_ref] == gender)
+        for gender in ("woman", "man")
+    }
+    assert advanced["woman"] < advanced["man"]
+
+
+def test_historical_bias_only_ever_withholds_womens_advancement() -> None:
+    config = CorpusConfig(seed=SEED, n_jobs=60, n_candidates=1500)
+    biased = generate_corpus(config)
+    unbiased = generate_corpus(dataclasses.replace(config, historical_bias=0.0))
+    assert (biased.jobs, biased.candidates) == (unbiased.jobs, unbiased.candidates)
+    genders = _genders(unbiased)
+    withheld = 0
+    for with_bias, without_bias in zip(biased.pairs, unbiased.pairs, strict=True):
+        assert dataclasses.replace(with_bias, advanced=False) == dataclasses.replace(
+            without_bias, advanced=False
+        )
+        if genders[with_bias.candidate_ref] == "woman":
+            assert without_bias.advanced or not with_bias.advanced
+            withheld += without_bias.advanced and not with_bias.advanced
+        else:
+            assert with_bias.advanced == without_bias.advanced
+    assert withheld > 0
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"n_jobs": 0},
+        {"slate_size": 0},
+        {"n_candidates": 10, "slate_size": 11},
+        {"same_family_share": 1.5},
+        {"historical_bias": -0.1},
+        {"historical_bias": 1.1},
+    ],
+)
+def test_an_impossible_config_is_refused(changes: dict[str, float]) -> None:
+    with pytest.raises(ValueError):
+        CorpusConfig(**changes)
