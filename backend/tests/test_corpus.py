@@ -408,6 +408,8 @@ def test_historical_bias_only_ever_withholds_womens_advancement() -> None:
         {"same_family_share": 1.5},
         {"historical_bias": -0.1},
         {"historical_bias": 1.1},
+        {"proxy_share": -0.1},
+        {"proxy_share": 1.1},
     ],
 )
 def test_an_impossible_config_is_refused(changes: dict[str, float]) -> None:
@@ -528,8 +530,9 @@ def test_the_summary_reports_the_planted_gender_bias_and_its_absence() -> None:
     """Compared against the same seed without the bias, not against 1.0.
 
     The ratio on any one corpus is a noisy estimate -- across twelve seeds it
-    runs 0.70 to 0.83 with the bias and 0.92 to 1.08 without it, so a tolerance
-    tight enough to mean anything would only be pinning a lucky draw. The same
+    runs 0.697 to 0.832 with the bias and 0.918 to 1.078 without it, so the two
+    ranges nearly touch and a tolerance tight enough to mean anything would only
+    be pinning a lucky draw. The same
     seed without the bias holds the people and the draws fixed, leaving a
     paired comparison that stays within 0.04 of the planted factor.
     """

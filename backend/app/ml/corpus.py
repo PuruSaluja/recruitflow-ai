@@ -674,6 +674,8 @@ class CorpusConfig:
             raise ValueError("same_family_share must be between 0 and 1")
         if not 0.0 <= self.historical_bias <= 1.0:
             raise ValueError("historical_bias must be between 0 and 1")
+        if not 0.0 <= self.proxy_share <= 1.0:
+            raise ValueError("proxy_share must be between 0 and 1")
 
 
 @dataclass(frozen=True)
