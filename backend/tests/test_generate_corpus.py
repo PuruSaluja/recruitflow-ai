@@ -92,6 +92,12 @@ def test_a_frozenset_is_written_in_a_stable_order(written: Path) -> None:
         assert row["true_skills"] == sorted(row["true_skills"])
 
 
+def test_every_file_is_written_with_line_feeds_only(written: Path) -> None:
+    """These are generated on Windows too, and must stay byte-identical across platforms."""
+    for path in written.iterdir():
+        assert b"\r" not in path.read_bytes(), path.name
+
+
 def test_the_manifest_records_the_config_and_the_interpreter(written: Path) -> None:
     manifest = json.loads((written / "manifest.json").read_text(encoding="utf-8"))
 
