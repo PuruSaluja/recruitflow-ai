@@ -474,7 +474,11 @@ def test_the_summary_counts_what_the_corpus_holds(corpus: Corpus) -> None:
         len(corpus.candidates),
         len(corpus.pairs),
     )
-    assert summary.relevance_counts == Counter(pair.relevance for pair in corpus.pairs)
+    # Spelled out per grade rather than compared to a Counter, which would drop
+    # a grade nobody scored and fail for a reason unrelated to the count.
+    assert summary.relevance_counts == {
+        grade: sum(pair.relevance == grade for pair in corpus.pairs) for grade in (0, 1, 2)
+    }
     assert sum(summary.relevance_counts.values()) == len(corpus.pairs)
     assert summary.gender_counts == Counter(c.gender for c in corpus.candidates)
     assert summary.age_band_counts == Counter(c.age_band for c in corpus.candidates)

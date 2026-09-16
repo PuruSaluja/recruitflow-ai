@@ -217,7 +217,8 @@ records the version rather than assuming it.
   skills list leaves some true skills out, and some are written under an alias,
   so the matcher has to cope with `Postgres` meaning `PostgreSQL`.
 - **`gender` comes from its own random stream**, independent of every
-  qualification; `age_band` follows years of experience.
+  qualification. `age_band` is not independent — it follows education and years
+  of experience, so the over-40 group really is the more experienced one.
 - A pair's **`fit` is ground truth** computed from the true profile alone —
   skill coverage, a shortfall in years, distance in seniority, missing
   education — plus a random term for what no profile shows. It never sees
