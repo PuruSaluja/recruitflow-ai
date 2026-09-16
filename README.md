@@ -239,7 +239,9 @@ gender; only the wording differs.
 ### Measured on the default corpus
 
 Real numbers from one run of the committed code — 200 jobs, 4,000 candidates,
-10,000 labelled pairs, generated in 0.27 s on **CPython 3.14.6**, seed 42:
+10,000 labelled pairs on **CPython 3.14.6**, seed 42. Generation takes roughly
+0.4 s (median of five runs on one laptop, spread 0.38–0.43 s), which is why the
+corpus is regenerated rather than committed:
 
 | | |
 | --- | --- |
@@ -259,9 +261,9 @@ lifts the overall rate to 16.7%; `--proxy-share 0` takes the proxy phrase to
 the simulated decisions and the resume wording, never a qualification.
 
 The ratio on any single corpus is a noisy estimate: across twelve seeds it runs
-0.70–0.83 with the bias and 0.92–1.08 without it. Comparisons in the tests are
-therefore made against the same seed with the bias removed, not against a fixed
-constant.
+0.697–0.832 with the bias and 0.918–1.078 without it — the two ranges nearly
+touch. Comparisons in the tests are therefore made against the same seed with
+the bias removed, not against a fixed constant.
 
 > **What this can and cannot establish.** A fairness audit on generated data can
 > show that the audit itself works — that it recovers a bias of known size and
