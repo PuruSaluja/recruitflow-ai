@@ -27,8 +27,10 @@ from __future__ import annotations
 
 import math
 import random
+from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from statistics import median
 from typing import Any, TypeVar
 
 from app.ml.taxonomy import SKILLS, get_skill
@@ -775,3 +777,92 @@ def label_pairs(
 
 def _advance_chance(fit: float) -> float:
     return 1.0 / (1.0 + math.exp(-6.0 * (fit - 0.5)))
+
+
+@dataclass(frozen=True)
+class CorpusSummary:
+    """What a generated corpus actually contains, measured rather than assumed.
+
+    The README's synthetic-data disclosure and the fairness audit both quote
+    these, so they are computed from the corpus in hand and never written down
+    by hand.
+    """
+
+    n_jobs: int
+    n_candidates: int
+    n_pairs: int
+    #: How many pairs got each relevance grade, 0 through 2.
+    relevance_counts: dict[int, int]
+    #: Jobs whose slate holds nobody graded 1 or 2, and nobody graded 2.
+    jobs_without_relevant: int
+    jobs_without_strong: int
+    #: Relevant candidates on a job's slate, at the median job.
+    median_relevant_per_job: float
+    gender_counts: dict[str, int]
+    age_band_counts: dict[str, int]
+    advance_rate: float
+    advance_rate_by_gender: dict[str, float]
+    #: Women's advance rate over men's. The planted ``historical_bias`` drives
+    #: it below 1.0; setting that to 0 should bring it back to about 1.0.
+    women_to_men_advance_ratio: float | None
+    #: Advance rates of pairs graded 2 and of every other pair.
+    advance_rate_strong: float
+    advance_rate_other: float
+    #: Share of resumes naming a women-in-tech group -- the planted text proxy
+    #: for gender. Only women's resumes carry it, so the second is always 0.
+    proxy_rate_women: float
+    proxy_rate_others: float
+
+
+def corpus_summary(corpus: Corpus) -> CorpusSummary:
+    """Measure ``corpus``: label balance, coverage per job, and both planted biases."""
+    relevance_counts = dict.fromkeys((0, 1, 2), 0)
+    relevant_per_job: Counter[str] = Counter()
+    strong_per_job: Counter[str] = Counter()
+    by_gender: defaultdict[str, list[bool]] = defaultdict(list)
+    strong: list[bool] = []
+    other: list[bool] = []
+    gender_of = {candidate.ref: candidate.gender for candidate in corpus.candidates}
+
+    for pair in corpus.pairs:
+        relevance_counts[pair.relevance] += 1
+        if pair.relevance >= 1:
+            relevant_per_job[pair.job_ref] += 1
+        if pair.relevance == 2:
+            strong_per_job[pair.job_ref] += 1
+            strong.append(pair.advanced)
+        else:
+            other.append(pair.advanced)
+        by_gender[gender_of[pair.candidate_ref]].append(pair.advanced)
+
+    rates = {gender: _rate(outcomes) for gender, outcomes in sorted(by_gender.items())}
+    men_rate = rates.get("man", 0.0)
+    women = [c for c in corpus.candidates if c.gender == "woman"]
+    others = [c for c in corpus.candidates if c.gender != "woman"]
+
+    return CorpusSummary(
+        n_jobs=len(corpus.jobs),
+        n_candidates=len(corpus.candidates),
+        n_pairs=len(corpus.pairs),
+        relevance_counts=relevance_counts,
+        jobs_without_relevant=sum(not relevant_per_job[job.ref] for job in corpus.jobs),
+        jobs_without_strong=sum(not strong_per_job[job.ref] for job in corpus.jobs),
+        median_relevant_per_job=median([relevant_per_job[job.ref] for job in corpus.jobs] or [0]),
+        gender_counts=dict(sorted(Counter(c.gender for c in corpus.candidates).items())),
+        age_band_counts=dict(sorted(Counter(c.age_band for c in corpus.candidates).items())),
+        advance_rate=_rate([pair.advanced for pair in corpus.pairs]),
+        advance_rate_by_gender=rates,
+        women_to_men_advance_ratio=rates.get("woman", 0.0) / men_rate if men_rate else None,
+        advance_rate_strong=_rate(strong),
+        advance_rate_other=_rate(other),
+        proxy_rate_women=_rate([_names_womens_group(c.resume_text) for c in women]),
+        proxy_rate_others=_rate([_names_womens_group(c.resume_text) for c in others]),
+    )
+
+
+def _rate(outcomes: Sequence[bool]) -> float:
+    return sum(outcomes) / len(outcomes) if outcomes else 0.0
+
+
+def _names_womens_group(resume_text: str) -> bool:
+    return any(line in resume_text for line in _WOMEN_COMMUNITY)
