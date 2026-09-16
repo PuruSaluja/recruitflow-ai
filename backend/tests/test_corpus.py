@@ -525,12 +525,26 @@ def test_the_summary_separates_strong_pairs_from_the_rest(corpus: Corpus) -> Non
 
 
 def test_the_summary_reports_the_planted_gender_bias_and_its_absence() -> None:
+    """Compared against the same seed without the bias, not against 1.0.
+
+    The ratio on any one corpus is a noisy estimate -- across twelve seeds it
+    runs 0.70 to 0.83 with the bias and 0.92 to 1.08 without it, so a tolerance
+    tight enough to mean anything would only be pinning a lucky draw. The same
+    seed without the bias holds the people and the draws fixed, leaving a
+    paired comparison that stays within 0.04 of the planted factor.
+    """
     config = CorpusConfig(seed=SEED, n_jobs=60, n_candidates=1500)
+    kept = 1 - config.historical_bias
     biased = corpus_summary(generate_corpus(config))
     unbiased = corpus_summary(generate_corpus(dataclasses.replace(config, historical_bias=0.0)))
 
-    assert biased.women_to_men_advance_ratio == pytest.approx(1 - config.historical_bias, abs=0.08)
-    assert unbiased.women_to_men_advance_ratio == pytest.approx(1.0, abs=0.08)
+    assert biased.advance_rate_by_gender["man"] == unbiased.advance_rate_by_gender["man"]
+    assert biased.advance_rate_by_gender["woman"] == pytest.approx(
+        unbiased.advance_rate_by_gender["woman"] * kept, abs=0.05 * kept
+    )
+    assert biased.women_to_men_advance_ratio == pytest.approx(
+        unbiased.women_to_men_advance_ratio * kept, abs=0.05
+    )
     assert biased.women_to_men_advance_ratio < unbiased.women_to_men_advance_ratio
 
 
