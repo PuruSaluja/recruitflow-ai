@@ -847,7 +847,7 @@ def corpus_summary(corpus: Corpus) -> CorpusSummary:
         relevance_counts=relevance_counts,
         jobs_without_relevant=sum(not relevant_per_job[job.ref] for job in corpus.jobs),
         jobs_without_strong=sum(not strong_per_job[job.ref] for job in corpus.jobs),
-        median_relevant_per_job=median([relevant_per_job[job.ref] for job in corpus.jobs] or [0]),
+        median_relevant_per_job=median(relevant_per_job[job.ref] for job in corpus.jobs),
         gender_counts=dict(sorted(Counter(c.gender for c in corpus.candidates).items())),
         age_band_counts=dict(sorted(Counter(c.age_band for c in corpus.candidates).items())),
         advance_rate=_rate([pair.advanced for pair in corpus.pairs]),

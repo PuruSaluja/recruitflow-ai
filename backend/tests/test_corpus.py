@@ -8,7 +8,7 @@ import os
 import subprocess
 import sys
 from collections import Counter, defaultdict
-from statistics import mean
+from statistics import mean, median
 
 import pytest
 
@@ -24,6 +24,7 @@ from app.ml.corpus import (
     CorpusConfig,
     SyntheticCandidate,
     SyntheticJob,
+    corpus_summary,
     generate_candidates,
     generate_corpus,
     generate_jobs,
@@ -458,3 +459,123 @@ def test_a_pool_one_candidate_short_is_refused_with_the_reason(
 
     with pytest.raises(ValueError, match="cannot fill a slate"):
         label_pairs([jobs[0]], pool, config)
+
+
+# --- summary ----------------------------------------------------------------
+
+
+def test_the_summary_counts_what_the_corpus_holds(corpus: Corpus) -> None:
+    summary = corpus_summary(corpus)
+
+    assert (summary.n_jobs, summary.n_candidates, summary.n_pairs) == (
+        len(corpus.jobs),
+        len(corpus.candidates),
+        len(corpus.pairs),
+    )
+    assert summary.relevance_counts == Counter(pair.relevance for pair in corpus.pairs)
+    assert sum(summary.relevance_counts.values()) == len(corpus.pairs)
+    assert summary.gender_counts == Counter(c.gender for c in corpus.candidates)
+    assert summary.age_band_counts == Counter(c.age_band for c in corpus.candidates)
+
+
+def test_a_grade_nobody_scored_is_still_reported_as_zero() -> None:
+    """All three grades are always keys, so a reader sees an empty class rather than a gap."""
+    corpus = generate_corpus(CorpusConfig(seed=SEED, n_jobs=1, n_candidates=60, slate_size=1))
+
+    assert set(corpus_summary(corpus).relevance_counts) == {0, 1, 2}
+
+
+def test_the_summary_counts_the_jobs_left_without_a_relevant_or_strong_candidate(
+    corpus: Corpus,
+) -> None:
+    graded: dict[str, list[int]] = defaultdict(list)
+    for pair in corpus.pairs:
+        graded[pair.job_ref].append(pair.relevance)
+    summary = corpus_summary(corpus)
+
+    assert summary.jobs_without_relevant == sum(max(g) < 1 for g in graded.values())
+    assert summary.jobs_without_strong == sum(max(g) < 2 for g in graded.values())
+    assert summary.median_relevant_per_job == median(
+        [sum(grade >= 1 for grade in g) for g in graded.values()]
+    )
+
+
+def test_the_summary_rates_match_the_pairs_they_describe(corpus: Corpus) -> None:
+    genders = _genders(corpus)
+    summary = corpus_summary(corpus)
+
+    assert summary.advance_rate == mean(pair.advanced for pair in corpus.pairs)
+    assert summary.advance_rate_strong == mean(
+        pair.advanced for pair in corpus.pairs if pair.relevance == 2
+    )
+    assert summary.advance_rate_other == mean(
+        pair.advanced for pair in corpus.pairs if pair.relevance != 2
+    )
+    assert set(summary.advance_rate_by_gender) == set(genders.values())
+    for gender, rate in summary.advance_rate_by_gender.items():
+        assert rate == mean(
+            pair.advanced for pair in corpus.pairs if genders[pair.candidate_ref] == gender
+        )
+
+
+def test_the_summary_separates_strong_pairs_from_the_rest(corpus: Corpus) -> None:
+    summary = corpus_summary(corpus)
+
+    assert summary.advance_rate_other < summary.advance_rate < summary.advance_rate_strong
+
+
+def test_the_summary_reports_the_planted_gender_bias_and_its_absence() -> None:
+    config = CorpusConfig(seed=SEED, n_jobs=60, n_candidates=1500)
+    biased = corpus_summary(generate_corpus(config))
+    unbiased = corpus_summary(generate_corpus(dataclasses.replace(config, historical_bias=0.0)))
+
+    assert biased.women_to_men_advance_ratio == pytest.approx(1 - config.historical_bias, abs=0.08)
+    assert unbiased.women_to_men_advance_ratio == pytest.approx(1.0, abs=0.08)
+    assert biased.women_to_men_advance_ratio < unbiased.women_to_men_advance_ratio
+
+
+def test_a_corpus_nobody_advanced_in_has_no_advance_ratio() -> None:
+    """Nothing to divide by, so the ratio is absent rather than a made-up number."""
+    corpus = generate_corpus(CorpusConfig(seed=SEED, n_jobs=5, n_candidates=300))
+    nobody = dataclasses.replace(
+        corpus, pairs=tuple(dataclasses.replace(pair, advanced=False) for pair in corpus.pairs)
+    )
+
+    summary = corpus_summary(nobody)
+
+    assert summary.women_to_men_advance_ratio is None
+    assert summary.advance_rate == 0.0
+    assert set(summary.advance_rate_by_gender.values()) == {0.0}
+
+
+def test_a_group_with_no_pairs_rates_zero_rather_than_one() -> None:
+    """There is nothing to average; 1.0 would read as every strong pair advancing."""
+    corpus = generate_corpus(CorpusConfig(seed=SEED, n_jobs=5, n_candidates=300))
+    unranked = dataclasses.replace(
+        corpus, pairs=tuple(dataclasses.replace(pair, relevance=0) for pair in corpus.pairs)
+    )
+
+    summary = corpus_summary(unranked)
+
+    assert summary.relevance_counts[2] == 0
+    assert summary.advance_rate_strong == 0.0
+    assert summary.median_relevant_per_job == 0
+    assert summary.jobs_without_relevant == summary.jobs_without_strong == summary.n_jobs
+
+
+def test_the_summary_finds_the_planted_proxy_on_womens_resumes_alone() -> None:
+    config = CorpusConfig(seed=SEED, n_jobs=5, n_candidates=2000)
+
+    summary = corpus_summary(generate_corpus(config))
+
+    assert summary.proxy_rate_women == pytest.approx(COMMUNITY_RATE * config.proxy_share, abs=0.05)
+    assert summary.proxy_rate_others == 0.0
+
+
+def test_dropping_the_proxy_share_clears_the_proxy_from_every_resume() -> None:
+    config = CorpusConfig(seed=SEED, n_jobs=5, n_candidates=2000, proxy_share=0.0)
+
+    summary = corpus_summary(generate_corpus(config))
+
+    assert summary.proxy_rate_women == 0.0
+    assert summary.proxy_rate_others == 0.0
