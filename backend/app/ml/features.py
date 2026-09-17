@@ -78,31 +78,38 @@ def skill_keys(spellings: Iterable[str]) -> set[str]:
     return {spelling_key(name) for name in normalise_skills(spellings)}
 
 
-def coverage(wanted: Iterable[str], held: set[str]) -> float:
+def _coverage(wanted: Iterable[str], held_keys: set[str]) -> float:
     """Share of ``wanted`` the candidate holds; 1.0 when nothing is wanted.
 
     Nothing asked for means nothing missing, so an empty requirement is full
     coverage rather than zero -- a job that lists no required skills must not
     push every candidate to the bottom.
+
+    ``held_keys`` must already have been through :func:`skill_keys`. Raw
+    spellings would not raise -- they would quietly intersect to the wrong
+    answer -- which is why this is private and ``feature_dict`` is the way in.
     """
     keys = skill_keys(wanted)
     if not keys:
         return 1.0
-    return len(keys & held) / len(keys)
+    return len(keys & held_keys) / len(keys)
 
 
-def jaccard(left: set[str], right: set[str]) -> float:
-    """Overlap of two skill sets over their union; 0.0 when both are empty.
+def _jaccard(left_keys: set[str], right_keys: set[str]) -> float:
+    """Overlap of two keyed skill sets over their union; 0.0 when both are empty.
 
     Two empty sets are conventionally identical, but scoring that 1.0 would
     hand a candidate who lists no skills a perfect similarity against a job
     that lists none either. There is no evidence of overlap, so this reports
     none.
+
+    Both sides must already have been through :func:`skill_keys`, for the
+    reason given on :func:`_coverage`.
     """
-    union = left | right
+    union = left_keys | right_keys
     if not union:
         return 0.0
-    return len(left & right) / len(union)
+    return len(left_keys & right_keys) / len(union)
 
 
 def experience_gap(job: JobLike, candidate: CandidateLike) -> float:
@@ -156,9 +163,9 @@ def feature_dict(job: JobLike, candidate: CandidateLike) -> dict[str, float]:
     held = skill_keys(candidate.skills)
     job_skills = skill_keys([*job.required_skills, *job.preferred_skills])
     return {
-        "required_skill_coverage": coverage(job.required_skills, held),
-        "preferred_skill_coverage": coverage(job.preferred_skills, held),
-        "skill_jaccard": jaccard(job_skills, held),
+        "required_skill_coverage": _coverage(job.required_skills, held),
+        "preferred_skill_coverage": _coverage(job.preferred_skills, held),
+        "skill_jaccard": _jaccard(job_skills, held),
         "experience_gap": experience_gap(job, candidate),
         "experience_surplus": experience_surplus(job, candidate),
         "seniority_distance": seniority_distance(job, candidate),
