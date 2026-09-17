@@ -12,13 +12,13 @@ from app.ml.corpus import CorpusConfig, SyntheticCandidate, SyntheticJob, genera
 from app.ml.features import (
     FEATURE_NAMES,
     YEARS_SCALE,
-    coverage,
+    _coverage,
+    _jaccard,
     education_fit,
     experience_gap,
     experience_surplus,
     feature_dict,
     feature_vector,
-    jaccard,
     seniority_direction,
     seniority_distance,
     skill_keys,
@@ -107,26 +107,37 @@ def test_the_same_pair_always_gives_the_same_vector() -> None:
     assert feature_vector(job, candidate) == feature_vector(job, candidate)
 
 
+def _as_orm(job: SyntheticJob, candidate: SyntheticCandidate) -> tuple[Job, Candidate]:
+    return (
+        make_job(
+            seniority=job.seniority,
+            education_required=job.education_required,
+            min_years_experience=job.min_years_experience,
+            required_skills=list(job.required_skills),
+            preferred_skills=list(job.preferred_skills),
+        ),
+        make_candidate(
+            seniority=candidate.seniority,
+            education_level=candidate.education_level,
+            years_experience=candidate.years_experience,
+            skills=list(candidate.skills),
+        ),
+    )
+
+
 def test_the_orm_models_and_the_synthetic_ones_agree(corpus) -> None:
-    """The protocols are structural; both shapes must really produce the same numbers."""
-    job: SyntheticJob = corpus.jobs[0]
-    candidate: SyntheticCandidate = corpus.candidates[0]
+    """The protocols are structural, so both shapes must really produce the same numbers.
 
-    orm_job = make_job(
-        seniority=job.seniority,
-        education_required=job.education_required,
-        min_years_experience=job.min_years_experience,
-        required_skills=list(job.required_skills),
-        preferred_skills=list(job.preferred_skills),
-    )
-    orm_candidate = make_candidate(
-        seniority=candidate.seniority,
-        education_level=candidate.education_level,
-        years_experience=candidate.years_experience,
-        skills=list(candidate.skills),
-    )
+    Run over every pair rather than one: a disagreement could easily depend on
+    a skill spelling or a level combination that one sample never reaches.
+    """
+    jobs = {job.ref: job for job in corpus.jobs}
+    people = {person.ref: person for person in corpus.candidates}
 
-    assert feature_dict(orm_job, orm_candidate) == feature_dict(job, candidate)
+    for pair in corpus.pairs:
+        job, candidate = jobs[pair.job_ref], people[pair.candidate_ref]
+        orm_job, orm_candidate = _as_orm(job, candidate)
+        assert feature_dict(orm_job, orm_candidate) == feature_dict(job, candidate), pair
 
 
 @pytest.mark.parametrize(
@@ -158,37 +169,45 @@ def test_every_feature_stays_in_its_range_across_the_corpus(corpus, name, low, h
 def test_an_alias_counts_as_the_skill_it_names() -> None:
     job = make_job(required_skills=["PostgreSQL", "Python"])
 
-    assert coverage(job.required_skills, skill_keys(["postgres", "python3"])) == 1.0
+    assert _coverage(job.required_skills, skill_keys(["postgres", "python3"])) == 1.0
 
 
 def test_an_unknown_skill_matches_whatever_its_casing_and_spacing() -> None:
     """The taxonomy leaves unknown skills as written, so the key has to do the folding."""
     job = make_job(required_skills=["Rust  Lang"])
 
-    assert coverage(job.required_skills, skill_keys(["rust lang"])) == 1.0
+    assert _coverage(job.required_skills, skill_keys(["rust lang"])) == 1.0
 
 
 def test_repeating_a_skill_does_not_inflate_coverage() -> None:
     job = make_job(required_skills=["Python", "Python", "python3", "SQL"])
 
-    assert coverage(job.required_skills, skill_keys(["Python"])) == pytest.approx(0.5)
+    assert _coverage(job.required_skills, skill_keys(["Python"])) == pytest.approx(0.5)
 
 
 def test_nothing_required_is_full_coverage_not_none() -> None:
     """An empty requirement must not push every candidate to the bottom."""
-    assert coverage([], skill_keys(["Python"])) == 1.0
-    assert coverage([], set()) == 1.0
+    assert _coverage([], skill_keys(["Python"])) == 1.0
+    assert _coverage([], set()) == 1.0
 
 
 def test_holding_none_of_what_is_required_is_zero() -> None:
-    assert coverage(["Python", "SQL"], skill_keys(["Cobol"])) == 0.0
+    assert _coverage(["Python", "SQL"], skill_keys(["Cobol"])) == 0.0
+
+
+def test_coverage_is_an_exact_fraction_not_a_rounded_one() -> None:
+    """Halves and whole numbers survive rounding; two thirds does not."""
+    assert _coverage(["Python", "SQL", "AWS"], skill_keys(["Python", "SQL"])) == pytest.approx(
+        2 / 3
+    )
+    assert _coverage(["a", "b", "c", "d", "e", "f", "g"], skill_keys(["a"])) == pytest.approx(1 / 7)
 
 
 def test_coverage_counts_only_what_is_asked_for() -> None:
     """Extra skills neither help nor hurt this feature."""
     held = skill_keys(["Python", "SQL", "Rust", "Go", "Excel"])
 
-    assert coverage(["Python", "SQL"], held) == 1.0
+    assert _coverage(["Python", "SQL"], held) == 1.0
 
 
 def test_required_and_preferred_coverage_are_not_interchangeable() -> None:
@@ -212,18 +231,41 @@ def test_the_overlap_feature_counts_preferred_skills_too() -> None:
 
 
 def test_jaccard_is_overlap_over_union() -> None:
-    assert jaccard({"a", "b"}, {"a", "b"}) == 1.0
-    assert jaccard({"a", "b"}, {"b", "c"}) == pytest.approx(1 / 3)
-    assert jaccard({"a"}, {"b"}) == 0.0
+    assert _jaccard({"a", "b"}, {"a", "b"}) == 1.0
+    assert _jaccard({"a", "b"}, {"b", "c"}) == pytest.approx(1 / 3)
+    assert _jaccard({"a"}, {"b"}) == 0.0
 
 
 def test_two_empty_skill_sets_score_no_overlap() -> None:
     """Conventionally 1.0, but that would hand a skill-less pair a perfect similarity."""
-    assert jaccard(set(), set()) == 0.0
+    assert _jaccard(set(), set()) == 0.0
 
 
 def test_blank_skill_entries_are_ignored() -> None:
     assert skill_keys(["Python", "", "   ", "SQL"]) == skill_keys(["Python", "SQL"])
+
+
+@pytest.mark.parametrize(
+    "spellings",
+    [
+        ["postgres", "Python", "Rust  Lang", "  SQL ", "python3", "C++", "cpp"],
+        ["Straße", "STRASSE", "Ünïcode Skill"],
+        [],
+    ],
+)
+def test_keying_an_already_keyed_list_changes_nothing(spellings: list[str]) -> None:
+    """_coverage and _jaccard take keys, so keying twice has to be harmless."""
+    once = skill_keys(spellings)
+
+    assert skill_keys(once) == once
+
+
+def test_raw_spellings_are_not_interchangeable_with_keys() -> None:
+    """Why _coverage and _jaccard are private: raw input is wrong, not loud."""
+    assert _coverage(["Python"], skill_keys(["python3"])) == 1.0
+    assert _coverage(["Python"], {"python3"}) == 0.0
+    assert _jaccard(skill_keys(["Python"]), skill_keys(["python3"])) == 1.0
+    assert _jaccard({"Python"}, {"python3"}) == 0.0
 
 
 # --- experience -------------------------------------------------------------
@@ -252,10 +294,16 @@ def test_the_gap_grows_with_the_shortfall_then_saturates() -> None:
     assert gaps[-2] == gaps[-1] == 1.0
 
 
-def test_the_surplus_saturates_too() -> None:
+def test_the_surplus_grows_with_the_years_then_saturates() -> None:
+    """Mirrors the gap: the rate matters, not just that it reaches 1.0 eventually."""
     job = make_job(min_years_experience=0)
+    surpluses = [
+        experience_surplus(job, make_candidate(years_experience=y)) for y in (1, 2, 4, 5, 40)
+    ]
 
-    assert experience_surplus(job, make_candidate(years_experience=40)) == 1.0
+    assert surpluses == sorted(surpluses)
+    assert surpluses[0] == pytest.approx(1 / YEARS_SCALE)
+    assert surpluses[-2] == surpluses[-1] == 1.0
 
 
 # --- seniority --------------------------------------------------------------
