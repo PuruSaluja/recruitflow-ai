@@ -60,7 +60,7 @@ TOKEN_PATTERN = r"(?u)\b\w[\w+#]*(?:\.\w[\w+#]*)*"
 
 # The characters the resume normaliser strips for the same reason: they survive
 # NFKC and split a word in two. Soft hyphen, ZWSP, ZWNJ, ZWJ, word joiner, BOM.
-_INVISIBLE_RE = re.compile("[­​‌‍⁠﻿]")
+_INVISIBLE_RE = re.compile("[\u00ad\u200b\u200c\u200d\u2060\ufeff]")
 
 
 def fold_text(text: str) -> str:

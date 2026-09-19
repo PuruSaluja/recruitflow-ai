@@ -110,13 +110,13 @@ def test_words_outside_ascii_are_kept() -> None:
 @pytest.mark.parametrize(
     ("variant", "plain"),
     [
-        ("café", "café"),
-        ("certiﬁed", "certified"),
-        ("Ｐｙｔｈｏｎ", "Python"),
-        ("Py​thon", "Python"),
-        ("Py­thon", "Python"),
-        ("Py﻿thon", "Python"),
-        ("STRASSE", "Straße"),
+        ("cafe\u0301", "caf\u00e9"),
+        ("certi\ufb01ed", "certified"),
+        ("\uff30\uff59\uff54\uff48\uff4f\uff4e", "Python"),
+        ("Py\u200bthon", "Python"),
+        ("Py\u00adthon", "Python"),
+        ("Py\ufeffthon", "Python"),
+        ("STRASSE", "Stra\u00dfe"),
     ],
     ids=["decomposed", "ligature", "full-width", "zero-width", "soft-hyphen", "bom", "casefold"],
 )
