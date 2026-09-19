@@ -114,11 +114,27 @@ def test_words_outside_ascii_are_kept() -> None:
         ("certi\ufb01ed", "certified"),
         ("\uff30\uff59\uff54\uff48\uff4f\uff4e", "Python"),
         ("Py\u200bthon", "Python"),
+        ("Py\u200cthon", "Python"),
+        ("Py\u200dthon", "Python"),
+        ("Py\u2060thon", "Python"),
         ("Py\u00adthon", "Python"),
         ("Py\ufeffthon", "Python"),
         ("STRASSE", "Stra\u00dfe"),
+        ("\u211d", "R"),
     ],
-    ids=["decomposed", "ligature", "full-width", "zero-width", "soft-hyphen", "bom", "casefold"],
+    ids=[
+        "decomposed",
+        "ligature",
+        "full-width",
+        "zero-width",
+        "zwnj",
+        "zwj",
+        "word-joiner",
+        "soft-hyphen",
+        "bom",
+        "casefold",
+        "folded-after-nfkc",
+    ],
 )
 def test_one_word_is_one_term_however_it_is_encoded(variant: str, plain: str) -> None:
     """Only uploaded resumes are normalised on the way in; JSON bodies and job text are not."""
