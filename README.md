@@ -308,14 +308,21 @@ require every row to stay identical.
 
 Choices in the text half, each pinned by a test:
 
+- **One spelling per word.** Every document is NFKC-normalised, cleared of
+  zero-width characters and case-folded before it is split into terms, so
+  `certiﬁed` with a ligature, `Ｐｙｔｈｏｎ` in full width and `café` in either
+  Unicode form each give one term. Uploaded resumes are normalised on the way
+  in, but resumes sent as JSON and job descriptions are not.
 - **The tokeniser keeps skill names whole.** scikit-learn's default pattern
   drops `C++`, `C#` and `R` entirely and splits `Node.js`; this one keeps them,
-  and still splits `Python/SQL` and hyphenated words.
+  and still splits `Python/SQL` and hyphenated words. A `+` between two words
+  does not split them, so `Python+SQL` stays one term.
 - **No stop-word list.** scikit-learn's English list would delete `go`,
   `system`, `front`, `back` and `full`.
 - **Repetition is damped.** A candidate's document names most skills twice,
   once in the resume and once in the skills list, so term counts are
-  sublinear. A term must appear in at least two resumes to be learned.
+  sublinear. A term must appear in at least two candidates' documents to be
+  learned.
 - **The vocabulary comes from the candidates alone**, each counted once however
   many slates they are on. Wording only jobs use ("We are hiring") can never
   match a resume; it would only lower each job's similarities by a different
@@ -335,13 +342,23 @@ in grades 1 and 2 — so the same ratios were measured on seeds 1 to 12 as well:
 medians of 0.83, 0.83 and 0.77 with the bias, and 1.02, 0.99 and 0.99 without
 it. The term follows the planted recruiter bias, not candidate quality.
 
-The default configuration keeps the term, and a model trained on past decisions
-is free to learn it. That is deliberate. Removing the word by hand would be a
-mitigation nobody measured, relying on knowledge a real system would not have
-about which of its terms stand in for gender, and it would hide exactly what
-the fairness audit is built to find. Mitigations are tried in that audit, with
-before-and-after numbers. Until then, expect a model trained on `advanced` to
-score some women lower for this reason alone.
+`women` is not the only such column: `bootcamp` and `member` also occur only in
+the planted lines, in 126 and 113 of the 363 slate resumes that carry one
+(`women` is in all 363). The proxy reaches a model through these columns, not
+through `text_similarity`: swapping each planted line for the neutral line the
+same person would otherwise have written moves that pair's similarity by
+-0.0007 on average and never by more than 0.03, against a standard deviation
+of 0.22 across all pairs.
+
+The default configuration keeps these columns, and a model trained on past
+decisions is free to learn them. That is deliberate. Removing words by hand
+would be a mitigation nobody measured, and it relies on knowing which terms
+stand in for gender: deleting `women` alone would leave the other two, and real
+resumes carry stand-ins this corpus never generates, such as names and email
+addresses, since its resumes contain no contact details. It would also hide
+exactly what the fairness audit is built to find. Mitigations are tried in
+that audit, with before-and-after numbers. Until then, expect a model trained
+on `advanced` to score some women lower for this reason alone.
 
 ### Measured on the default corpus
 
@@ -353,7 +370,7 @@ Real numbers from one run of the committed code on the default corpus
 | Matrix for the 10,000 pairs | 10,000 × 355: 8 engineered, 1 similarity, 346 resume terms; 14% of cells non-zero |
 | Vocabulary learned from | 3,680 distinct candidates on the slates |
 | `text_similarity` by relevance grade 0 / 1 / 2 | 0.217 / 0.535 / 0.579 (mean) |
-| Time to fit / to build all 10,000 rows | 0.12 s / 0.41 s (median of five runs, one laptop) |
+| Time to fit / to build all 10,000 rows | 0.12 s / 0.42 s (median of eleven runs, one laptop) |
 
 Correlation of each of the first nine columns with the generator's
 ground-truth `fit`, over the 10,000 pairs:
