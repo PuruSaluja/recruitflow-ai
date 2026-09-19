@@ -21,9 +21,10 @@ never reorder a slate.
 
 The resume terms are where a model learns from wording directly, and so where
 it can pick up a proxy for gender. The synthetic corpus plants one -- a
-women-in-tech community line on some women's resumes -- and ``resume:women`` is
-a column like any other, on purpose: the fairness audit exists to measure what a
-model does with it, and removing the term here would hide what it is meant to
+women-in-tech community line on some women's resumes -- and the words only that
+line uses (``resume:women``, ``resume:bootcamp``, ``resume:member``) are
+columns like any other, on purpose: the fairness audit exists to measure what a
+model does with them, and removing them here would hide what it is meant to
 find.
 """
 
