@@ -6,9 +6,9 @@ descriptions.
 
 > **Status:** in development. The data layer and the job, candidate and
 > application APIs are in place, including resume file ingestion and the
-> pipeline stage-history trail, as are the skills taxonomy and the synthetic
-> corpus the matcher will train on; the matching model itself, PDF reporting,
-> and the frontend are landing incrementally.
+> pipeline stage-history trail, as are the skills taxonomy, the synthetic
+> corpus the matcher will train on and the features it will read; the matching
+> model itself, PDF reporting, and the frontend are landing incrementally.
 
 ## Tech stack
 
@@ -270,6 +270,113 @@ the bias removed, not against a fixed constant.
 > show that the audit itself works — that it recovers a bias of known size and
 > reports none when none was planted. It cannot say anything about bias in real
 > hiring, and no number here should be read as if it could.
+
+## Matching features
+
+The matcher reads each job-candidate pair as one row of numbers, built by
+`PairFeaturiser` in [`backend/app/ml/matrix.py`](backend/app/ml/matrix.py). A
+row has three blocks, always in this order:
+
+1. **Eight engineered features** from fields a recruiter can see
+   ([`app/ml/features.py`](backend/app/ml/features.py)):
+
+   | Feature | Measures | Range |
+   | --- | --- | --- |
+   | `required_skill_coverage` | Share of the required skills the candidate lists | 0 to 1 |
+   | `preferred_skill_coverage` | Share of the preferred skills the candidate lists | 0 to 1 |
+   | `skill_jaccard` | Overlap between all the job's skills and the candidate's | 0 to 1 |
+   | `experience_gap` | Years short of the job's minimum, full at five | 0 to 1 |
+   | `experience_surplus` | Years past the minimum, full at five | 0 to 1 |
+   | `seniority_distance` | Levels between the two, either way | 0 to 1 |
+   | `seniority_direction` | Under-levelled (negative) or over-levelled (positive) | -1 to 1 |
+   | `education_fit` | 1 when the requirement is met, less for each level short | 0 to 1 |
+
+2. **`text_similarity`**, the cosine between the job's and the candidate's
+   TF-IDF vectors ([`app/ml/text.py`](backend/app/ml/text.py)). A job's document
+   is its title, description and skill lists; a candidate's is their current
+   title, resume and listed skills.
+3. **The candidate's own TF-IDF vector**, one column per term, named
+   `resume:<term>`.
+
+Skills are compared through the taxonomy, so `postgres` counts as
+`PostgreSQL`, and a skill the taxonomy does not know still matches itself
+whatever its case and spacing. A job with no required skills gives every
+candidate full coverage rather than none, and two empty skill lists score no
+overlap rather than a perfect one. Nothing in the matrix reads gender, age band
+or a synthetic candidate's hidden true skills: tests change each of them and
+require every row to stay identical.
+
+Choices in the text half, each pinned by a test:
+
+- **The tokeniser keeps skill names whole.** scikit-learn's default pattern
+  drops `C++`, `C#` and `R` entirely and splits `Node.js`; this one keeps them,
+  and still splits `Python/SQL` and hyphenated words.
+- **No stop-word list.** scikit-learn's English list would delete `go`,
+  `system`, `front`, `back` and `full`.
+- **Repetition is damped.** A candidate's document names most skills twice,
+  once in the resume and once in the skills list, so term counts are
+  sublinear. A term must appear in at least two resumes to be learned.
+- **The vocabulary comes from the candidates alone**, each counted once however
+  many slates they are on. Wording only jobs use ("We are hiring") can never
+  match a resume; it would only lower each job's similarities by a different
+  amount and add columns that are always zero.
+- **The job's own terms are not a block.** They are the same for every
+  candidate on a slate, so they cannot reorder one.
+
+### The planted proxy is kept on purpose
+
+The corpus plants a women-in-tech community line on some women's resumes, and
+the text half treats it like any other wording: `resume:women` is a column. On
+the default corpus it is non-zero in **1,017 of the 10,000 pairs**, and within
+each relevance grade those pairs were advanced at 0.69, 0.87 and 0.74 times the
+rate of the rest (grades 0, 1, 2); with `--historical-bias 0`, at 0.81, 1.07
+and 0.96. One corpus is a noisy estimate — only 90 and 55 of those pairs sit
+in grades 1 and 2 — so the same ratios were measured on seeds 1 to 12 as well:
+medians of 0.83, 0.83 and 0.77 with the bias, and 1.02, 0.99 and 0.99 without
+it. The term follows the planted recruiter bias, not candidate quality.
+
+The default configuration keeps the term, and a model trained on past decisions
+is free to learn it. That is deliberate. Removing the word by hand would be a
+mitigation nobody measured, relying on knowledge a real system would not have
+about which of its terms stand in for gender, and it would hide exactly what
+the fairness audit is built to find. Mitigations are tried in that audit, with
+before-and-after numbers. Until then, expect a model trained on `advanced` to
+score some women lower for this reason alone.
+
+### Measured on the default corpus
+
+Real numbers from one run of the committed code on the default corpus
+(CPython 3.14.6, seed 42):
+
+| | |
+| --- | --- |
+| Matrix for the 10,000 pairs | 10,000 × 355: 8 engineered, 1 similarity, 346 resume terms; 14% of cells non-zero |
+| Vocabulary learned from | 3,680 distinct candidates on the slates |
+| `text_similarity` by relevance grade 0 / 1 / 2 | 0.217 / 0.535 / 0.579 (mean) |
+| Time to fit / to build all 10,000 rows | 0.12 s / 0.41 s (median of five runs, one laptop) |
+
+Correlation of each of the first nine columns with the generator's
+ground-truth `fit`, over the 10,000 pairs:
+
+| Feature | Pearson r |
+| --- | --- |
+| `required_skill_coverage` | +0.704 |
+| `preferred_skill_coverage` | +0.376 |
+| `skill_jaccard` | +0.705 |
+| `experience_gap` | -0.295 |
+| `experience_surplus` | +0.086 |
+| `seniority_distance` | -0.393 |
+| `seniority_direction` | +0.077 |
+| `education_fit` | +0.134 |
+| `text_similarity` | +0.705 |
+
+None of these is close to 1, by design. The features see the listed skills and
+the written resume, while `fit` comes from the true profile plus a random term
+for what no profile shows; closing that gap is the model's job.
+`experience_surplus` and `seniority_direction` are weak because the generator
+never rewards going past a job's minimum or level: it penalises only a
+shortfall in years, and distance in seniority either way. They are kept for
+real data, where being over-qualified may count for or against a candidate.
 
 ## License
 
