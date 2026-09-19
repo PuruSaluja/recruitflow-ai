@@ -13,6 +13,7 @@ from app.ml.text import candidate_text, job_text, make_vectoriser
 from app.models.candidate import Candidate
 from app.models.enums import EducationLevel, SeniorityLevel
 from app.models.job import Job
+from app.services import resume as resume_service
 
 
 def tokens(text: str) -> list[str]:
@@ -142,6 +143,15 @@ def test_one_word_is_one_term_however_it_is_encoded(variant: str, plain: str) ->
     assert len(tokens(plain)) == 1
 
 
+def test_the_fold_strips_everything_the_upload_path_strips() -> None:
+    """The comment on the fold says so, and a JSON resume must give the terms an upload does."""
+    stripped_on_upload = resume_service._INVISIBLE_RE.pattern.strip("[]")
+
+    assert stripped_on_upload
+    for character in stripped_on_upload:
+        assert tokens(f"Py{character}thon") == ["python"], f"U+{ord(character):04X}"
+
+
 def test_a_possessive_keeps_its_word() -> None:
     """The planted proxy is written both "women's" and "women"; both must give one term."""
     assert "women" in tokens("Mentor in a women's coding bootcamp")
@@ -251,15 +261,19 @@ def test_each_vectoriser_is_new_so_fitted_state_is_never_shared() -> None:
         make_vectoriser().transform(["python"])
 
 
+#: Words that only the planted women-in-tech lines use.
+PROXY_TERMS = {"women", "bootcamp", "member"}
+
+
 def test_the_planted_proxy_reaches_the_vocabulary(corpus) -> None:
     """Deliberately not stripped: the fairness audit needs to see what a model does with it."""
     vectoriser = make_vectoriser().fit([candidate_text(c) for c in corpus.candidates])
 
-    assert "women" in vectoriser.vocabulary_
+    assert set(vectoriser.vocabulary_) >= PROXY_TERMS
 
 
 def test_the_proxy_comes_only_from_the_planted_phrase() -> None:
     corpus = generate_corpus(CorpusConfig(seed=5, n_jobs=40, n_candidates=1200, proxy_share=0.0))
     vectoriser = make_vectoriser().fit([candidate_text(c) for c in corpus.candidates])
 
-    assert "women" not in vectoriser.vocabulary_
+    assert not set(vectoriser.vocabulary_) & PROXY_TERMS
