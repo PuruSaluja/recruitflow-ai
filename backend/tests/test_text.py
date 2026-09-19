@@ -90,6 +90,11 @@ def test_slashes_and_hyphens_still_split() -> None:
     assert tokens("scikit-learn") == ["scikit", "learn"]
 
 
+def test_a_plus_between_two_words_does_not_split_them() -> None:
+    """The cost of keeping + inside a token, as the module docstring says."""
+    assert tokens("Python+SQL") == ["python+sql"]
+
+
 def test_a_dot_joins_only_between_word_characters() -> None:
     assert tokens("version 3.14.6 of it.") == ["version", "3.14.6", "of", "it"]
 

@@ -17,7 +17,8 @@ Three settings are deliberate:
   one-character tokens and punctuation, so ``C++``, ``C#`` and ``R`` vanish and
   ``Node.js`` splits in two. This pattern keeps ``+`` and ``#`` inside a token
   and a ``.`` between two word characters, but still splits on ``/`` and ``-``,
-  so ``Python/SQL`` stays two skills.
+  so ``Python/SQL`` stays two skills. A ``+`` between two words joins them as
+  well, so ``Python+SQL`` stays one token.
 * **There is no stop-word list.** scikit-learn's English list contains ``go``,
   ``system``, ``front``, ``back`` and ``full`` -- a language, and half of
   "System Design", "front-end", "back-end" and "full-stack". Inverse document
