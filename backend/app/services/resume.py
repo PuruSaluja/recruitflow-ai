@@ -30,7 +30,7 @@ _ZIP_MAGIC = b"PK\x03\x04"
 
 # Zero-width and soft-hyphen characters survive NFKC and glue tokens together:
 # soft hyphen, ZWSP, ZWNJ, ZWJ, word joiner, BOM.
-_INVISIBLE_RE = re.compile("[­​‌‍⁠﻿]")
+_INVISIBLE_RE = re.compile("[\u00ad\u200b\u200c\u200d\u2060\ufeff]")
 
 # C0/C1 control characters other than tab and newline. PDF text extraction
 # emits these wherever a glyph is missing from the exporting font's encoding,
@@ -43,7 +43,7 @@ _CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0e-\x1f\x7f-\x9f]")
 # codepoint Word uses for Symbol-font bullets, and U+25A0, which is what a small
 # square bullet degrades to when the exporting font has no U+25AA glyph.
 _BULLET_LINE_RE = re.compile(
-    "^[ \t]*[•‣⁃▪▫▬■□▸▶●○◦·∙–—➢➤]+[ \t]*",
+    "^[ \t]*[•‣⁃▪▫▬■□▸▶●○◦·∙–—➢➤\uf0b7]+[ \t]*",
     re.MULTILINE,
 )
 
