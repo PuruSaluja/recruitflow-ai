@@ -99,7 +99,26 @@ def test_tokens_are_lower_cased() -> None:
 
 
 def test_words_outside_ascii_are_kept() -> None:
-    assert tokens("Straße Ünïcode") == ["straße", "ünïcode"]
+    assert tokens("Ünïcode Café") == ["ünïcode", "café"]
+
+
+@pytest.mark.parametrize(
+    ("variant", "plain"),
+    [
+        ("café", "café"),
+        ("certiﬁed", "certified"),
+        ("Ｐｙｔｈｏｎ", "Python"),
+        ("Py​thon", "Python"),
+        ("Py­thon", "Python"),
+        ("Py﻿thon", "Python"),
+        ("STRASSE", "Straße"),
+    ],
+    ids=["decomposed", "ligature", "full-width", "zero-width", "soft-hyphen", "bom", "casefold"],
+)
+def test_one_word_is_one_term_however_it_is_encoded(variant: str, plain: str) -> None:
+    """Only uploaded resumes are normalised on the way in; JSON bodies and job text are not."""
+    assert tokens(variant) == tokens(plain)
+    assert len(tokens(plain)) == 1
 
 
 def test_a_possessive_keeps_its_word() -> None:

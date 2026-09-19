@@ -5,8 +5,14 @@ reads the words. Each side contributes one document -- a job its title,
 description and skill lists, a candidate their current title, resume and listed
 skills -- and both are vectorised with one vocabulary so they can be compared.
 
-Two settings are deliberate:
+Three settings are deliberate:
 
+* **Text is folded before it is tokenised.** Only uploaded resumes are
+  normalised on the way in (:mod:`app.services.resume`); a resume sent as JSON
+  and every job description arrive as typed. Without folding, one word could
+  become two terms: ``certiﬁed`` with a ligature, ``Ｐｙｔｈｏｎ`` in full
+  width, ``café`` in its other Unicode form, or ``Py`` and ``thon`` either side
+  of a zero-width space.
 * **The token pattern keeps skill names whole.** scikit-learn's default drops
   one-character tokens and punctuation, so ``C++``, ``C#`` and ``R`` vanish and
   ``Node.js`` splits in two. This pattern keeps ``+`` and ``#`` inside a token
@@ -23,6 +29,8 @@ it that stands in for gender reaches the vocabulary like any other word.
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from collections.abc import Sequence
 from typing import Protocol
 
@@ -49,6 +57,15 @@ class CandidateText(Protocol):
 #: Word characters, with ``+`` and ``#`` allowed after the first and ``.`` between two.
 TOKEN_PATTERN = r"(?u)\b\w[\w+#]*(?:\.\w[\w+#]*)*"
 
+# The characters the resume normaliser strips for the same reason: they survive
+# NFKC and split a word in two. Soft hyphen, ZWSP, ZWNJ, ZWJ, word joiner, BOM.
+_INVISIBLE_RE = re.compile("[­​‌‍⁠﻿]")
+
+
+def fold_text(text: str) -> str:
+    """Fold ``text`` so one word has one spelling: NFKC, no invisible characters, casefolded."""
+    return _INVISIBLE_RE.sub("", unicodedata.normalize("NFKC", text)).casefold()
+
 
 def job_text(job: JobText) -> str:
     """The job as one document: title, description, then both skill lists."""
@@ -72,4 +89,6 @@ def make_vectoriser() -> TfidfVectorizer:
     count for less than the first. ``min_df=2`` because a term that appears in
     one resume only can never describe anyone else.
     """
-    return TfidfVectorizer(token_pattern=TOKEN_PATTERN, sublinear_tf=True, min_df=2)
+    return TfidfVectorizer(
+        preprocessor=fold_text, token_pattern=TOKEN_PATTERN, sublinear_tf=True, min_df=2
+    )
