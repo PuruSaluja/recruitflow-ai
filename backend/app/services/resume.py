@@ -28,8 +28,8 @@ MIN_EXTRACTED_CHARS = 20
 _PDF_MAGIC = b"%PDF-"
 _ZIP_MAGIC = b"PK\x03\x04"
 
-# Zero-width and soft-hyphen characters survive NFKC and glue tokens together:
-# soft hyphen, ZWSP, ZWNJ, ZWJ, word joiner, BOM.
+# Zero-width and soft-hyphen characters survive NFKC and, inside a word, split it
+# in two for the vectoriser: soft hyphen, ZWSP, ZWNJ, ZWJ, word joiner, BOM.
 _INVISIBLE_RE = re.compile("[\u00ad\u200b\u200c\u200d\u2060\ufeff]")
 
 # C0/C1 control characters other than tab and newline. PDF text extraction
