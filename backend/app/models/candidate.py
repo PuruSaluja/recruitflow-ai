@@ -69,11 +69,5 @@ class Candidate(Base, TimestampMixin):
         back_populates="candidate", cascade="all, delete-orphan"
     )
 
-    def matching_text(self) -> str:
-        """Free-text blob handed to the vectoriser."""
-        skills = " ".join(self.skills or [])
-        title = self.current_title or ""
-        return f"{title}\n{self.resume_text}\n{skills}".strip()
-
     def __repr__(self) -> str:  # pragma: no cover - debugging helper
         return f"<Candidate id={self.id} email={self.email!r}>"
