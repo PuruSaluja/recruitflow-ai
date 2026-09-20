@@ -169,6 +169,20 @@ def test_the_matcher_calibrates_a_featuriser_and_a_classifier() -> None:
     assert isinstance(matcher.estimator.named_steps["classifier"], LogisticRegression)
 
 
+def test_nothing_about_the_classifier_is_tuned() -> None:
+    """The module's claim is that the estimators keep scikit-learn's defaults.
+
+    Nothing else here would notice a knob turned to chase a number. Calibration
+    hides a reweighting from the average-score test, and neither `C` nor
+    `class_weight` breaks any other assertion, though both move the ranking:
+    `class_weight="balanced"` took held-out ROC-AUC from 0.7728 to 0.7657 and
+    changed one score by as much as 0.10.
+    """
+    classifier = make_matcher().estimator.named_steps["classifier"]
+
+    assert classifier.get_params() == LogisticRegression().get_params()
+
+
 def test_training_fits_the_advanced_label_and_repeats_exactly(train_set, test_set, scores) -> None:
     """Two claims, one comparison: the target is ``advanced``, and a rerun reproduces it.
 
@@ -204,10 +218,17 @@ def test_no_two_candidates_come_out_with_the_same_score(scores) -> None:
 
 
 def test_the_average_score_lands_near_the_rate_it_was_trained_on(train_set, scores) -> None:
-    """What calibration is for. An unbalanced classifier reweighted to 50/50 would fail this.
+    """Probabilities come out on the scale the matcher was trained on, not on a handy one.
 
     The gap measured on corpus seeds 3, 5, 7 and 11 is 0.002 to 0.011; the band
     here is wider than that spread on purpose, since it is four draws.
+
+    This says nothing about the classifier underneath, and an earlier version of
+    this docstring wrongly claimed it did. Pulling a score back onto the base
+    rate is exactly calibration's job, so it absorbs a reweighted classifier
+    too: `class_weight="balanced"` moves the *uncalibrated* mean from 0.140 to
+    0.391, and calibrated it lands at 0.145 -- inside this band. The
+    classifier's own settings are pinned by their own test.
     """
     assert abs(scores.mean() - train_set.advanced.mean()) < 0.03
 
