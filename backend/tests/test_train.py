@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 
 import numpy as np
 import pytest
@@ -155,6 +156,27 @@ def test_the_jobs_held_out_do_not_depend_on_the_order_the_pairs_arrive_in(data) 
 def test_a_share_that_would_empty_one_side_is_refused(data, share) -> None:
     with pytest.raises(ValueError, match="at least one job on each side"):
         split_by_job(data, test_share=share)
+
+
+def test_the_default_corpus_is_still_split_the_way_the_published_numbers_were() -> None:
+    """Every held-out figure quoted anywhere came from this exact set of 50 jobs.
+
+    Which jobs a seed picks is arbitrary, and every other test here passes just
+    as well if it changes -- sorting the refs in reverse, or deriving the
+    shuffle from `seed + 1`, both leave a working split and a different model.
+    That would quietly strand the numbers in the README and the commit
+    messages, so the choice is pinned by digest rather than left to whatever
+    the code happens to do.
+
+    `random.shuffle` is not guaranteed to draw alike across Python versions, so
+    a future interpreter may well trip this. That is the point: it means the
+    published numbers need re-measuring, not that the split is wrong.
+    """
+    held_out = sorted(held_out_jobs(training_data(generate_corpus(CorpusConfig()))))
+    digest = hashlib.sha256(",".join(held_out).encode()).hexdigest()
+
+    assert len(held_out) == 50
+    assert digest[:16] == "0e7c8d6dc58ffb50"
 
 
 # --- the matcher ------------------------------------------------------------
