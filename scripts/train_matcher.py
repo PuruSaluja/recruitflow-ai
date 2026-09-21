@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
-import math
 import sys
 from pathlib import Path
 from typing import Any
@@ -126,7 +125,9 @@ def _safe_auc(labels, scores) -> float | None:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
-    if math.isnan(args.test_share) or not 0.0 < args.test_share < 1.0:
+    # A chained comparison against NaN is always False, so this also refuses
+    # `--test-share nan` without naming it specially.
+    if not 0.0 < args.test_share < 1.0:
         print(
             f"error: --test-share must be a number between 0 and 1, got {args.test_share}",
             file=sys.stderr,
