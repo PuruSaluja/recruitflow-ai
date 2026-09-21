@@ -395,6 +395,90 @@ never rewards going past a job's minimum or level: it penalises only a
 shortfall in years, and distance in seniority either way. They are kept for
 real data, where being over-qualified may count for or against a candidate.
 
+## Training pipeline
+
+`backend/app/ml/train.py` turns a corpus into a calibrated matcher:
+`training_data` resolves a corpus's labelled pairs into objects and parallel
+label arrays, `split_by_job` holds out a share of jobs with their whole
+slates, and `make_matcher`/`train_matcher` build and fit a pipeline of
+`PairFeaturiser` → `LogisticRegression`, wrapped in `CalibratedClassifierCV`.
+
+**The training target is `advanced`**, the past recruiter's call, not
+`relevance`. `relevance` is ground truth derived from `true_skills`, which no
+real recruiting system has, and the planted bias lives entirely in
+`advanced` — a model fitted on ground truth would leave the fairness audit
+nothing to find. `relevance` is carried beside the pairs for the ranking
+evaluation and never fitted.
+
+**The split is by job**, so a slate is never torn in half — ranking metrics
+are per job over a whole slate. The cost is candidate overlap: 84.5% of the
+default corpus's 1,844 held-out candidates also sit on a training slate.
+Measured, that overlap does not inflate the held-out score: on the 636 pairs
+whose job *and* candidate were both held out, a strictly-split model scores
+0.8022 ROC-AUC against this one's 0.8030 on the same pairs, while splitting
+that way discards 25.5% of the training pairs.
+
+**Calibration wraps the whole pipeline** rather than sitting inside it, so
+each fold learns its own vocabulary instead of calibrating against resumes it
+was fitted on. **Sigmoid, not isotonic**: they calibrate this corpus equally
+well (log loss 0.3539 against 0.3528, Brier 0.1071 against 0.1068), but
+sigmoid is strictly monotone — isotonic returned 786 distinct probabilities
+over 2,500 held-out pairs against sigmoid's 2,500, and every tie is two
+candidates a ranking then has to separate arbitrarily. Nothing is tuned: the
+estimators keep scikit-learn's defaults.
+
+### Persisting the matcher
+
+Model binaries do not belong in git, so `backend/app/ml/artifacts/` is
+gitignored in full. `scripts/train_matcher.py` trains a matcher on a
+synthetic corpus (generated in memory — it does not read the JSON Lines
+files `data/generate_corpus.py` writes) and persists it with
+[`app/ml/artifact.py`](backend/app/ml/artifact.py):
+
+```
+python scripts/train_matcher.py
+```
+
+This writes `backend/app/ml/artifacts/matcher.joblib` (overridable with
+`--out`, and via `RECRUITFLOW_MODEL_PATH`/`Settings.model_path`) plus a
+`matcher.manifest.json` beside it, recording the corpus config, the split,
+the training label, measured held-out metrics, and the interpreter —
+`random`'s draws and the calibration folds both depend on it, the way the
+corpus manifest already records that for the corpus itself. Anything that
+needs a trained matcher calls `app.ml.artifact.load_matcher`, which raises
+`MatcherUnavailable` naming this command rather than letting a missing file
+surface as a stack trace when the matching endpoints try to use it.
+
+The CLI refuses to write a matcher rather than silently shipping a bad one:
+a training split with only one label present fails scikit-learn's solver
+with an opaque message ("needs samples of at least 2 classes"), so it is
+checked for up front and named in plain language; a split where the rarer
+label has fewer examples than `CalibratedClassifierCV`'s five folds would
+otherwise only draw a scikit-learn warning and calibrate on folds too thin to
+trust, so that is refused too; and an out-of-range or non-numeric
+`--test-share` (`nan` included) is validated before it reaches `split_by_job`,
+rather than surfacing as `round()`'s "cannot convert float NaN to integer".
+All three are exercised in `backend/tests/test_train_matcher.py` against
+corpus shapes measured to trigger them.
+
+### Measured on the default corpus
+
+Real numbers from one run of the committed code (CPython 3.14.6, default
+corpus, `--test-share 0.25 --split-seed 0`, both scikit-learn's defaults):
+
+| | |
+| --- | --- |
+| Trained on / held out | 7,500 pairs across 150 jobs / 2,500 pairs across 50 jobs |
+| Held-out ROC-AUC vs `advanced` | 0.7829 |
+| Held-out ROC-AUC vs `relevance >= 1` (reference only; never fitted) | 0.9427 |
+| Mean predicted probability vs training base rate | 0.1498 vs 0.1508 |
+
+`relevance`'s ROC-AUC is higher because it is the easier, unbiased target the
+generator itself defines; the matcher is not trained on it. These numbers are
+for reference — the evaluation milestone reports NDCG@10 and P@5 on the
+ranking task these are a proxy for, and the fairness audit is where the
+planted bias in `advanced` gets measured properly rather than assumed.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
