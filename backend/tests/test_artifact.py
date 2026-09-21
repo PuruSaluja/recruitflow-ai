@@ -95,6 +95,20 @@ def test_the_manifest_carries_what_was_passed_plus_the_interpreter(
     assert manifest["implementation"] == platform.python_implementation()
 
 
+def test_the_real_interpreter_wins_over_a_caller_supplied_one(
+    fitted_and_scores, tmp_path: Path
+) -> None:
+    """The interpreter is truth about the run, not a value a caller can shadow."""
+    matcher, _, _ = fitted_and_scores
+    path = tmp_path / "matcher.joblib"
+
+    save_matcher(matcher, manifest={"python": "bogus", "implementation": "bogus"}, path=path)
+    manifest = load_manifest(path)
+
+    assert manifest["python"] == platform.python_version()
+    assert manifest["implementation"] == platform.python_implementation()
+
+
 def test_the_manifest_file_is_the_one_beside_the_matcher(fitted_and_scores, tmp_path: Path) -> None:
     matcher, _, _ = fitted_and_scores
     path = tmp_path / "matcher.joblib"
@@ -102,6 +116,16 @@ def test_the_manifest_file_is_the_one_beside_the_matcher(fitted_and_scores, tmp_
     save_matcher(matcher, manifest={}, path=path)
 
     assert manifest_path_for(path).is_file()
+
+
+def test_the_manifest_is_written_with_line_feeds_only(fitted_and_scores, tmp_path: Path) -> None:
+    """Written on Windows too, and read back on whatever regenerates it next."""
+    matcher, _, _ = fitted_and_scores
+    path = tmp_path / "matcher.joblib"
+
+    save_matcher(matcher, manifest={"note": "line one\nline two"}, path=path)
+
+    assert b"\r" not in manifest_path_for(path).read_bytes()
 
 
 # --- missing files -----------------------------------------------------
