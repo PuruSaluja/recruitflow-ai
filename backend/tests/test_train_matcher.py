@@ -15,7 +15,7 @@ import pytest
 from app.config import REPO_ROOT
 from app.ml.artifact import load_manifest, load_matcher, manifest_path_for
 from app.ml.corpus import CorpusConfig, generate_corpus
-from app.ml.train import split_by_job, train_matcher, training_data
+from app.ml.train import TrainingData, split_by_job, train_matcher, training_data
 
 SCRIPT = REPO_ROOT / "scripts" / "train_matcher.py"
 #: Small enough to stay fast; big enough to fill a slate and hold both labels
@@ -78,6 +78,21 @@ def test_the_manifest_records_the_corpus_config_the_split_and_the_label(written:
     assert manifest["split_seed"] == 0
 
 
+def test_the_manifest_declares_the_corpus_synthetic(written: Path) -> None:
+    """Same disclosure the corpus's own manifest carries; honesty rule 2."""
+    assert load_manifest(written)["synthetic"] is True
+
+
+def test_the_manifest_row_counts_are_exact_not_just_the_right_shape(written: Path) -> None:
+    """Measured directly: this corpus/split gives 1,500 training pairs across 30 jobs."""
+    assert load_manifest(written)["rows"] == {
+        "train_pairs": 1500,
+        "test_pairs": 500,
+        "train_jobs": 30,
+        "test_jobs": 10,
+    }
+
+
 def test_the_manifest_metrics_are_measured_not_guessed(written: Path) -> None:
     manifest = load_manifest(written)
     corpus = generate_corpus(CorpusConfig(seed=5, n_jobs=40, n_candidates=1200))
@@ -99,6 +114,49 @@ def test_safe_auc_is_none_when_the_held_out_set_has_only_one_class() -> None:
 
 def test_safe_auc_scores_normally_with_both_classes_present() -> None:
     assert script._safe_auc([True, False], [0.9, 0.1]) == pytest.approx(1.0)
+
+
+# --- the untrainable-reason helper, exactly at its boundaries ---------
+
+
+def _fake_training_data(n_pos: int, n_neg: int) -> TrainingData:
+    """A ``TrainingData`` with the given class counts; the pairs and job_refs are dummies.
+
+    ``_untrainable_reason`` reads only ``advanced`` and the row count, so this
+    pins its two thresholds exactly, without depending on a corpus/seed search
+    landing on the right shape by luck.
+    """
+    n = n_pos + n_neg
+    return TrainingData(
+        pairs=tuple((None, None) for _ in range(n)),
+        advanced=np.array([True] * n_pos + [False] * n_neg),
+        relevance=np.zeros(n, dtype=int),
+        job_refs=tuple(f"J{i}" for i in range(n)),
+    )
+
+
+def test_untrainable_reason_is_none_for_a_well_balanced_split() -> None:
+    assert script._untrainable_reason(_fake_training_data(50, 50)) is None
+
+
+def test_untrainable_reason_names_whichever_label_never_occurs() -> None:
+    assert "nobody in the training split was ever advanced" in script._untrainable_reason(
+        _fake_training_data(0, 10)
+    )
+    assert "nobody in the training split was ever rejected" in script._untrainable_reason(
+        _fake_training_data(10, 0)
+    )
+
+
+def test_untrainable_reason_is_none_right_at_the_calibration_floor() -> None:
+    """5 matches CalibratedClassifierCV's default fold count (pinned in test_train.py)."""
+    assert script._untrainable_reason(_fake_training_data(5, 50)) is None
+    assert script._untrainable_reason(_fake_training_data(50, 5)) is None
+
+
+def test_untrainable_reason_fires_just_under_the_calibration_floor() -> None:
+    assert script._untrainable_reason(_fake_training_data(4, 50)) is not None
+    assert script._untrainable_reason(_fake_training_data(50, 4)) is not None
 
 
 def test_rerunning_with_the_same_arguments_gives_the_same_matcher(tmp_path: Path) -> None:
