@@ -157,6 +157,58 @@ def test_nothing_is_written_before_the_caller_commits(pool, matcher, version) ->
     assert _stored(db, job) == []
 
 
+# --- a duplicate in the pool --------------------------------------------------
+
+
+def test_a_repeated_candidate_id_is_scored_once(pool, matcher, version) -> None:
+    """A future endpoint may build the pool from a request's id list; a duplicate must not
+    turn into two insert attempts for the same (job, candidate, model_version) row."""
+    db, job, candidates = pool
+    twice = [candidates[0], candidates[1], candidates[0]]
+
+    results = score_pool(db, job, twice, matcher, version)
+    db.commit()
+
+    assert {row.candidate_id for row in results} == {candidates[0].id, candidates[1].id}
+    assert sorted(row.rank for row in results) == [1, 2]
+    assert len(_stored(db, job)) == 2
+
+
+def test_a_repeated_candidate_id_collapses_even_as_two_distinct_objects(
+    pool, clean_db: Engine, matcher, version
+) -> None:
+    """Dedup keys on candidate id, not object identity -- a second session's copy collapses too."""
+    db, job, candidates = pool
+    with Session(clean_db) as other_session:
+        twin = other_session.get(Candidate, candidates[0].id)
+        assert twin is not candidates[0]
+
+        results = score_pool(db, job, [candidates[0], twin], matcher, version)
+
+    assert len(results) == 1
+
+
+def test_a_repeated_candidate_id_keeps_the_first_occurrences_data(
+    clean_db: Engine, make_job: Factory, make_candidate: Factory, matcher, version
+) -> None:
+    """Proves *which* occurrence wins with data the two disagree on, not just that they
+    collapse to one row -- two objects holding identical data could never tell the two
+    apart."""
+    job_payload = make_job(required_skills=["Python"], preferred_skills=[])
+    candidate_payload = make_candidate(skills=["Python"])
+
+    with Session(clean_db) as db, Session(clean_db) as other:
+        job = db.get(Job, job_payload["id"])
+        first = db.get(Candidate, candidate_payload["id"])
+        second = other.get(Candidate, candidate_payload["id"])
+        second.skills = []  # a genuine, never-committed divergence in a separate session
+
+        results = score_pool(db, job, [first, second], matcher, version)
+
+        assert len(results) == 1
+        assert results[0].features["required_skill_coverage"] == 1.0  # first's data, not second's
+
+
 # --- empty pool --------------------------------------------------------------
 
 
