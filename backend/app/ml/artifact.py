@@ -10,6 +10,7 @@ letting a missing file surface as a raw ``FileNotFoundError`` two layers down.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import platform
 from pathlib import Path
@@ -21,6 +22,11 @@ from sklearn.calibration import CalibratedClassifierCV
 from app.config import get_settings
 
 REGENERATE_COMMAND = "python scripts/train_matcher.py"
+
+#: Hex digest length for a matcher's version. 16 characters (64 bits) is far
+#: more collision-resistant than this project will ever need, and short
+#: enough to read at a glance in a match_scores row or a log line.
+VERSION_DIGEST_LENGTH = 16
 
 
 class MatcherUnavailable(RuntimeError):
@@ -86,3 +92,23 @@ def load_manifest(path: Path | None = None) -> dict[str, Any]:
             f"No matcher manifest at {manifest_path}. Regenerate it with: {REGENERATE_COMMAND}"
         )
     return json.loads(manifest_path.read_text(encoding="utf-8"))
+
+
+def matcher_version(path: Path | None = None) -> str:
+    """A short, content-derived identifier for the matcher file at ``path``.
+
+    This is a hash of the file's bytes rather than a counter or a manifest
+    field: two matcher files with identical bytes are the same trained model,
+    so scoring against an unchanged artifact reuses the same version and the
+    same cached rows, while retraining -- which always rewrites the file,
+    even from the same config on a new corpus draw -- earns a fresh one on
+    its own. Raises :class:`MatcherUnavailable` under the same condition
+    :func:`load_matcher` does, naming the same fix.
+    """
+    matcher_path = path if path is not None else default_matcher_path()
+    if not matcher_path.exists():
+        raise MatcherUnavailable(
+            f"No trained matcher at {matcher_path}. Regenerate it with: {REGENERATE_COMMAND}"
+        )
+    digest = hashlib.sha256(matcher_path.read_bytes()).hexdigest()
+    return digest[:VERSION_DIGEST_LENGTH]
