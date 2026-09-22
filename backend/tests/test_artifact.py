@@ -5,6 +5,7 @@ No database needed.
 
 from __future__ import annotations
 
+import hashlib
 import platform
 from pathlib import Path
 
@@ -13,11 +14,13 @@ import pytest
 
 from app.config import get_settings
 from app.ml.artifact import (
+    VERSION_DIGEST_LENGTH,
     MatcherUnavailable,
     default_matcher_path,
     load_manifest,
     load_matcher,
     manifest_path_for,
+    matcher_version,
     save_matcher,
 )
 from app.ml.corpus import CorpusConfig, generate_corpus
@@ -157,3 +160,69 @@ def test_a_matcher_without_its_manifest_still_loads(fitted_and_scores, tmp_path:
     load_matcher(path)  # does not raise
     with pytest.raises(MatcherUnavailable):
         load_manifest(path)
+
+
+# --- version -------------------------------------------------------------
+
+
+def test_the_version_is_a_hex_digest_of_the_configured_length(
+    fitted_and_scores, tmp_path: Path
+) -> None:
+    matcher, _, _ = fitted_and_scores
+    path = tmp_path / "matcher.joblib"
+    save_matcher(matcher, manifest={}, path=path)
+
+    version = matcher_version(path)
+
+    assert len(version) == VERSION_DIGEST_LENGTH
+    assert all(char in "0123456789abcdef" for char in version)
+
+
+def test_the_version_is_the_sha256_of_the_files_bytes(fitted_and_scores, tmp_path: Path) -> None:
+    matcher, _, _ = fitted_and_scores
+    path = tmp_path / "matcher.joblib"
+    save_matcher(matcher, manifest={}, path=path)
+
+    expected = hashlib.sha256(path.read_bytes()).hexdigest()[:VERSION_DIGEST_LENGTH]
+    assert matcher_version(path) == expected
+
+
+def test_identical_bytes_give_the_same_version(fitted_and_scores, tmp_path: Path) -> None:
+    matcher, _, _ = fitted_and_scores
+    first = tmp_path / "first.joblib"
+    second = tmp_path / "second.joblib"
+    save_matcher(matcher, manifest={}, path=first)
+    second.write_bytes(first.read_bytes())
+
+    assert matcher_version(first) == matcher_version(second)
+
+
+def test_different_bytes_give_a_different_version(tmp_path: Path) -> None:
+    first = tmp_path / "first.joblib"
+    second = tmp_path / "second.joblib"
+    first.write_bytes(b"one")
+    second.write_bytes(b"two")
+
+    assert matcher_version(first) != matcher_version(second)
+
+
+def test_the_version_is_unaffected_by_the_manifest(fitted_and_scores, tmp_path: Path) -> None:
+    """Only the matcher file's own bytes matter -- the manifest lives in a separate file."""
+    matcher, _, _ = fitted_and_scores
+    path = tmp_path / "matcher.joblib"
+    save_matcher(matcher, manifest={"note": "first"}, path=path)
+    before = matcher_version(path)
+
+    save_matcher(matcher, manifest={"note": "second, and much longer"}, path=path)
+
+    assert matcher_version(path) == before
+
+
+def test_asking_for_a_missing_matchers_version_names_the_path_and_the_fix(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "nope.joblib"
+
+    with pytest.raises(MatcherUnavailable, match="scripts/train_matcher.py") as excinfo:
+        matcher_version(path)
+    assert str(path) in str(excinfo.value)
