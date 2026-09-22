@@ -64,6 +64,13 @@ class MatchScore(Base):
     features: Mapped[dict] = mapped_column(JSONB(none_as_null=True), nullable=False, default=dict)
     model_version: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
 
+    #: When this row was last (re)computed. The default only covers a bare
+    #: INSERT outside the ORM; the one real writer (``services.matching``)
+    #: sets this explicitly on every row it touches, insert or update. An
+    #: ``onupdate=func.now()`` here would look like it did that, but it only
+    #: fires when some *other* column is also dirty -- a rescore that
+    #: reproduces the same score, rank and features leaves nothing changed
+    #: for SQLAlchemy to see, and the timestamp would silently go stale.
     scored_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
