@@ -12,6 +12,7 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 from sqlalchemy import Engine
@@ -22,11 +23,13 @@ from sqlalchemy.orm.exc import StaleDataError
 
 import app.models  # noqa: F401  (registers every table on Base.metadata)
 from app.api.v1 import applications as applications_api
+from app.config import get_settings
 from app.db.base import Base
 from app.models import Candidate, Job
 from app.models.application import Application
 from app.models.enums import ApplicationStatus
 from app.schemas.candidate import CandidateUpdate
+from app.schemas.common import MAX_ID, MAX_OFFSET
 from app.schemas.job import JobUpdate
 
 Factory = Callable[..., dict[str, Any]]
@@ -405,3 +408,119 @@ def test_a_plausible_but_absent_id_is_still_a_404(
     response = getattr(client, method)(template.format(id=999999))
 
     assert response.status_code == 404
+
+
+# --- 6. ids and offsets past what PostgreSQL can hold (found 2026-09-22) -----
+#
+# Was: an id above 2,147,483,647, the INTEGER keys' maximum, answered 503
+# "Database unavailable" on every route, and so did an offset above BIGINT's
+# maximum. PostgreSQL raises "integer out of range", a DataError, and the
+# database error handler reported it as an outage.
+
+TOO_BIG_ID = MAX_ID + 1
+
+
+def _id_routes(app: FastAPI) -> list[tuple[str, str, list[str]]]:
+    """Every (method, path, path id names) the app serves with an id in its path.
+
+    Read from the app's OpenAPI document rather than listed by hand, so a route
+    added later is covered without anyone remembering to add it here.
+    """
+    prefix = get_settings().api_prefix
+    routes = []
+    for path, operations in app.openapi()["paths"].items():
+        for method, operation in operations.items():
+            names = [p["name"] for p in operation.get("parameters", []) if p["in"] == "path"]
+            if names:
+                routes.append((method.upper(), path.removeprefix(prefix), names))
+    assert len(routes) >= 16  # guards against the walk silently finding nothing
+    return routes
+
+
+def _path_errors(response: Any) -> set[str]:
+    if response.status_code != 422:
+        return set()
+    return {error["loc"][1] for error in response.json()["detail"] if error["loc"][0] == "path"}
+
+
+def test_every_path_id_past_the_integer_range_is_a_payload_error(
+    app: FastAPI, client: TestClient
+) -> None:
+    wrong = []
+    for method, template, names in _id_routes(app):
+        path = template.format(**{name: TOO_BIG_ID for name in names})
+        response = client.request(method, path, json={} if method in {"PATCH", "POST"} else None)
+        if response.status_code != 422 or _path_errors(response) != set(names):
+            wrong.append(f"{method} {path} -> {response.status_code}")
+
+    assert wrong == []
+
+
+def test_the_largest_integer_id_is_still_a_plain_404(app: FastAPI, client: TestClient) -> None:
+    """Guards against over-correcting: the bound must admit every id a row can have."""
+    wrong = []
+    for method, template, names in _id_routes(app):
+        path = template.format(**{name: MAX_ID for name in names})
+        response = client.request(method, path, json={} if method in {"PATCH", "POST"} else None)
+        # The resume upload sent no file, so it is a 422 about the body instead.
+        if response.status_code not in {404, 422} or _path_errors(response):
+            wrong.append(f"{method} {path} -> {response.status_code}")
+
+    assert wrong == []
+
+
+@pytest.mark.parametrize("field", ["job_id", "candidate_id"])
+def test_a_body_id_past_the_integer_range_is_a_payload_error(
+    client: TestClient, make_job: Factory, make_candidate: Factory, field: str
+) -> None:
+    ids = {"job_id": make_job()["id"], "candidate_id": make_candidate()["id"]}
+
+    response = client.post("/applications", json={**ids, field: TOO_BIG_ID})
+
+    assert response.status_code == 422
+    assert [error["loc"] for error in response.json()["detail"]] == [["body", field]]
+    assert client.post("/applications", json={**ids, field: MAX_ID}).status_code == 404
+
+
+@pytest.mark.parametrize("field", ["job_id", "candidate_id"])
+def test_a_query_id_past_the_integer_range_is_a_payload_error(
+    client: TestClient, field: str
+) -> None:
+    response = client.get("/applications", params={field: TOO_BIG_ID})
+
+    assert response.status_code == 422
+    assert [error["loc"] for error in response.json()["detail"]] == [["query", field]]
+    assert client.get("/applications", params={field: MAX_ID}).json()["total"] == 0
+
+
+def test_a_candidate_id_to_score_past_the_integer_range_is_a_payload_error(
+    client: TestClient, make_job: Factory
+) -> None:
+    url = f"/jobs/{make_job()['id']}/score"
+
+    response = client.post(url, json={"candidate_ids": [1, TOO_BIG_ID]})
+
+    assert response.status_code == 422
+    assert [error["loc"] for error in response.json()["detail"]] == [["body", "candidate_ids", 1]]
+    # At the bound it is an ordinary unknown candidate, refused before any matcher loads.
+    assert client.post(url, json={"candidate_ids": [MAX_ID]}).status_code == 404
+
+
+@pytest.mark.parametrize("path", ["/jobs", "/candidates", "/applications"])
+def test_an_offset_past_the_bigint_range_is_a_payload_error(
+    client: TestClient,
+    make_job: Factory,
+    make_candidate: Factory,
+    make_application: Factory,
+    path: str,
+) -> None:
+    make_application(job_id=make_job()["id"], candidate_id=make_candidate()["id"])
+
+    response = client.get(path, params={"offset": MAX_OFFSET + 1})
+
+    assert response.status_code == 422
+    assert [error["loc"] for error in response.json()["detail"]] == [["query", "offset"]]
+    at_bound = client.get(path, params={"offset": MAX_OFFSET})
+    assert at_bound.status_code == 200
+    assert at_bound.json()["items"] == []
+    assert at_bound.json()["total"] == 1

@@ -27,6 +27,7 @@ from app.ml.corpus import CorpusConfig, generate_corpus
 from app.ml.features import FEATURE_NAMES, feature_dict
 from app.ml.train import train_matcher, training_data
 from app.models import Candidate, Job, MatchScore
+from app.schemas.common import MAX_OFFSET
 from app.schemas.match import MAX_CANDIDATE_IDS
 from app.services.matching import score_pool
 
@@ -545,6 +546,23 @@ def test_the_listing_leaves_out_scores_from_another_matcher(
 
     assert body["total"] == 2
     assert sorted(_ids(body["items"])) == sorted(chosen)
+
+
+def test_listing_offset_is_bounded_by_what_postgresql_accepts(
+    client: TestClient, trained: Path, pool: Pool
+) -> None:
+    """Past BIGINT's maximum the offset used to reach PostgreSQL and answer 503."""
+    job, _ = pool
+    assert client.post(f"/jobs/{job['id']}/score").status_code == 200
+
+    too_far = client.get(f"/jobs/{job['id']}/matches", params={"offset": MAX_OFFSET + 1})
+    at_bound = client.get(f"/jobs/{job['id']}/matches", params={"offset": MAX_OFFSET})
+
+    assert too_far.status_code == 422
+    assert [error["loc"] for error in too_far.json()["detail"]] == [["query", "offset"]]
+    assert at_bound.status_code == 200
+    assert at_bound.json()["items"] == []
+    assert at_bound.json()["total"] == len(pool[1])
 
 
 def test_listing_a_missing_job_is_a_404_even_without_a_matcher(
