@@ -143,7 +143,7 @@ def create_candidate(payload: CandidateCreate, db: Session = Depends(get_db)) ->
     candidate = Candidate(**payload.model_dump())
     db.add(candidate)
     db.commit()
-    db.refresh(candidate)
+    refresh_row(db, candidate, Candidate, candidate.id)
     return candidate
 
 

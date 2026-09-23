@@ -97,7 +97,7 @@ def create_job(payload: JobCreate, db: Session = Depends(get_db)) -> Job:
     job = Job(**payload.model_dump())
     db.add(job)
     db.commit()
-    db.refresh(job)
+    refresh_row(db, job, Job, job.id)
     return job
 
 

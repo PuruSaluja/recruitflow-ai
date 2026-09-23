@@ -16,7 +16,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
-from sqlalchemy import Engine, delete, event, update
+from sqlalchemy import Engine, delete, event, func, select, update
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError, InvalidRequestError
 from sqlalchemy.orm import Session
@@ -580,6 +580,7 @@ def _delete_candidate(ids: dict[str, int]) -> Any:
 
 
 BEFORE, AFTER = "before_commit", "after_commit"
+RACE_RESUME = "Built reporting pipelines in SQL and Python."
 GONE = "{} {{{}}} not found"
 CHANGED = "{} {{{}}} was changed by someone else while this request was in flight"
 GONE_AFTER = "{} {{{}}} not found: another request deleted it just after this change was saved"
@@ -669,6 +670,40 @@ def test_a_resume_upload_whose_row_was_deleted_after_saving_is_a_404(
     assert fired, "the race was never replayed"
     assert response.status_code == 404, response.text
     assert response.json()["detail"] == GONE_AFTER.format("Candidate", "candidate").format(**ids)
+
+
+@pytest.mark.parametrize("model", [Job, Candidate, Application], ids=lambda m: m.__name__)
+def test_a_create_whose_new_row_was_deleted_before_it_was_read_back_is_a_404(
+    client: TestClient,
+    clean_db: Engine,
+    make_job: Factory,
+    make_candidate: Factory,
+    model: Any,
+) -> None:
+    job_id, candidate_id = make_job()["id"], make_candidate()["id"]
+    path, body = {
+        Job: (
+            "/jobs",
+            {"title": "Data Engineer", "description": "Build and run the nightly loads."},
+        ),
+        Candidate: (
+            "/candidates",
+            {"full_name": "Ada Okafor", "email": "ada@example.com", "resume_text": RACE_RESUME},
+        ),
+        Application: ("/applications", {"job_id": job_id, "candidate_id": candidate_id}),
+    }[model]
+    newest = select(func.max(model.id)).scalar_subquery()
+
+    with _interloper(clean_db, AFTER, delete(model).where(model.id == newest)) as fired:
+        response = client.post(path, json=body)
+
+    assert fired, "the race was never replayed"
+    assert response.status_code == 404, response.text
+    detail = response.json()["detail"]
+    assert detail.startswith(f"{model.__name__} ")
+    assert detail.endswith(
+        " not found: another request deleted it just after this change was saved"
+    )
 
 
 def test_a_delete_refused_because_the_row_changed_leaves_it_whole(

@@ -159,7 +159,7 @@ def create_application(payload: ApplicationCreate, db: Session = Depends(get_db)
         db, application, from_status=None, to_status=application.status, changed_by=changed_by
     )
     db.commit()
-    db.refresh(application)
+    refresh_row(db, application, Application, application.id)
     return application
 
 

@@ -1,4 +1,4 @@
-"""Shared FastAPI dependencies, and the commit helpers every write route uses."""
+"""Shared FastAPI dependencies, and the helpers write routes commit and read rows back with."""
 
 from __future__ import annotations
 
