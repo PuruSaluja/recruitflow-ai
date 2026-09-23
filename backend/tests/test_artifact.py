@@ -1,4 +1,4 @@
-"""Unit tests for persisting the matcher: the round trip and the missing-file errors.
+"""Unit tests for persisting the matcher: the round trip, and a missing or unusable file.
 
 No database needed.
 """
@@ -6,9 +6,15 @@ No database needed.
 from __future__ import annotations
 
 import hashlib
+import io
+import pickle
 import platform
+import sys
+import types
+from collections.abc import Callable
 from pathlib import Path
 
+import joblib
 import numpy as np
 import pytest
 
@@ -19,6 +25,7 @@ from app.ml.artifact import (
     default_matcher_path,
     load_manifest,
     load_matcher,
+    load_versioned_matcher,
     manifest_path_for,
     matcher_version,
     save_matcher,
@@ -226,3 +233,119 @@ def test_asking_for_a_missing_matchers_version_names_the_path_and_the_fix(
     with pytest.raises(MatcherUnavailable, match="scripts/train_matcher.py") as excinfo:
         matcher_version(path)
     assert str(path) in str(excinfo.value)
+
+
+# --- loading the matcher with its version ----------------------------------
+
+
+def test_the_versioned_load_gives_the_saved_matcher_and_the_files_version(
+    fitted_and_scores, tmp_path: Path
+) -> None:
+    matcher, test_set, scores = fitted_and_scores
+    path = save_matcher(matcher, manifest={}, path=tmp_path / "matcher.joblib")
+
+    loaded, version = load_versioned_matcher(path)
+
+    assert np.array_equal(loaded.predict_proba(test_set.pairs)[:, 1], scores)
+    assert version == matcher_version(path)
+
+
+def test_the_matcher_and_its_version_come_from_one_read_of_the_file(
+    fitted_and_scores, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two reads would let a retrain landing in between pair one model with another's version."""
+    matcher, _, _ = fitted_and_scores
+    path = save_matcher(matcher, manifest={}, path=tmp_path / "matcher.joblib")
+    reads: list[bytes] = []
+    unpickled_from: list[object] = []
+    real_read_bytes, real_load = Path.read_bytes, joblib.load
+
+    def counting_read_bytes(self: Path) -> bytes:
+        data = real_read_bytes(self)
+        reads.append(data)
+        return data
+
+    def recording_load(source: object, *args: object, **kwargs: object) -> object:
+        unpickled_from.append(source)
+        return real_load(source, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_bytes", counting_read_bytes)
+    monkeypatch.setattr(joblib, "load", recording_load)
+
+    _, version = load_versioned_matcher(path)
+
+    assert len(reads) == 1
+    [source] = unpickled_from
+    assert isinstance(source, io.BytesIO)
+    assert source.getvalue() == reads[0]
+    assert version == hashlib.sha256(reads[0]).hexdigest()[:VERSION_DIGEST_LENGTH]
+
+
+def test_a_missing_matcher_is_unavailable_to_the_versioned_load_too(tmp_path: Path) -> None:
+    path = tmp_path / "nope.joblib"
+
+    with pytest.raises(MatcherUnavailable, match="scripts/train_matcher.py") as excinfo:
+        load_versioned_matcher(path)
+    assert str(path) in str(excinfo.value)
+
+
+# --- a matcher file that exists but cannot be used -------------------------
+
+
+def _pickle_of_a_class_that_has_since_moved(monkeypatch: pytest.MonkeyPatch) -> bytes:
+    """What an artifact looks like after the code it was pickled against is renamed."""
+    module = types.ModuleType("vanished_module")
+
+    class Thing:
+        pass
+
+    Thing.__module__ = module.__name__
+    Thing.__qualname__ = "Thing"
+    module.Thing = Thing
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+    data = pickle.dumps(Thing())
+    monkeypatch.delitem(sys.modules, module.__name__)
+    return data
+
+
+_DAMAGE: dict[str, Callable[[bytes, pytest.MonkeyPatch], bytes]] = {
+    "empty": lambda data, _: b"",
+    "truncated to half": lambda data, _: data[: len(data) // 2],
+    "last byte missing": lambda data, _: data[:-1],
+    "not a pickle": lambda data, _: b"not a pickle at all\n" * 10,
+    "pickled against moved code": lambda _, monkeypatch: _pickle_of_a_class_that_has_since_moved(
+        monkeypatch
+    ),
+}
+
+
+@pytest.mark.parametrize("damage", list(_DAMAGE))
+def test_an_unreadable_matcher_is_unavailable_and_names_the_path_and_the_fix(
+    fitted_and_scores, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, damage: str
+) -> None:
+    matcher, _, _ = fitted_and_scores
+    path = save_matcher(matcher, manifest={}, path=tmp_path / "matcher.joblib")
+    path.write_bytes(_DAMAGE[damage](path.read_bytes(), monkeypatch))
+
+    with pytest.raises(MatcherUnavailable, match="scripts/train_matcher.py") as excinfo:
+        load_versioned_matcher(path)
+    assert str(path) in str(excinfo.value)
+    assert excinfo.value.__cause__ is not None
+
+
+def test_a_file_holding_something_other_than_a_matcher_is_unavailable(tmp_path: Path) -> None:
+    path = tmp_path / "matcher.joblib"
+    joblib.dump({"not": "a matcher"}, path)
+
+    with pytest.raises(MatcherUnavailable, match="holds a dict") as excinfo:
+        load_versioned_matcher(path)
+    assert str(path) in str(excinfo.value)
+    assert "scripts/train_matcher.py" in str(excinfo.value)
+
+
+def test_load_matcher_turns_an_unreadable_file_into_unavailable_as_well(tmp_path: Path) -> None:
+    path = tmp_path / "matcher.joblib"
+    path.write_bytes(b"not a pickle at all\n")
+
+    with pytest.raises(MatcherUnavailable, match="scripts/train_matcher.py"):
+        load_matcher(path)
