@@ -8,20 +8,22 @@ stays readable in one place.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from typing import Any
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
-from sqlalchemy import Engine
+from sqlalchemy import Engine, delete, event, update
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, InvalidRequestError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
 
 import app.models  # noqa: F401  (registers every table on Base.metadata)
+from app.api.deps import refresh_row
 from app.api.v1 import applications as applications_api
 from app.config import get_settings
 from app.db.base import Base
@@ -524,3 +526,174 @@ def test_an_offset_past_the_bigint_range_is_a_payload_error(
     assert at_bound.status_code == 200
     assert at_bound.json()["items"] == []
     assert at_bound.json()["total"] == 1
+
+
+# --- 7. a write that loses a race to another request (found 2026-09-14) ------
+#
+# Was: a lost race answered 503 "Database unavailable" unless it was a stage
+# change. A DELETE whose row another request removed first raised
+# StaleDataError; a PATCH, close, reopen or upload whose row was deleted just
+# after it committed raised "Could not refresh instance". Measured on
+# 2026-09-14 for applications (19 of 50 racing deletes answered 503), and on
+# 2026-09-23, replaying each race below, on 13 of these 16 shapes; the other
+# three answered 409 although the row was in fact gone.
+#
+# Each case replays its race deterministically: the other request's statement
+# runs on its own connection when the endpoint's session reaches its commit
+# (before it, when the endpoint has only read the row) or just after it.
+
+
+@contextmanager
+def _interloper(engine: Engine, moment: str, statement: Any) -> Iterator[list[bool]]:
+    """Run ``statement`` once, from another connection, at ``moment`` in any session."""
+    fired: list[bool] = []
+
+    def run(session: Session) -> None:
+        if not fired:
+            fired.append(True)
+            with engine.begin() as connection:
+                connection.execute(statement)
+
+    event.listen(Session, moment, run)
+    try:
+        yield fired
+    finally:
+        event.remove(Session, moment, run)
+
+
+def _delete_application(ids: dict[str, int]) -> Any:
+    return delete(Application).where(Application.id == ids["application"])
+
+
+def _edit_application(ids: dict[str, int]) -> Any:
+    """Bump the version, as any committed edit by another request does."""
+    table = Application.__table__
+    return update(table).where(table.c.id == ids["application"]).values(version=table.c.version + 1)
+
+
+def _delete_job(ids: dict[str, int]) -> Any:
+    return delete(Job).where(Job.id == ids["job"])
+
+
+def _delete_candidate(ids: dict[str, int]) -> Any:
+    return delete(Candidate).where(Candidate.id == ids["candidate"])
+
+
+BEFORE, AFTER = "before_commit", "after_commit"
+GONE = "{} {{{}}} not found"
+CHANGED = "{} {{{}}} was changed by someone else while this request was in flight"
+GONE_AFTER = "{} {{{}}} not found: another request deleted it just after this change was saved"
+
+# fmt: off
+LOST_RACES = [
+    pytest.param("delete", "/applications/{application}", None, BEFORE, _delete_application,
+                 404, GONE.format("Application", "application"), id="delete-application-deleted"),
+    pytest.param("delete", "/applications/{application}", None, BEFORE, _edit_application,
+                 409, CHANGED.format("Application", "application"), id="delete-application-edited"),
+    pytest.param("patch", "/applications/{application}", {"notes": "n"}, BEFORE,
+                 _delete_application, 404, GONE.format("Application", "application"),
+                 id="patch-application-deleted"),
+    pytest.param("patch", "/applications/{application}", {"notes": "n"}, AFTER,
+                 _delete_application, 404, GONE_AFTER.format("Application", "application"),
+                 id="patch-application-deleted-after"),
+    pytest.param("post", "/applications/{application}/reopen", None, BEFORE, _delete_application,
+                 404, GONE.format("Application", "application"), id="reopen-deleted"),
+    pytest.param("post", "/applications/{application}/reopen", None, AFTER, _delete_application,
+                 404, GONE_AFTER.format("Application", "application"), id="reopen-deleted-after"),
+    pytest.param("patch", "/jobs/{job}", {"title": "Senior Analyst"}, BEFORE, _delete_job,
+                 404, GONE.format("Job", "job"), id="patch-job-deleted"),
+    pytest.param("patch", "/jobs/{job}", {"title": "Senior Analyst"}, AFTER, _delete_job,
+                 404, GONE_AFTER.format("Job", "job"), id="patch-job-deleted-after"),
+    pytest.param("post", "/jobs/{job}/close", None, BEFORE, _delete_job,
+                 404, GONE.format("Job", "job"), id="close-job-deleted"),
+    pytest.param("post", "/jobs/{job}/close", None, AFTER, _delete_job,
+                 404, GONE_AFTER.format("Job", "job"), id="close-job-deleted-after"),
+    pytest.param("delete", "/jobs/{job}", None, BEFORE, _delete_job,
+                 404, GONE.format("Job", "job"), id="delete-job-deleted"),
+    pytest.param("delete", "/jobs/{job}", None, BEFORE, _edit_application,
+                 409, CHANGED.format("Job", "job"), id="delete-job-application-edited"),
+    pytest.param("patch", "/candidates/{candidate}", {"location": "Atlanta, GA"}, BEFORE,
+                 _delete_candidate, 404, GONE.format("Candidate", "candidate"),
+                 id="patch-candidate-deleted"),
+    pytest.param("patch", "/candidates/{candidate}", {"location": "Atlanta, GA"}, AFTER,
+                 _delete_candidate, 404, GONE_AFTER.format("Candidate", "candidate"),
+                 id="patch-candidate-deleted-after"),
+    pytest.param("delete", "/candidates/{candidate}", None, BEFORE, _delete_candidate,
+                 404, GONE.format("Candidate", "candidate"), id="delete-candidate-deleted"),
+    pytest.param("delete", "/candidates/{candidate}", None, BEFORE, _delete_application,
+                 409, CHANGED.format("Candidate", "candidate"),
+                 id="delete-candidate-application-gone"),
+]
+# fmt: on
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "body", "moment", "interloper", "status", "detail"), LOST_RACES
+)
+def test_a_write_that_lost_a_race_says_what_happened_not_that_the_database_is_down(
+    client: TestClient,
+    clean_db: Engine,
+    make_job: Factory,
+    make_candidate: Factory,
+    make_application: Factory,
+    method: str,
+    path: str,
+    body: dict[str, Any] | None,
+    moment: str,
+    interloper: Callable[[dict[str, int]], Any],
+    status: int,
+    detail: str,
+) -> None:
+    ids = {"job": make_job()["id"], "candidate": make_candidate()["id"]}
+    ids["application"] = make_application(job_id=ids["job"], candidate_id=ids["candidate"])["id"]
+    if "reopen" in path:
+        client.patch(f"/applications/{ids['application']}", json={"status": "rejected"})
+
+    with _interloper(clean_db, moment, interloper(ids)) as fired:
+        response = client.request(method.upper(), path.format(**ids), json=body)
+
+    assert fired, "the race was never replayed"
+    assert response.status_code == status, response.text
+    assert response.json()["detail"].startswith(detail.format(**ids))
+
+
+def test_a_resume_upload_whose_row_was_deleted_after_saving_is_a_404(
+    client: TestClient, clean_db: Engine, make_candidate: Factory
+) -> None:
+    ids = {"candidate": make_candidate()["id"]}
+    upload = {"file": ("cv.txt", b"Built reporting pipelines in SQL and Python.", "text/plain")}
+
+    with _interloper(clean_db, AFTER, _delete_candidate(ids)) as fired:
+        response = client.put(f"/candidates/{ids['candidate']}/resume", files=upload)
+
+    assert fired, "the race was never replayed"
+    assert response.status_code == 404, response.text
+    assert response.json()["detail"] == GONE_AFTER.format("Candidate", "candidate").format(**ids)
+
+
+def test_a_delete_refused_because_the_row_changed_leaves_it_whole(
+    client: TestClient,
+    clean_db: Engine,
+    make_job: Factory,
+    make_candidate: Factory,
+    make_application: Factory,
+) -> None:
+    """Guards the 409 case: the row and its stage trail must survive untouched."""
+    application = make_application(job_id=make_job()["id"], candidate_id=make_candidate()["id"])
+
+    with _interloper(clean_db, BEFORE, _edit_application({"application": application["id"]})):
+        assert client.delete(f"/applications/{application['id']}").status_code == 409
+
+    assert client.get(f"/applications/{application['id']}").status_code == 200
+    assert len(client.get(f"/applications/{application['id']}/stage-events").json()) == 1
+
+
+def test_a_refresh_that_fails_for_another_reason_is_not_reported_as_a_lost_race(
+    clean_db: Engine, make_job: Factory
+) -> None:
+    """Only a row that is really gone becomes a 404; any other failure is raised as it was."""
+    job_id = make_job()["id"]
+
+    # A transient instance cannot be refreshed, although its row exists.
+    with Session(clean_db) as session, pytest.raises(InvalidRequestError, match="not persistent"):
+        refresh_row(session, Job(id=job_id), Job, job_id)
