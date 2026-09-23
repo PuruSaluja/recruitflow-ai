@@ -7,9 +7,8 @@ from fastapi import status as http_status
 from sqlalchemy import Select, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from sqlalchemy.orm.exc import StaleDataError
 
-from app.api.deps import Pagination, pagination
+from app.api.deps import Pagination, commit_row, pagination, refresh_row
 from app.db.session import get_db
 from app.models.application import Application
 from app.models.candidate import Candidate
@@ -37,26 +36,6 @@ def _get_or_404(db: Session, application_id: int) -> Application:
             detail=f"Application {application_id} not found",
         )
     return application
-
-
-def _commit_or_conflict(db: Session, application_id: int) -> None:
-    """Commit a write to one application, answering 409 if it lost a race.
-
-    The version column makes an UPDATE that raced another write match no row.
-    Rolling back drops any stage event added alongside it, so the trail never
-    records a move that did not take effect.
-    """
-    try:
-        db.commit()
-    except StaleDataError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=http_status.HTTP_409_CONFLICT,
-            detail=(
-                f"Application {application_id} was changed by someone else while this "
-                "update was in flight. Re-read it and retry."
-            ),
-        ) from exc
 
 
 def _apply_filters(
@@ -251,8 +230,8 @@ def update_application(
         setattr(application, field, value)
 
     if updates:
-        _commit_or_conflict(db, application_id)
-        db.refresh(application)
+        commit_row(db, Application, application_id)
+        refresh_row(db, application, Application, application_id)
     return application
 
 
@@ -299,8 +278,8 @@ def reopen_application(
         to_status=REOPEN_TARGET,
         changed_by=payload.changed_by if payload else None,
     )
-    _commit_or_conflict(db, application_id)
-    db.refresh(application)
+    commit_row(db, Application, application_id)
+    refresh_row(db, application, Application, application_id)
     return application
 
 
@@ -319,4 +298,4 @@ def delete_application(
     """
     application = _get_or_404(db, application_id)
     db.delete(application)
-    db.commit()
+    commit_row(db, Application, application_id)

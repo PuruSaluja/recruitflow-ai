@@ -7,7 +7,7 @@ from fastapi import status as http_status
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import Pagination, pagination
+from app.api.deps import Pagination, commit_row, pagination, refresh_row
 from app.db.session import get_db
 from app.models.enums import EmploymentType, JobStatus, SeniorityLevel
 from app.models.job import Job
@@ -131,8 +131,8 @@ def update_job(
         setattr(job, field, value)
 
     if updates:
-        db.commit()
-        db.refresh(job)
+        commit_row(db, Job, job_id)
+        refresh_row(db, job, Job, job_id)
     return job
 
 
@@ -142,8 +142,8 @@ def close_job(job_id: int = Path(gt=0, le=MAX_ID), db: Session = Depends(get_db)
     job = _get_or_404(db, job_id)
     if job.status is not JobStatus.CLOSED:
         job.status = JobStatus.CLOSED
-        db.commit()
-        db.refresh(job)
+        commit_row(db, Job, job_id)
+        refresh_row(db, job, Job, job_id)
     return job
 
 
@@ -156,4 +156,4 @@ def delete_job(job_id: int = Path(gt=0, le=MAX_ID), db: Session = Depends(get_db
     """Hard-delete a job; applications and cached match scores cascade."""
     job = _get_or_404(db, job_id)
     db.delete(job)
-    db.commit()
+    commit_row(db, Job, job_id)

@@ -8,7 +8,7 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import Pagination, pagination
+from app.api.deps import Pagination, commit_row, pagination, refresh_row
 from app.db.session import get_db
 from app.models.candidate import Candidate
 from app.models.enums import EducationLevel, SeniorityLevel
@@ -188,8 +188,8 @@ def update_candidate(
         setattr(candidate, field, value)
 
     if updates:
-        db.commit()
-        db.refresh(candidate)
+        commit_row(db, Candidate, candidate_id)
+        refresh_row(db, candidate, Candidate, candidate_id)
     return candidate
 
 
@@ -204,7 +204,7 @@ def delete_candidate(
     """Hard-delete a candidate; applications and cached match scores cascade."""
     candidate = _get_or_404(db, candidate_id)
     db.delete(candidate)
-    db.commit()
+    commit_row(db, Candidate, candidate_id)
 
 
 @router.get(
@@ -233,8 +233,8 @@ async def upload_resume(
     """
     candidate = _get_or_404(db, candidate_id)
     candidate.resume_text = await _read_resume(file)
-    db.commit()
-    db.refresh(candidate)
+    commit_row(db, Candidate, candidate_id)
+    refresh_row(db, candidate, Candidate, candidate_id)
     return candidate
 
 

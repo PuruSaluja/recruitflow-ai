@@ -60,8 +60,8 @@ def score_pool(
     candidate, model_version) row: both can see it as missing before either
     inserts, and the caller's commit -- not this function's, since it never
     commits -- is what raises the resulting ``IntegrityError``. The caller
-    should catch it there the way ``_commit_or_conflict`` does for
-    applications; measured at 1 to 4 of 10 concurrent first-time scores of
+    should catch it there the way ``commit_row`` catches a lost race for the
+    other write routes; measured at 1 to 4 of 10 concurrent first-time scores of
     one row failing this way, with the row always left correct regardless.
     """
     if not candidates:
