@@ -3,14 +3,17 @@
 Model binaries do not belong in git -- ``.gitignore`` excludes the whole
 ``artifacts`` directory -- so the matcher is written by
 ``scripts/train_matcher.py`` and read back from the same path here. Anything
-that wants a trained matcher calls :func:`load_matcher`, which raises
-:class:`MatcherUnavailable` naming the regeneration command rather than
-letting a missing file surface as a raw ``FileNotFoundError`` two layers down.
+that wants a trained matcher calls :func:`load_matcher` (or
+:func:`load_versioned_matcher`, when it also records which matcher scored),
+which raises :class:`MatcherUnavailable` naming the regeneration command
+rather than letting a missing file surface as a raw ``FileNotFoundError`` two
+layers down.
 """
 
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import platform
 from pathlib import Path
@@ -75,12 +78,43 @@ def save_matcher(
 
 def load_matcher(path: Path | None = None) -> CalibratedClassifierCV:
     """Load the persisted matcher, or fail with a message that says how to make one."""
+    return load_versioned_matcher(path)[0]
+
+
+def load_versioned_matcher(path: Path | None = None) -> tuple[CalibratedClassifierCV, str]:
+    """Load the persisted matcher together with its :func:`matcher_version`.
+
+    Both come from one read of the file. Hashing it and loading it as two
+    reads would let a retrain that lands in between tag one model's scores
+    with the other model's version.
+
+    A file that exists but cannot be used raises :class:`MatcherUnavailable`
+    as well, since the fix is the same: truncated by an interrupted write,
+    not a pickle at all, pickled against code that has since moved, or
+    holding something other than a matcher. Unpickling fails in too many
+    ways to list -- ``EOFError``, ``UnpicklingError``, ``KeyError`` and
+    ``ModuleNotFoundError`` were all measured -- so any failure is caught
+    and chained.
+    """
     matcher_path = path if path is not None else default_matcher_path()
     if not matcher_path.exists():
         raise MatcherUnavailable(
             f"No trained matcher at {matcher_path}. Regenerate it with: {REGENERATE_COMMAND}"
         )
-    return joblib.load(matcher_path)
+    data = matcher_path.read_bytes()
+    try:
+        matcher = joblib.load(io.BytesIO(data))
+    except Exception as exc:
+        raise MatcherUnavailable(
+            f"The matcher at {matcher_path} could not be loaded ({exc!r}). "
+            f"Regenerate it with: {REGENERATE_COMMAND}"
+        ) from exc
+    if not isinstance(matcher, CalibratedClassifierCV):
+        raise MatcherUnavailable(
+            f"The file at {matcher_path} holds a {type(matcher).__name__}, not a trained "
+            f"matcher. Regenerate it with: {REGENERATE_COMMAND}"
+        )
+    return matcher, _version_of(data)
 
 
 def load_manifest(path: Path | None = None) -> dict[str, Any]:
@@ -110,5 +144,8 @@ def matcher_version(path: Path | None = None) -> str:
         raise MatcherUnavailable(
             f"No trained matcher at {matcher_path}. Regenerate it with: {REGENERATE_COMMAND}"
         )
-    digest = hashlib.sha256(matcher_path.read_bytes()).hexdigest()
-    return digest[:VERSION_DIGEST_LENGTH]
+    return _version_of(matcher_path.read_bytes())
+
+
+def _version_of(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()[:VERSION_DIGEST_LENGTH]
