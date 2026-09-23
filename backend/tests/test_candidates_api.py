@@ -11,8 +11,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
-from app.models import Application, MatchScore
-from app.services.resume import MAX_UPLOAD_BYTES
+from app.models import Application, Candidate, MatchScore
+from app.services.resume import MAX_RESUME_CHARS, MAX_UPLOAD_BYTES
 
 Factory = Callable[..., dict[str, Any]]
 
@@ -136,6 +136,109 @@ def test_skill_list_is_capped_at_100(client: TestClient, count: int, expected_st
     }
 
     assert client.post("/candidates", json=payload).status_code == expected_status
+
+
+@pytest.mark.parametrize(
+    ("length", "expected_status"), [(MAX_RESUME_CHARS, 201), (MAX_RESUME_CHARS + 1, 422)]
+)
+def test_resume_text_is_capped_at_100_000_characters_on_create(
+    client: TestClient, length: int, expected_status: int
+) -> None:
+    payload = {"full_name": "Long Resume", "email": "long@example.com", "resume_text": "a" * length}
+
+    response = client.post("/candidates", json=payload)
+
+    assert response.status_code == expected_status
+    assert client.get("/candidates").json()["total"] == (1 if expected_status == 201 else 0)
+
+
+@pytest.mark.parametrize(
+    ("skill", "expected_status"),
+    [
+        pytest.param("s" * 100, 201, id="100"),
+        pytest.param("s" * 101, 422, id="101"),
+        pytest.param("s" * 50_000, 422, id="50000"),
+        pytest.param("  " + "s" * 100 + "  ", 201, id="padding-not-counted"),
+        pytest.param("s" * 50 + "     " + "s" * 49, 201, id="inner-run-counted-once"),
+    ],
+)
+def test_each_skill_is_capped_at_100_characters_after_tidying(
+    client: TestClient, skill: str, expected_status: int
+) -> None:
+    payload = {
+        "full_name": "Long Skill",
+        "email": "skill@example.com",
+        "resume_text": RESUME,
+        "skills": ["SQL", skill],
+    }
+
+    response = client.post("/candidates", json=payload)
+
+    assert response.status_code == expected_status
+    if expected_status == 201:
+        assert len(response.json()["skills"][1]) == 100
+    else:
+        assert response.json()["detail"][0]["loc"][-1] == "skills"
+        assert "at most 100 characters" in response.json()["detail"][0]["msg"]
+        assert client.get("/candidates").json()["total"] == 0
+
+
+@pytest.mark.parametrize(
+    ("updates", "field"),
+    [
+        pytest.param({"resume_text": "a" * (MAX_RESUME_CHARS + 1)}, "resume_text", id="resume"),
+        pytest.param({"skills": ["SQL", "s" * 101]}, "skills", id="skill"),
+    ],
+)
+def test_patch_applies_the_same_length_caps_and_keeps_the_stored_row(
+    client: TestClient, make_candidate: Factory, updates: dict[str, Any], field: str
+) -> None:
+    candidate = make_candidate(resume_text=RESUME, skills=["Python"])
+
+    response = client.patch(f"/candidates/{candidate['id']}", json=updates)
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"][-1] == field
+    assert client.get(f"/candidates/{candidate['id']}").json() == candidate
+
+
+def test_patch_accepts_values_exactly_at_the_caps(
+    client: TestClient, make_candidate: Factory
+) -> None:
+    candidate = make_candidate()
+
+    response = client.patch(
+        f"/candidates/{candidate['id']}",
+        # PATCH checks before tidying, so the padding here must not count.
+        json={"resume_text": "a" * MAX_RESUME_CHARS, "skills": ["  " + "s" * 100 + "  "]},
+    )
+
+    assert response.status_code == 200
+    assert len(response.json()["resume_text"]) == MAX_RESUME_CHARS
+    assert response.json()["skills"] == ["s" * 100]
+
+
+def test_a_row_stored_before_the_caps_is_still_readable(
+    client: TestClient, clean_db: Engine
+) -> None:
+    """The caps guard what comes in, so rows already stored over them still serialise."""
+    with Session(clean_db) as session:
+        row = Candidate(
+            full_name="Legacy Row",
+            email="legacy@example.com",
+            resume_text="a" * (MAX_RESUME_CHARS + 1),
+            skills=["s" * 101],
+        )
+        session.add(row)
+        session.commit()
+        candidate_id = row.id
+
+    assert client.get(f"/candidates/{candidate_id}").status_code == 200
+    assert client.get("/candidates").json()["items"][0]["id"] == candidate_id
+    # Editing another field leaves the oversized ones alone rather than refusing.
+    response = client.patch(f"/candidates/{candidate_id}", json={"location": "Atlanta, GA"})
+    assert response.status_code == 200
+    assert len(response.json()["resume_text"]) == MAX_RESUME_CHARS + 1
 
 
 @pytest.mark.parametrize(
@@ -444,6 +547,12 @@ def test_stored_resume_is_served_as_plain_text(client: TestClient, make_candidat
         pytest.param("cv.txt", b"", "empty", id="empty"),
         pytest.param("cv.txt", b"Too short", "No usable text", id="too-short"),
         pytest.param("cv.docx", b"PK\x03\x04zip-body", "DOCX", id="docx"),
+        pytest.param(
+            "cv.txt",
+            b"a" * (MAX_RESUME_CHARS + 1),
+            "over the 100,000-character limit",
+            id="too-long",
+        ),
     ],
 )
 def test_rejected_upload_is_a_400_and_keeps_the_stored_resume(
