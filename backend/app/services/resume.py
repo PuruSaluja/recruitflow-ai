@@ -25,6 +25,12 @@ SUPPORTED_EXTENSIONS = frozenset({".txt", ".md", ".markdown", ".text", ".pdf"})
 #: almost certainly a scan with no text layer.
 MIN_EXTRACTED_CHARS = 20
 
+#: The longest resume text accepted, from a form or an upload alike. A one- or
+#: two-page resume is a few thousand characters and a long academic CV tens of
+#: thousands. ``MAX_UPLOAD_BYTES`` cannot stand in for this: it bounds a file's
+#: bytes, and 2 MB of plain text is roughly 300,000 words.
+MAX_RESUME_CHARS = 100_000
+
 _PDF_MAGIC = b"%PDF-"
 _ZIP_MAGIC = b"PK\x03\x04"
 
@@ -97,7 +103,7 @@ def extract_text(filename: str | None, data: bytes) -> str:
 
     Raises:
         ResumeIngestError: the file is empty, too large, in an unsupported
-            format, or yields too little text to be a resume.
+            format, or yields too little or too much text to be a resume.
     """
     if not data:
         raise ResumeIngestError("The uploaded file is empty")
@@ -133,6 +139,11 @@ def extract_text(filename: str | None, data: bytes) -> str:
             "No usable text could be extracted "
             f"({len(text)} characters, minimum {MIN_EXTRACTED_CHARS}). "
             "If this is a scanned PDF it has no text layer and needs OCR first."
+        )
+    if len(text) > MAX_RESUME_CHARS:
+        raise ResumeIngestError(
+            f"The extracted text is {len(text):,} characters, "
+            f"over the {MAX_RESUME_CHARS:,}-character limit for a resume"
         )
     return text
 

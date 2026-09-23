@@ -12,6 +12,7 @@ import io
 import pytest
 
 from app.services.resume import (
+    MAX_RESUME_CHARS,
     MAX_UPLOAD_BYTES,
     ResumeIngestError,
     extract_text,
@@ -284,6 +285,38 @@ def test_unusable_uploads_are_rejected(filename: str, data: bytes, message: str)
 
 
 def test_upload_exactly_at_the_size_limit_is_accepted() -> None:
-    data = b"a" * MAX_UPLOAD_BYTES
+    # Padded with trailing spaces, which normalising strips, so the file sits
+    # on the byte limit while its text sits on the character limit.
+    data = b"a" * MAX_RESUME_CHARS + b" " * (MAX_UPLOAD_BYTES - MAX_RESUME_CHARS)
 
-    assert len(extract_text("resume.txt", data)) == MAX_UPLOAD_BYTES
+    assert len(data) == MAX_UPLOAD_BYTES
+    assert len(extract_text("resume.txt", data)) == MAX_RESUME_CHARS
+
+
+def test_text_over_the_character_limit_is_rejected_and_the_message_gives_both_lengths() -> None:
+    data = b"a" * (MAX_RESUME_CHARS + 1)
+
+    with pytest.raises(ResumeIngestError) as excinfo:
+        extract_text("resume.txt", data)
+
+    assert str(excinfo.value) == (
+        "The extracted text is 100,001 characters, over the 100,000-character limit for a resume"
+    )
+
+
+def test_the_character_limit_applies_to_the_text_after_normalising() -> None:
+    # 100,000 letters with a soft hyphen inside: 100,001 characters raw,
+    # 100,000 once the invisible character is removed.
+    data = ("a" * 50_000 + SOFT_HYPHEN + "a" * 50_000).encode()
+
+    assert len(extract_text("resume.txt", data)) == MAX_RESUME_CHARS
+
+
+def test_the_character_limit_applies_to_pdf_text_too() -> None:
+    """A small PDF can hold far more text than a resume: the byte cap is no guard."""
+    line = "Built reporting pipelines in SQL and Python. " * 2
+    data = _pdf(*[[line] * 40 for _ in range(30)])  # 30 pages of 40 lines of 90 characters
+
+    assert len(data) < MAX_UPLOAD_BYTES // 20
+    with pytest.raises(ResumeIngestError, match="100,000-character limit"):
+        extract_text("resume.pdf", data)
