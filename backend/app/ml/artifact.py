@@ -1,4 +1,4 @@
-"""Persisting the trained matcher, and failing clearly when it is missing.
+"""Persisting the trained matcher, and failing clearly when it is missing or damaged.
 
 Model binaries do not belong in git -- ``.gitignore`` excludes the whole
 ``artifacts`` directory -- so the matcher is written by
@@ -6,8 +6,8 @@ Model binaries do not belong in git -- ``.gitignore`` excludes the whole
 that wants a trained matcher calls :func:`load_matcher` (or
 :func:`load_versioned_matcher`, when it also records which matcher scored),
 which raises :class:`MatcherUnavailable` naming the regeneration command
-rather than letting a missing file surface as a raw ``FileNotFoundError`` two
-layers down.
+rather than letting a missing file surface as a raw ``FileNotFoundError``, or
+a damaged one as an unpickling error, two layers down.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ VERSION_DIGEST_LENGTH = 16
 
 
 class MatcherUnavailable(RuntimeError):
-    """Raised when a trained matcher (or its manifest) was asked for but never persisted."""
+    """Raised when a trained matcher (or its manifest) is missing, or cannot be loaded."""
 
 
 def default_matcher_path() -> Path:
@@ -136,8 +136,10 @@ def matcher_version(path: Path | None = None) -> str:
     so scoring against an unchanged artifact reuses the same version and the
     same cached rows, while retraining -- which always rewrites the file,
     even from the same config on a new corpus draw -- earns a fresh one on
-    its own. Raises :class:`MatcherUnavailable` under the same condition
-    :func:`load_matcher` does, naming the same fix.
+    its own. Raises :class:`MatcherUnavailable` when the file is missing,
+    naming the same fix as :func:`load_matcher`. It only hashes the bytes,
+    so a file that cannot be unpickled still gets a version; anything that
+    needs a usable matcher goes through :func:`load_versioned_matcher`.
     """
     matcher_path = path if path is not None else default_matcher_path()
     if not matcher_path.exists():

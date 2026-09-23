@@ -1,9 +1,9 @@
 """Integration tests for scoring a candidate pool and caching it into match_scores.
 
-No endpoint exists yet -- that is the next milestone -- so these drive
-:func:`app.services.matching.score_pool` directly against real ``Job`` and
-``Candidate`` rows, with a matcher that is actually fitted rather than
-stubbed, the same way the ml layer's own tests do.
+These drive :func:`app.services.matching.score_pool` directly against real
+``Job`` and ``Candidate`` rows, with a matcher that is actually fitted rather
+than stubbed, the same way the ml layer's own tests do. The endpoints built
+on it are covered in ``test_matching_api.py``.
 """
 
 from __future__ import annotations
@@ -161,8 +161,8 @@ def test_nothing_is_written_before_the_caller_commits(pool, matcher, version) ->
 
 
 def test_a_repeated_candidate_id_is_scored_once(pool, matcher, version) -> None:
-    """A future endpoint may build the pool from a request's id list; a duplicate must not
-    turn into two insert attempts for the same (job, candidate, model_version) row."""
+    """A caller may build the pool from a list with repeats; a duplicate must not turn
+    into two insert attempts for the same (job, candidate, model_version) row."""
     db, job, candidates = pool
     twice = [candidates[0], candidates[1], candidates[0]]
 
