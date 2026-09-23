@@ -276,6 +276,18 @@ def test_scoring_a_missing_job_is_a_404_even_without_a_matcher(
     assert response.json()["detail"] == "Job 999999 not found"
 
 
+def test_an_unknown_candidate_id_is_a_404_even_without_a_matcher(
+    client: TestClient, use_model: Callable[[Path], None], tmp_path: Path, pool: Pool
+) -> None:
+    use_model(tmp_path / "missing.joblib")
+    job, _ = pool
+
+    response = client.post(f"/jobs/{job['id']}/score", json={"candidate_ids": [999999]})
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Candidates not found: 999999"
+
+
 def test_an_unknown_candidate_id_is_a_404_naming_every_missing_one(
     client: TestClient, trained: Path, pool: Pool, clean_db: Engine
 ) -> None:
@@ -435,6 +447,30 @@ def test_the_listing_ranks_stay_1_to_total_after_a_smaller_rescore(
     assert [item["rank"] for item in items] == list(range(1, len(candidates) + 1))
     scores = [item["score"] for item in items]
     assert scores == sorted(scores, reverse=True)
+
+
+def test_tied_candidates_are_listed_in_the_order_scoring_ranked_them(
+    client: TestClient, trained: Path, make_job: Factory, make_candidate: Factory, corpus
+) -> None:
+    """Identical on every field the matcher reads, so they tie; both endpoints put the lower
+    id first."""
+    twin = {
+        "years_experience": 4,
+        "seniority": "mid",
+        "education_level": "bachelor",
+        "current_title": "Software Engineer",
+        "resume_text": "Shipped internal tools end to end with Python, SQL and some React.",
+        "skills": ["Python", "SQL", "React"],
+    }
+    job = make_job(**corpus.jobs[0].api_payload())
+    first, second = make_candidate(**twin), make_candidate(**twin)
+
+    scored = client.post(f"/jobs/{job['id']}/score").json()["results"]
+    listed = client.get(f"/jobs/{job['id']}/matches").json()["items"]
+
+    assert scored[0]["score"] == scored[1]["score"]
+    assert _ids(scored) == [first["id"], second["id"]]
+    assert _ids(listed) == [first["id"], second["id"]]
 
 
 def test_nothing_scored_yet_is_an_empty_listing(
