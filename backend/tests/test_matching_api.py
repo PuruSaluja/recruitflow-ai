@@ -8,14 +8,16 @@ deployment uses -- so the real load path runs rather than an injected model.
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Callable, Iterator
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, delete, insert, select
+from sqlalchemy import Engine, delete, event, insert, select
 from sqlalchemy.orm import Session
 
 from app.api.v1 import matches
@@ -181,6 +183,16 @@ def test_each_result_carries_a_summary_of_its_candidate_and_no_more(
         assert row["candidate"] == {field: full[field] for field in SUMMARY_FIELDS}
 
 
+def test_elapsed_ms_is_the_real_server_time(client: TestClient, trained: Path, pool: Pool) -> None:
+    job, _ = pool
+
+    started = time.perf_counter()
+    body = client.post(f"/jobs/{job['id']}/score").json()
+    wall_ms = (time.perf_counter() - started) * 1000
+
+    assert 0 < body["elapsed_ms"] <= wall_ms
+
+
 def test_candidate_ids_restrict_scoring_to_those_candidates(
     client: TestClient, trained: Path, pool: Pool, clean_db: Engine
 ) -> None:
@@ -300,6 +312,17 @@ def test_an_unknown_candidate_id_is_a_404_naming_every_missing_one(
     assert response.status_code == 404
     assert response.json()["detail"] == "Candidates not found: 888888, 999999"
     assert _cached(clean_db, job["id"]) == []
+
+
+def test_missing_candidate_ids_are_named_in_ascending_order(
+    client: TestClient, trained: Path, pool: Pool
+) -> None:
+    """A Python set yields 16 before 9, so this fails unless the ids are sorted."""
+    job, _ = pool
+
+    response = client.post(f"/jobs/{job['id']}/score", json={"candidate_ids": [16, 9]})
+
+    assert response.json()["detail"] == "Candidates not found: 9, 16"
 
 
 @pytest.mark.parametrize(
@@ -471,6 +494,27 @@ def test_tied_candidates_are_listed_in_the_order_scoring_ranked_them(
     assert scored[0]["score"] == scored[1]["score"]
     assert _ids(scored) == [first["id"], second["id"]]
     assert _ids(listed) == [first["id"], second["id"]]
+
+
+def test_a_listing_page_loads_its_candidates_in_the_same_query(
+    client: TestClient, trained: Path, pool: Pool
+) -> None:
+    """Loading each row's candidate on its own would cost a query per row on every page."""
+    job, _ = pool
+    client.post(f"/jobs/{job['id']}/score")
+    statements: list[str] = []
+
+    def record(conn, cursor, statement, parameters, context, executemany) -> None:
+        statements.append(statement)
+
+    event.listen(Engine, "before_cursor_execute", record)
+    try:
+        assert client.get(f"/jobs/{job['id']}/matches").status_code == 200
+    finally:
+        event.remove(Engine, "before_cursor_execute", record)
+
+    assert statements, "the listener saw no queries at all"
+    assert [s for s in statements if "FROM candidates" in s] == []
 
 
 def test_nothing_scored_yet_is_an_empty_listing(
@@ -741,3 +785,18 @@ def test_a_job_deleted_mid_run_is_a_404(
 
     assert response.status_code == 404
     assert response.json()["detail"] == f"Job {job['id']} not found"
+
+
+# --- the API description ---------------------------------------------------------
+
+
+def test_the_openapi_document_renders_both_routes(app: FastAPI) -> None:
+    """No other test renders the schema, and a generic page subclass can break it."""
+    prefix = get_settings().api_prefix
+
+    response = TestClient(app).get("/openapi.json")
+
+    assert response.status_code == 200
+    paths = response.json()["paths"]
+    assert "post" in paths[f"{prefix}/jobs/{{job_id}}/score"]
+    assert "get" in paths[f"{prefix}/jobs/{{job_id}}/matches"]
