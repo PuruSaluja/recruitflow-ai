@@ -23,9 +23,10 @@ from app.services.matching import score_pool
 
 router = APIRouter(prefix="/jobs", tags=["matching"])
 
-#: A scoring run whose commit loses a race is re-read and scored once more;
-#: only a second loss is reported. See :func:`score_job`.
-SCORING_ATTEMPTS = 2
+#: How many times a scoring run is tried before a lost race is reported as a
+#: 409: one retry for a lost insert race, one more for a delete that knocks
+#: back every concurrent run at once. See :func:`score_job`.
+SCORING_ATTEMPTS = 3
 
 
 def _get_job_or_404(db: Session, job_id: int) -> Job:
@@ -91,10 +92,12 @@ def score_job(
     Two runs scoring the same new rows at once can both find a row missing
     and both insert it, and the loser's commit fails; a job or candidate
     deleted mid-run fails the commit too. Either way the run is rolled back,
-    re-read and scored once more. The winner's rows are committed by then,
-    so the retry updates them instead of inserting, and anything deleted has
-    dropped out of the pool (or is now a 404, if it was asked for by id).
-    Only a second failure is answered with a 409.
+    re-read and scored again. After a lost insert race the winner's rows are
+    committed, so the retry updates them instead of inserting, and anything
+    deleted has dropped out of the pool (or is now a 404, if it was asked for
+    by id). A delete can knock back every concurrent run at once, though,
+    leaving no winner, so their first retries race each other; that is what
+    the third attempt is for. Only a third failure is answered with a 409.
     """
     request = payload or ScoreJobRequest()
     job = _get_job_or_404(db, job_id)

@@ -546,41 +546,57 @@ def test_listing_with_an_unreadable_matcher_is_a_503_too(
 # --- a run that loses a race ---------------------------------------------------
 
 
+Action = Callable[[int, Job, list[Candidate], str], None]
+
+
 class _Interference:
     """Stands in for ``score_pool``: scores for real, then lets another "request" commit.
 
-    ``action`` runs on the listed calls, after scoring and before the endpoint
-    commits -- the window in which a concurrent request can change the rows.
+    ``actions`` maps a call number to what that other request does, after
+    scoring and before the endpoint commits -- the window in which a
+    concurrent request can change the rows.
     """
 
-    def __init__(self, action: Callable[[int, Job, list[Candidate], str], None], on_calls=(1,)):
-        self.action = action
-        self.on_calls = on_calls
+    def __init__(self, actions: dict[int, Action]):
+        self.actions = actions
         self.calls = 0
 
     def __call__(self, db, job, candidates, matcher, model_version):
         self.calls += 1
         ranked = score_pool(db, job, candidates, matcher, model_version)
-        if self.calls in self.on_calls:
-            self.action(self.calls, job, candidates, model_version)
+        if self.calls in self.actions:
+            self.actions[self.calls](self.calls, job, candidates, model_version)
         return ranked
 
 
-def _insert_a_score_first(engine: Engine) -> Callable[[int, Job, list[Candidate], str], None]:
-    """Commits the row this run is about to insert, for a different candidate each call."""
+def _commit_a_score(engine: Engine, job_id: int, candidate_id: int, version: str) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            insert(MatchScore).values(
+                job_id=job_id,
+                candidate_id=candidate_id,
+                model_version=version,
+                score=0.5,
+                rank=1,
+                features={},
+            )
+        )
+
+
+def _insert_a_score_first(engine: Engine) -> Action:
+    """Commits a row this run is about to insert, for a different candidate each call."""
 
     def action(call: int, job: Job, candidates: list[Candidate], version: str) -> None:
-        with engine.begin() as conn:
-            conn.execute(
-                insert(MatchScore).values(
-                    job_id=job.id,
-                    candidate_id=candidates[call - 1].id,
-                    model_version=version,
-                    score=0.5,
-                    rank=1,
-                    features={},
-                )
-            )
+        _commit_a_score(engine, job.id, candidates[call - 1].id, version)
+
+    return action
+
+
+def _insert_a_score_for(engine: Engine, candidate_id: int) -> Action:
+    """Commits the row this run is about to insert for one candidate not yet scored."""
+
+    def action(call: int, job: Job, candidates: list[Candidate], version: str) -> None:
+        _commit_a_score(engine, job.id, candidate_id, version)
 
     return action
 
@@ -601,7 +617,7 @@ def test_a_run_that_loses_an_insert_race_is_scored_again_and_succeeds(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     job, candidates = pool
-    interference = _Interference(_insert_a_score_first(clean_db))
+    interference = _Interference({1: _insert_a_score_first(clean_db)})
     monkeypatch.setattr(matches, "score_pool", interference)
 
     response = client.post(f"/jobs/{job['id']}/score")
@@ -615,7 +631,33 @@ def test_a_run_that_loses_an_insert_race_is_scored_again_and_succeeds(
     assert all(set(row.features) == set(FEATURE_NAMES) for row in cached)
 
 
-def test_a_run_that_loses_twice_is_a_409_and_writes_nothing(
+def test_a_delete_then_a_lost_insert_race_succeeds_on_the_third_attempt(
+    client: TestClient,
+    trained: Path,
+    pool: Pool,
+    clean_db: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """What the live delete race showed: a delete knocks back every run in flight at once,
+    so their first retries race each other, and the loser needs one more attempt."""
+    job, candidates = pool
+    client.post(
+        f"/jobs/{job['id']}/score", json={"candidate_ids": [c["id"] for c in candidates[:3]]}
+    )
+    gone, unscored = candidates[0]["id"], candidates[-1]["id"]
+    interference = _Interference(
+        {1: _delete(clean_db, Candidate, gone), 2: _insert_a_score_for(clean_db, unscored)}
+    )
+    monkeypatch.setattr(matches, "score_pool", interference)
+
+    response = client.post(f"/jobs/{job['id']}/score")
+
+    assert response.status_code == 200, response.text
+    assert interference.calls == 3
+    assert response.json()["scored_count"] == len(candidates) - 1
+
+
+def test_a_run_that_loses_every_attempt_is_a_409_and_writes_nothing(
     client: TestClient,
     trained: Path,
     pool: Pool,
@@ -623,15 +665,18 @@ def test_a_run_that_loses_twice_is_a_409_and_writes_nothing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     job, _ = pool
-    interference = _Interference(_insert_a_score_first(clean_db), on_calls=(1, 2))
+    attempts = matches.SCORING_ATTEMPTS
+    interference = _Interference(
+        {call: _insert_a_score_first(clean_db) for call in range(1, attempts + 1)}
+    )
     monkeypatch.setattr(matches, "score_pool", interference)
 
     response = client.post(f"/jobs/{job['id']}/score")
 
     assert response.status_code == 409
     assert "Retry" in response.json()["detail"]
-    assert interference.calls == 2
-    assert [row.score for row in _cached(clean_db, job["id"])] == [0.5, 0.5]
+    assert interference.calls == attempts
+    assert [row.score for row in _cached(clean_db, job["id"])] == [0.5] * attempts
 
 
 def test_a_candidate_deleted_mid_run_drops_out_and_the_rest_are_scored(
@@ -645,7 +690,7 @@ def test_a_candidate_deleted_mid_run_drops_out_and_the_rest_are_scored(
     job, candidates = pool
     client.post(f"/jobs/{job['id']}/score")
     gone = candidates[2]["id"]
-    interference = _Interference(_delete(clean_db, Candidate, gone))
+    interference = _Interference({1: _delete(clean_db, Candidate, gone)})
     monkeypatch.setattr(matches, "score_pool", interference)
 
     response = client.post(f"/jobs/{job['id']}/score")
@@ -668,7 +713,7 @@ def test_a_candidate_asked_for_and_deleted_mid_run_is_a_404(
     client.post(f"/jobs/{job['id']}/score", json={"candidate_ids": chosen})
     before = {row.candidate_id: row.scored_at for row in _cached(clean_db, job["id"])}
     monkeypatch.setattr(
-        matches, "score_pool", _Interference(_delete(clean_db, Candidate, chosen[0]))
+        matches, "score_pool", _Interference({1: _delete(clean_db, Candidate, chosen[0])})
     )
 
     response = client.post(f"/jobs/{job['id']}/score", json={"candidate_ids": chosen})
@@ -688,7 +733,9 @@ def test_a_job_deleted_mid_run_is_a_404(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     job, _ = pool
-    monkeypatch.setattr(matches, "score_pool", _Interference(_delete(clean_db, Job, job["id"])))
+    monkeypatch.setattr(
+        matches, "score_pool", _Interference({1: _delete(clean_db, Job, job["id"])})
+    )
 
     response = client.post(f"/jobs/{job['id']}/score")
 
