@@ -15,6 +15,7 @@ from app import __version__
 from app.api.v1 import api_router
 from app.config import Settings, get_settings
 from app.db.session import get_db, make_session_factory
+from app.ml.artifact import REGENERATE_COMMAND, MatcherUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return JSONResponse(
             status_code=409,
             content={"detail": "Resource conflicts with an existing record", "code": "conflict"},
+        )
+
+    @app.exception_handler(MatcherUnavailable)
+    def _handle_matcher_unavailable(request: Request, exc: MatcherUnavailable) -> JSONResponse:
+        """Answer 503 when the trained matcher is missing or cannot be loaded.
+
+        The log gets the full message, file path and underlying error
+        included; the client gets the command that fixes it, but not the
+        server's filesystem layout.
+        """
+        logger.error("matcher unavailable on %s: %s", request.url.path, exc, exc_info=exc)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": (
+                    "The trained matcher is missing or cannot be loaded. "
+                    f"Regenerate it with: {REGENERATE_COMMAND}"
+                ),
+                "code": "matcher_unavailable",
+            },
         )
 
     @app.exception_handler(SQLAlchemyError)
