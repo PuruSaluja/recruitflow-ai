@@ -372,6 +372,8 @@ def test_version_is_not_part_of_the_api_contract(
         pytest.param("delete", "/applications/{id}", id="delete-application"),
         pytest.param("get", "/applications/{id}/stage-events", id="stage-events"),
         pytest.param("post", "/applications/{id}/reopen", id="reopen-application"),
+        pytest.param("post", "/jobs/{id}/score", id="score-job"),
+        pytest.param("get", "/jobs/{id}/matches", id="job-matches"),
     ],
 )
 def test_a_non_positive_path_id_is_a_payload_error(
@@ -392,6 +394,8 @@ def test_a_non_positive_path_id_is_a_payload_error(
         pytest.param("get", "/applications/{id}/stage-events", id="stage-events"),
         pytest.param("get", "/jobs/{id}", id="get-job"),
         pytest.param("get", "/candidates/{id}", id="get-candidate"),
+        pytest.param("post", "/jobs/{id}/score", id="score-job"),
+        pytest.param("get", "/jobs/{id}/matches", id="job-matches"),
     ],
 )
 def test_a_plausible_but_absent_id_is_still_a_404(
