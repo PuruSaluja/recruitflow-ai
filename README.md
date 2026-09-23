@@ -6,9 +6,11 @@ descriptions.
 
 > **Status:** in development. The data layer and the job, candidate and
 > application APIs are in place, including resume file ingestion and the
-> pipeline stage-history trail, as are the skills taxonomy, the synthetic
-> corpus the matcher will train on and the features it will read; the matching
-> model itself, PDF reporting, and the frontend are landing incrementally.
+> pipeline stage-history trail, as is the matching layer: the skills taxonomy,
+> the synthetic corpus the matcher trains on, its features, the calibrated
+> classifier, and endpoints that score a job's candidate pool and cache the
+> ranking. Evaluation, the fairness audit, PDF reporting and the frontend are
+> landing incrementally.
 
 ## Tech stack
 
@@ -109,6 +111,8 @@ reverted.
 | `GET` | `/api/v1/applications/{id}/stage-events` | Full pipeline history, oldest first |
 | `POST` | `/api/v1/applications/{id}/reopen` | Put a rejected/withdrawn application back to `applied` |
 | `DELETE` | `/api/v1/applications/{id}` | Delete an application |
+| `POST` | `/api/v1/jobs/{id}/score` | Score a candidate pool against a job and cache the ranking |
+| `GET` | `/api/v1/jobs/{id}/matches` | The cached ranking under the current matcher, paginated |
 
 Candidate listings filter on `seniority`, `education_level`,
 `min_years_experience`, `max_years_experience`, `location` (substring), `q`
@@ -445,9 +449,10 @@ This writes `backend/app/ml/artifacts/matcher.joblib` (overridable with
 the training label, measured held-out metrics, and the interpreter —
 `random`'s draws and the calibration folds both depend on it, the way the
 corpus manifest already records that for the corpus itself. Anything that
-needs a trained matcher calls `app.ml.artifact.load_matcher`, which raises
-`MatcherUnavailable` naming this command rather than letting a missing file
-surface as a stack trace when the matching endpoints try to use it.
+needs a trained matcher loads it through `app.ml.artifact`, which raises
+`MatcherUnavailable` naming this command when the file is missing or cannot
+be unpickled, rather than letting either surface as a stack trace; the
+matching endpoints turn that into a 503.
 
 The CLI refuses to write a matcher rather than silently shipping a bad one:
 a training split with only one label present fails scikit-learn's solver
@@ -478,6 +483,73 @@ generator itself defines; the matcher is not trained on it. These numbers are
 for reference — the evaluation milestone reports NDCG@10 and P@5 on the
 ranking task these are a proxy for, and the fairness audit is where the
 planted bias in `advanced` gets measured properly rather than assumed.
+
+## Scoring candidates
+
+`POST /api/v1/jobs/{id}/score` runs a pool of candidates through the trained
+matcher, ranks them best first and caches one row per candidate in
+`match_scores`. With no body it scores every candidate on file;
+`candidate_ids` (up to 1,000) restricts the pool, and `limit` (1–500,
+default 50) only trims what comes back — the whole pool is scored and cached
+either way. Ranks in that response are positions within the pool just
+scored, ties going to the lower candidate id. `GET /api/v1/jobs/{id}/matches`
+pages through the cache, best first, without scoring anything. Its ranks run
+from 1 to `total` across everything cached for the job, so they match the
+scoring response whenever the whole pool was scored together.
+
+**What a score is.** The calibrated probability that a past recruiter would
+have advanced this candidate for this job. The matcher is trained on
+`advanced` (see the training pipeline above), so it inherits whatever bias
+those decisions carried, the planted one included; the fairness audit is
+where that gets measured. Each row carries the eight engineered features
+behind its score, exactly `FEATURE_NAMES`. The TF-IDF half is not broken out
+per score: the calibrated matcher keeps one fitted vocabulary per
+calibration fold, so there is no single text similarity to report.
+
+**Caching.** Rows are keyed by job, candidate and `model_version`, the first
+16 hex characters of the SHA-256 of the matcher file's bytes. Scoring again
+with the same matcher updates the rows in place. A retrained matcher gets a
+new version on its own, and the listing shows only the current matcher's
+rows; older ones stay in the table. A cached score is as of its `scored_at`:
+editing the job or a candidate does not rescore it, so score again to
+refresh.
+
+**Errors.** A missing job, or any requested candidate that does not exist,
+is a 404 naming it, checked before the matcher is loaded. A misspelt body
+field is a 422 rather than being ignored, since ignoring it would silently
+score everyone on file. A matcher that is missing or cannot be loaded is a
+503 with `code: "matcher_unavailable"` and the regeneration command; the file
+path and the underlying error go to the server log, not the response.
+
+**Concurrency.** Two requests scoring the same new rows at once can both
+find a row missing and both insert it, and a job or candidate deleted mid-run
+fails the commit too. The run is then rolled back, re-read and scored once
+more. The winner's rows are committed by then, so the retry updates them, and
+only a second failure is answered with a 409 asking the client to retry.
+
+### Measured on the default corpus
+
+Real numbers from a live server on the development database, loaded through
+the API with the default corpus's 4,000 candidates, using the matcher trained
+above (CPython 3.14.6):
+
+| | |
+| --- | --- |
+| Scoring all 4,000 for a new job | 3,521 ms median server time (3,210–3,691, 3 jobs) |
+| Scoring them again (rows updated) | 2,960 ms median (2,810–3,109) |
+| Listing a page of 50 | 28.4 ms median round trip over 11 requests |
+| 10 simultaneous first scorings of the same 300 candidates, 5 rounds | 50 of 50 answered 200, with 300 rows cached each round; with the retry disabled, 11 of 50 lost the race (409) |
+
+A second burst raced a delete: eight requests naming the same 100
+already-scored candidates and two scoring the whole pool, with one of those
+candidates deleted 30 ms in, over 5 rounds. Every request that named the
+deleted candidate answered 404 naming it (40 of 40). The whole-pool requests
+succeeded 6 times in 10; the other 4 used up both attempts and answered the
+retryable 409. No request in either burst answered 500 or 503. Most of the
+scoring time is
+feature computation: under a profiler, normalising skill lists took about
+half of a whole-pool request, and three of every four of those calls redo the
+job's own lists, which do not change across the pool.
 
 ## License
 

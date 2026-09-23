@@ -54,9 +54,11 @@ class MatchScore(Base):
         ForeignKey("candidates.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
-    #: Calibrated probability that this candidate is a strong match, in [0, 1].
+    #: Calibrated probability, in [0, 1], that a past recruiter would have
+    #: advanced this candidate for this job -- the label the matcher learns.
     score: Mapped[float] = mapped_column(Float, nullable=False)
-    #: 1-based position within this job's ranked candidate list.
+    #: 1-based position within the pool this row was last scored in, which
+    #: may be a subset of the job's candidates.
     rank: Mapped[int | None] = mapped_column(Integer)
 
     #: Per-feature contributions, kept so the UI and PDF report can explain
