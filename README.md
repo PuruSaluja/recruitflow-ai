@@ -523,33 +523,40 @@ path and the underlying error go to the server log, not the response.
 
 **Concurrency.** Two requests scoring the same new rows at once can both
 find a row missing and both insert it, and a job or candidate deleted mid-run
-fails the commit too. The run is then rolled back, re-read and scored once
-more. The winner's rows are committed by then, so the retry updates them, and
-only a second failure is answered with a 409 asking the client to retry.
+fails the commit too. The run is then rolled back, re-read and scored again,
+up to three attempts in all. After a lost insert race the winner's rows are
+committed, so a retry updates them. A delete can knock back every run in
+flight at once, leaving no winner, so their first retries race each other;
+the third attempt covers that. Only a third failure is answered with a 409
+asking the client to retry.
 
 ### Measured on the default corpus
 
 Real numbers from a live server on the development database, loaded through
 the API with the default corpus's 4,000 candidates, using the matcher trained
-above (CPython 3.14.6):
+above (CPython 3.14.6). Timings come from two runs on the same data, which
+differed by about a quarter, so both are shown:
 
 | | |
 | --- | --- |
-| Scoring all 4,000 for a new job | 3,521 ms median server time (3,210–3,691, 3 jobs) |
-| Scoring them again (rows updated) | 2,960 ms median (2,810–3,109) |
-| Listing a page of 50 | 28.4 ms median round trip over 11 requests |
-| 10 simultaneous first scorings of the same 300 candidates, 5 rounds | 50 of 50 answered 200, with 300 rows cached each round; with the retry disabled, 11 of 50 lost the race (409) |
+| Scoring all 4,000 for a new job | 3,521 and 2,782 ms median server time, 3 jobs per run (2,661–3,691 ms overall) |
+| Scoring them again (rows updated) | 2,960 and 2,464 ms median (2,438–3,109 ms overall) |
+| Listing a page of 50 | 25.8 ms median round trip over 11 requests |
+| 10 simultaneous first scorings of the same 300 candidates, 5 rounds a run | 150 of 150 answered 200 over three runs, with 300 rows cached each round; with the retry disabled, 25 of 100 lost the race (409) over two runs |
 
 A second burst raced a delete: eight requests naming the same 100
 already-scored candidates and two scoring the whole pool, with one of those
-candidates deleted 30 ms in, over 5 rounds. Every request that named the
-deleted candidate answered 404 naming it (40 of 40). The whole-pool requests
-succeeded 6 times in 10; the other 4 used up both attempts and answered the
-retryable 409. No request in either burst answered 500 or 503. Most of the
-scoring time is
-feature computation: under a profiler, normalising skill lists took about
-half of a whole-pool request, and three of every four of those calls redo the
-job's own lists, which do not change across the pool.
+candidates deleted 30 ms in, over 5 rounds. Wherever the retry was in place,
+each request that named the deleted candidate answered 404 naming it. With
+only two attempts, the whole-pool requests answered the retryable 409 in 9 of
+20 across two runs, because the delete knocks both back and their retries
+then race each other; that is why there is a third attempt, and with it all
+20 succeeded across two runs. No request in any burst answered 500 or 503.
+
+Most of the scoring time is feature computation: under a profiler,
+normalising skill lists took about half of a whole-pool request, and three of
+every four of those calls redo the job's own lists, which do not change
+across the pool.
 
 ## License
 
