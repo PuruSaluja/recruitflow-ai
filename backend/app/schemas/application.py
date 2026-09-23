@@ -8,7 +8,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.enums import ApplicationStatus
-from app.schemas.common import reject_null_fields
+from app.schemas.common import MAX_ID, reject_null_fields
 
 #: Columns the database declares NOT NULL, so a PATCH may omit them but must
 #: never send an explicit null. ``source`` and ``notes`` are nullable and can
@@ -29,10 +29,10 @@ def _tidy_changed_by(value: str | None) -> str | None:
 
 
 class ApplicationCreate(BaseModel):
-    # gt=0 so a malformed id is a 422 about the payload rather than a 404
+    # Bounded so a malformed id is a 422 about the payload rather than a 404
     # claiming the job does not exist.
-    job_id: int = Field(gt=0)
-    candidate_id: int = Field(gt=0)
+    job_id: int = Field(gt=0, le=MAX_ID)
+    candidate_id: int = Field(gt=0, le=MAX_ID)
     source: str | None = Field(default=None, max_length=80)
     notes: str | None = None
     #: Who opened this application, recorded on the opening stage event only.

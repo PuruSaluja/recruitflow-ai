@@ -22,7 +22,7 @@ from app.schemas.application import (
     ApplicationStageEventRead,
     ApplicationUpdate,
 )
-from app.schemas.common import Page
+from app.schemas.common import MAX_ID, Page
 from app.services.pipeline import REOPEN_TARGET, TransitionError, check_reopen, check_transition
 from app.services.stage_history import record_stage_event
 
@@ -87,8 +87,10 @@ def _apply_filters(
 def list_applications(
     db: Session = Depends(get_db),
     page: Pagination = Depends(pagination),
-    job_id: int | None = Query(None, gt=0, description="Only this job's pipeline"),
-    candidate_id: int | None = Query(None, gt=0, description="Only this candidate's applications"),
+    job_id: int | None = Query(None, gt=0, le=MAX_ID, description="Only this job's pipeline"),
+    candidate_id: int | None = Query(
+        None, gt=0, le=MAX_ID, description="Only this candidate's applications"
+    ),
     status: ApplicationStatus | None = Query(None, description="Filter by pipeline stage"),
     source: str | None = Query(None, description="Exact match on how the application arrived"),
 ) -> Page[ApplicationRead]:
@@ -183,7 +185,9 @@ def create_application(payload: ApplicationCreate, db: Session = Depends(get_db)
 
 
 @router.get("/{application_id}", response_model=ApplicationRead, summary="Fetch one application")
-def get_application(application_id: int = Path(gt=0), db: Session = Depends(get_db)) -> Application:
+def get_application(
+    application_id: int = Path(gt=0, le=MAX_ID), db: Session = Depends(get_db)
+) -> Application:
     return _get_or_404(db, application_id)
 
 
@@ -192,7 +196,9 @@ def get_application(application_id: int = Path(gt=0), db: Session = Depends(get_
     response_model=list[ApplicationStageEventRead],
     summary="Full pipeline history for one application",
 )
-def list_stage_events(application_id: int = Path(gt=0), db: Session = Depends(get_db)) -> list:
+def list_stage_events(
+    application_id: int = Path(gt=0, le=MAX_ID), db: Session = Depends(get_db)
+) -> list:
     """Every status move this application has made, oldest first.
 
     Answers "how long did screening take" and similar questions without
@@ -210,7 +216,7 @@ def list_stage_events(application_id: int = Path(gt=0), db: Session = Depends(ge
 )
 def update_application(
     payload: ApplicationUpdate,
-    application_id: int = Path(gt=0),
+    application_id: int = Path(gt=0, le=MAX_ID),
     db: Session = Depends(get_db),
 ) -> Application:
     """Partially update an application.
@@ -257,7 +263,7 @@ def update_application(
 )
 def reopen_application(
     payload: ApplicationReopen | None = None,
-    application_id: int = Path(gt=0),
+    application_id: int = Path(gt=0, le=MAX_ID),
     db: Session = Depends(get_db),
 ) -> Application:
     """Put a rejected or withdrawn application back at the start of the pipeline.
@@ -303,7 +309,9 @@ def reopen_application(
     status_code=http_status.HTTP_204_NO_CONTENT,
     summary="Delete an application",
 )
-def delete_application(application_id: int = Path(gt=0), db: Session = Depends(get_db)) -> None:
+def delete_application(
+    application_id: int = Path(gt=0, le=MAX_ID), db: Session = Depends(get_db)
+) -> None:
     """Hard-delete an application.
 
     Withdrawing a candidate is a status change; this is for removing a record

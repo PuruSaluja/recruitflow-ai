@@ -8,6 +8,15 @@ from pydantic import BaseModel, Field
 
 T = TypeVar("T")
 
+#: The largest id any table can hold: every primary key is a PostgreSQL
+#: ``INTEGER``. Every id the API accepts, in a path, a body or a query, is
+#: bounded by it, because a larger one makes PostgreSQL raise "integer out of
+#: range", which the database error handler would report as an outage.
+MAX_ID = 2_147_483_647
+
+#: The largest ``OFFSET`` PostgreSQL accepts (``BIGINT``), for the same reason.
+MAX_OFFSET = 9_223_372_036_854_775_807
+
 
 def contains_pattern(text: str) -> str:
     """Build a ``LIKE``/``ILIKE`` substring pattern from user-supplied text.

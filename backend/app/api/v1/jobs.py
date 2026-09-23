@@ -11,7 +11,7 @@ from app.api.deps import Pagination, pagination
 from app.db.session import get_db
 from app.models.enums import EmploymentType, JobStatus, SeniorityLevel
 from app.models.job import Job
-from app.schemas.common import Page, contains_pattern
+from app.schemas.common import MAX_ID, Page, contains_pattern
 from app.schemas.job import JobCreate, JobRead, JobUpdate
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -102,12 +102,14 @@ def create_job(payload: JobCreate, db: Session = Depends(get_db)) -> Job:
 
 
 @router.get("/{job_id}", response_model=JobRead, summary="Fetch one job requisition")
-def get_job(job_id: int = Path(gt=0), db: Session = Depends(get_db)) -> Job:
+def get_job(job_id: int = Path(gt=0, le=MAX_ID), db: Session = Depends(get_db)) -> Job:
     return _get_or_404(db, job_id)
 
 
 @router.patch("/{job_id}", response_model=JobRead, summary="Partially update a job")
-def update_job(payload: JobUpdate, job_id: int = Path(gt=0), db: Session = Depends(get_db)) -> Job:
+def update_job(
+    payload: JobUpdate, job_id: int = Path(gt=0, le=MAX_ID), db: Session = Depends(get_db)
+) -> Job:
     job = _get_or_404(db, job_id)
 
     # exclude_unset distinguishes "field omitted" from "field set to null", so
@@ -135,7 +137,7 @@ def update_job(payload: JobUpdate, job_id: int = Path(gt=0), db: Session = Depen
 
 
 @router.post("/{job_id}/close", response_model=JobRead, summary="Close a job requisition")
-def close_job(job_id: int = Path(gt=0), db: Session = Depends(get_db)) -> Job:
+def close_job(job_id: int = Path(gt=0, le=MAX_ID), db: Session = Depends(get_db)) -> Job:
     """Close a requisition. Idempotent: closing a closed job is a no-op."""
     job = _get_or_404(db, job_id)
     if job.status is not JobStatus.CLOSED:
@@ -150,7 +152,7 @@ def close_job(job_id: int = Path(gt=0), db: Session = Depends(get_db)) -> Job:
     status_code=http_status.HTTP_204_NO_CONTENT,
     summary="Delete a job requisition",
 )
-def delete_job(job_id: int = Path(gt=0), db: Session = Depends(get_db)) -> None:
+def delete_job(job_id: int = Path(gt=0, le=MAX_ID), db: Session = Depends(get_db)) -> None:
     """Hard-delete a job; applications and cached match scores cascade."""
     job = _get_or_404(db, job_id)
     db.delete(job)

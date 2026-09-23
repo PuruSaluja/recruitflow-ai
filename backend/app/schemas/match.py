@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.ml.features import YEARS_SCALE
 from app.schemas.candidate import CandidateSummary
-from app.schemas.common import Page
+from app.schemas.common import MAX_ID, Page
 
 #: Most candidate ids one scoring request may name. Leaving the list out scores
 #: every candidate on file, so this only bounds an explicit selection -- and
@@ -102,7 +102,7 @@ class ScoreJobRequest(BaseModel):
     # for three candidates scores everyone on file.
     model_config = ConfigDict(extra="forbid")
 
-    candidate_ids: list[Annotated[int, Field(gt=0)]] | None = Field(
+    candidate_ids: list[Annotated[int, Field(gt=0, le=MAX_ID)]] | None = Field(
         default=None,
         max_length=MAX_CANDIDATE_IDS,
         description="Score only these candidates; omit to score every candidate on file",

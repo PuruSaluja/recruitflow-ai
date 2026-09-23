@@ -18,6 +18,7 @@ from app.models.candidate import Candidate
 from app.models.job import Job
 from app.models.match import MatchScore
 from app.schemas.candidate import CandidateSummary
+from app.schemas.common import MAX_ID
 from app.schemas.match import MatchPage, RankedCandidate, ScoreJobRequest, ScoreJobResponse
 from app.services.matching import score_pool
 
@@ -75,7 +76,7 @@ def _ranked(row: MatchScore, candidate: Candidate, rank: int) -> RankedCandidate
 )
 def score_job(
     payload: ScoreJobRequest | None = None,
-    job_id: int = Path(gt=0),
+    job_id: int = Path(gt=0, le=MAX_ID),
     db: Session = Depends(get_db),
 ) -> ScoreJobResponse:
     """Score candidates against a job with the trained matcher, rank them and cache the scores.
@@ -142,7 +143,7 @@ def score_job(
     summary="A job's cached ranking under the current matcher",
 )
 def list_matches(
-    job_id: int = Path(gt=0),
+    job_id: int = Path(gt=0, le=MAX_ID),
     page: Pagination = Depends(pagination),
     db: Session = Depends(get_db),
 ) -> MatchPage:

@@ -6,6 +6,8 @@ from dataclasses import dataclass
 
 from fastapi import Query
 
+from app.schemas.common import MAX_OFFSET
+
 
 @dataclass(frozen=True)
 class Pagination:
@@ -17,6 +19,6 @@ class Pagination:
 
 def pagination(
     limit: int = Query(50, ge=1, le=200, description="Maximum rows to return"),
-    offset: int = Query(0, ge=0, description="Rows to skip"),
+    offset: int = Query(0, ge=0, le=MAX_OFFSET, description="Rows to skip"),
 ) -> Pagination:
     return Pagination(limit=limit, offset=offset)
