@@ -38,12 +38,19 @@ def commit_row(db: Session, model: Any, row_id: int) -> None:
     """Commit a write to one row, answering a race it lost for what it was.
 
     Between reading a row and committing, another request can delete it, or,
-    for an application, whose version column notices, edit it. The UPDATE or
-    DELETE then matches no row and SQLAlchemy raises ``StaleDataError``, which
-    the database handler would report as an outage. Instead: 404 if the row is
-    gone, the same answer the request would have had a moment later, and 409
-    if it is still there but changed. Rolling back also drops anything written
-    alongside, such as a stage event, so no trail records a move that failed.
+    for an application, whose version column notices, edit it. An UPDATE then
+    matches no row and SQLAlchemy raises ``StaleDataError``, which the database
+    handler would report as an outage, and so does a DELETE that reaches a
+    versioned row: an application, or one a job or candidate takes with it.
+    Instead: 404 if the row is gone, the same answer the request would have had
+    a moment later, and 409 if it is still there but changed, where the change
+    can be in an application the DELETE was taking with it. Rolling back also
+    drops anything written alongside, such as a stage event, so no trail
+    records a move that failed.
+
+    A DELETE of a job or candidate with no applications has nothing versioned
+    to check: SQLAlchemy only warns that it matched no row, and the request
+    answers 204 as though it had won.
     """
     try:
         db.commit()

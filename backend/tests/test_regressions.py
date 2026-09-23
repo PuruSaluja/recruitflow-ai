@@ -16,9 +16,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
-from sqlalchemy import Engine, delete, event, func, select, update
+from sqlalchemy import BigInteger, Engine, Integer, delete, event, func, select, text, update
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.exc import IntegrityError, InvalidRequestError
+from sqlalchemy.exc import DataError, IntegrityError, InvalidRequestError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
 
@@ -460,15 +460,43 @@ def test_every_path_id_past_the_integer_range_is_a_payload_error(
 
 def test_the_largest_integer_id_is_still_a_plain_404(app: FastAPI, client: TestClient) -> None:
     """Guards against over-correcting: the bound must admit every id a row can have."""
+    upload = {"file": ("cv.txt", b"Built reporting pipelines in SQL and Python.", "text/plain")}
     wrong = []
     for method, template, names in _id_routes(app):
         path = template.format(**{name: MAX_ID for name in names})
-        response = client.request(method, path, json={} if method in {"PATCH", "POST"} else None)
-        # The resume upload sent no file, so it is a 422 about the body instead.
-        if response.status_code not in {404, 422} or _path_errors(response):
+        response = client.request(
+            method,
+            path,
+            json={} if method in {"PATCH", "POST"} else None,
+            files=upload if method == "PUT" else None,
+        )
+        if response.status_code != 404:
             wrong.append(f"{method} {path} -> {response.status_code}")
 
     assert wrong == []
+
+
+def test_the_bounds_are_postgresqls_own_limits(clean_db: Engine) -> None:
+    """Pins the constants themselves: every test above is relative to them.
+
+    MAX_ID is the largest id a row can have only while every primary key is an
+    INTEGER, so that is checked too; a move to BIGINT keys must move MAX_ID.
+    """
+    with clean_db.connect() as connection:
+        for limit, sql_type in ((MAX_ID, "INTEGER"), (MAX_OFFSET, "BIGINT")):
+            cast = text(f"SELECT CAST(:value AS {sql_type})")
+            assert connection.scalar(cast, {"value": limit}) == limit
+            with pytest.raises(DataError, match="out of range"):
+                connection.execute(cast, {"value": limit + 1})
+            connection.rollback()
+
+    keys = [column for table in Base.metadata.sorted_tables for column in table.primary_key]
+    assert keys
+    assert [
+        f"{c.table.name}.{c.name}"
+        for c in keys
+        if not isinstance(c.type, Integer) or isinstance(c.type, BigInteger)
+    ] == []
 
 
 @pytest.mark.parametrize("field", ["job_id", "candidate_id"])
@@ -530,13 +558,15 @@ def test_an_offset_past_the_bigint_range_is_a_payload_error(
 
 # --- 7. a write that loses a race to another request (found 2026-09-14) ------
 #
-# Was: a lost race answered 503 "Database unavailable" unless it was a stage
-# change. A DELETE whose row another request removed first raised
-# StaleDataError; a PATCH, close, reopen or upload whose row was deleted just
-# after it committed raised "Could not refresh instance". Measured on
-# 2026-09-14 for applications (19 of 50 racing deletes answered 503), and on
-# 2026-09-23, replaying each race below, on 13 of these 16 shapes; the other
-# three answered 409 although the row was in fact gone.
+# Was: a lost race answered 503 "Database unavailable", except a PATCH or
+# reopen of an application, which answered 409 even when the row was gone. A
+# DELETE whose row another request removed first raised StaleDataError; a
+# write whose row was deleted just after it committed raised "Could not
+# refresh instance". Measured on 2026-09-14 for applications (19 of 50 racing
+# deletes answered 503), and on 2026-09-23 by replaying each race below
+# against the previous code: 14 of the 16 shapes in LOST_RACES answered 503
+# and the other two 409 although the row was gone; the upload, refused-delete
+# and create cases answered 503.
 #
 # Each case replays its race deterministically: the other request's statement
 # runs on its own connection when the endpoint's session reaches its commit
@@ -658,18 +688,21 @@ def test_a_write_that_lost_a_race_says_what_happened_not_that_the_database_is_do
     assert response.json()["detail"].startswith(detail.format(**ids))
 
 
-def test_a_resume_upload_whose_row_was_deleted_after_saving_is_a_404(
-    client: TestClient, clean_db: Engine, make_candidate: Factory
+@pytest.mark.parametrize(
+    ("moment", "detail"), [(BEFORE, GONE), (AFTER, GONE_AFTER)], ids=["before", "after"]
+)
+def test_a_resume_upload_whose_row_was_deleted_is_a_404(
+    client: TestClient, clean_db: Engine, make_candidate: Factory, moment: str, detail: str
 ) -> None:
     ids = {"candidate": make_candidate()["id"]}
     upload = {"file": ("cv.txt", b"Built reporting pipelines in SQL and Python.", "text/plain")}
 
-    with _interloper(clean_db, AFTER, _delete_candidate(ids)) as fired:
+    with _interloper(clean_db, moment, _delete_candidate(ids)) as fired:
         response = client.put(f"/candidates/{ids['candidate']}/resume", files=upload)
 
     assert fired, "the race was never replayed"
     assert response.status_code == 404, response.text
-    assert response.json()["detail"] == GONE_AFTER.format("Candidate", "candidate").format(**ids)
+    assert response.json()["detail"] == detail.format("Candidate", "candidate").format(**ids)
 
 
 @pytest.mark.parametrize("model", [Job, Candidate, Application], ids=lambda m: m.__name__)
