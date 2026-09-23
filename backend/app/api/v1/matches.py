@@ -13,7 +13,7 @@ from sqlalchemy.orm.exc import StaleDataError
 
 from app.api.deps import Pagination, pagination
 from app.db.session import get_db
-from app.ml.artifact import load_versioned_matcher, matcher_version
+from app.ml.artifact import load_versioned_matcher
 from app.models.candidate import Candidate
 from app.models.job import Job
 from app.models.match import MatchScore
@@ -152,9 +152,14 @@ def list_matches(
     smaller run -- which is the one case where they differ from the rank that
     run returned. A score is as of its ``scored_at``: editing the job or a
     candidate afterwards does not rescore it.
+
+    The matcher is loaded here too, not just hashed, so a file that exists
+    but cannot be used is the same 503 scoring gives. Hashing alone would
+    list nothing for it -- no score can carry the version of a file that
+    never loaded -- and every shortlist would look emptied.
     """
     _get_job_or_404(db, job_id)
-    version = matcher_version()
+    _, version = load_versioned_matcher()
     cached = (MatchScore.job_id == job_id, MatchScore.model_version == version)
 
     total = db.execute(select(func.count()).select_from(MatchScore).where(*cached)).scalar_one()

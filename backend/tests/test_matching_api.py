@@ -523,6 +523,26 @@ def test_listing_without_a_trained_matcher_is_a_503(
     assert response.json()["code"] == "matcher_unavailable"
 
 
+def test_listing_with_an_unreadable_matcher_is_a_503_too(
+    client: TestClient,
+    trained: Path,
+    use_model: Callable[[Path], None],
+    tmp_path: Path,
+    pool: Pool,
+) -> None:
+    """Hashing alone would give the damaged file a version no score carries, and list nothing."""
+    job, _ = pool
+    client.post(f"/jobs/{job['id']}/score")
+    damaged = tmp_path / "matcher.joblib"
+    damaged.write_bytes(trained.read_bytes()[:-1])
+    use_model(damaged)
+
+    response = client.get(f"/jobs/{job['id']}/matches")
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "matcher_unavailable"
+
+
 # --- a run that loses a race ---------------------------------------------------
 
 
