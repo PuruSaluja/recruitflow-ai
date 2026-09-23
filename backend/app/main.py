@@ -8,7 +8,7 @@ from collections.abc import Iterator
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.exc import DataError, IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app import __version__
@@ -97,6 +97,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     f"Regenerate it with: {REGENERATE_COMMAND}"
                 ),
                 "code": "matcher_unavailable",
+            },
+        )
+
+    @app.exception_handler(DataError)
+    def _handle_data_error(request: Request, exc: DataError) -> JSONResponse:
+        """Answer a value PostgreSQL will not store as a bad request, not an outage.
+
+        ``DataError`` is PostgreSQL's "data exception" class: text holding a NUL
+        character, which no PostgreSQL text column can store, JSON it cannot
+        parse (a lone surrogate in a skill list), a number too large for its
+        column. Each such value arrived with the request, so it is a 422 like
+        any other invalid input; the log keeps the database's own reason.
+        """
+        logger.warning("value refused by the database on %s: %s", request.url.path, exc.orig)
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": (
+                    "A value in this request cannot be stored, such as text containing "
+                    "the NUL character (U+0000)"
+                ),
+                "code": "invalid_value",
             },
         )
 

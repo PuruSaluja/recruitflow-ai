@@ -8,6 +8,7 @@ stays readable in one place.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Any
@@ -765,3 +766,104 @@ def test_a_refresh_that_fails_for_another_reason_is_not_reported_as_a_lost_race(
     # A transient instance cannot be refreshed, although its row exists.
     with Session(clean_db) as session, pytest.raises(InvalidRequestError, match="not persistent"):
         refresh_row(session, Job(id=job_id), Job, job_id)
+
+
+# --- 8. values the database, or the answer, cannot hold (found 2026-09-23) ---
+#
+# Was: text holding a NUL character (U+0000), which no PostgreSQL text column
+# can store, answered 503 "Database unavailable" in all 13 body fields and
+# search parameters tried, and so did a lone surrogate inside a skill list,
+# which PostgreSQL refuses as JSON.
+
+NUL = chr(0)
+LONE_SURROGATE = chr(0xD800)
+JOB_BODY = {"title": "Data Analyst", "description": "Own the weekly metrics review."}
+
+
+def _post_ascii_json(client: TestClient, path: str, payload: Any) -> Any:
+    """Send ``payload`` as ASCII JSON, so a lone surrogate travels as a valid escape."""
+    body = json.dumps(payload, ensure_ascii=True).encode("ascii")
+    return client.post(path, content=body, headers={"content-type": "application/json"})
+
+
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        pytest.param("/jobs", {**JOB_BODY, "title": f"Data{NUL}Analyst"}, id="job-title"),
+        pytest.param("/jobs", {**JOB_BODY, "description": f"{NUL}" * 30}, id="job-description"),
+        pytest.param("/jobs", {**JOB_BODY, "required_skills": [f"S{NUL}QL"]}, id="job-skills"),
+        pytest.param(
+            "/jobs", {**JOB_BODY, "preferred_skills": [LONE_SURROGATE]}, id="job-skills-surrogate"
+        ),
+        pytest.param(
+            "/candidates",
+            {
+                "full_name": "Nul Byte",
+                "email": "nul@example.com",
+                "resume_text": f"{RACE_RESUME}{NUL}",
+            },
+            id="candidate-resume",
+        ),
+        pytest.param(
+            "/candidates",
+            {
+                "full_name": "Nul Byte",
+                "email": "nul@example.com",
+                "resume_text": RACE_RESUME,
+                "skills": [f"S{NUL}QL"],
+            },
+            id="candidate-skills",
+        ),
+    ],
+)
+def test_a_value_postgresql_cannot_store_is_a_422_not_an_outage(
+    client: TestClient, path: str, payload: dict[str, Any]
+) -> None:
+    response = _post_ascii_json(client, path, payload)
+
+    assert response.status_code == 422, response.text
+    assert response.json()["code"] == "invalid_value"
+    assert client.get(path).json()["total"] == 0
+
+
+@pytest.mark.parametrize(
+    ("path", "params"),
+    [
+        pytest.param("/jobs", {"q": f"a{NUL}b"}, id="job-search"),
+        pytest.param("/candidates", {"q": f"a{NUL}b"}, id="candidate-search"),
+        pytest.param("/candidates", {"skill": f"S{NUL}QL"}, id="candidate-skill-filter"),
+        pytest.param("/candidates", {"location": f"a{NUL}b"}, id="candidate-location-filter"),
+        pytest.param("/applications", {"source": f"a{NUL}b"}, id="application-source-filter"),
+    ],
+)
+def test_a_search_for_a_nul_character_is_a_422_not_an_outage(
+    client: TestClient, path: str, params: dict[str, str]
+) -> None:
+    response = client.get(path, params=params)
+
+    assert response.status_code == 422, response.text
+    assert response.json()["code"] == "invalid_value"
+
+
+def test_an_update_with_a_nul_character_is_a_422_and_changes_nothing(
+    client: TestClient, make_job: Factory, make_candidate: Factory, make_application: Factory
+) -> None:
+    job, candidate = make_job(), make_candidate()
+    application = make_application(job_id=job["id"], candidate_id=candidate["id"])
+    updates = [
+        (f"/jobs/{job['id']}", {"department": f"Data{NUL}"}, job),
+        (f"/candidates/{candidate['id']}", {"location": f"Atlanta{NUL}"}, candidate),
+        (f"/applications/{application['id']}", {"notes": f"Strong{NUL}"}, application),
+        (
+            f"/applications/{application['id']}",
+            {"status": "screening", "changed_by": f"Ana{NUL}"},
+            application,
+        ),
+    ]
+
+    for path, body, before in updates:
+        response = client.patch(path, json=body)
+
+        assert response.status_code == 422, f"{path} {body} -> {response.text}"
+        assert response.json()["code"] == "invalid_value"
+        assert client.get(path).json() == before
