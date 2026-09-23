@@ -11,7 +11,7 @@ from app.schemas.common import ErrorDetail, Page
 from app.schemas.job import JobCreate, JobRead, JobUpdate
 from app.schemas.match import (
     MatchFeatures,
-    MatchRead,
+    MatchPage,
     RankedCandidate,
     ScoreJobRequest,
     ScoreJobResponse,
@@ -30,7 +30,7 @@ __all__ = [
     "JobRead",
     "JobUpdate",
     "MatchFeatures",
-    "MatchRead",
+    "MatchPage",
     "Page",
     "RankedCandidate",
     "ScoreJobRequest",
