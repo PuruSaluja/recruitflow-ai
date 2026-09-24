@@ -9,7 +9,9 @@ stays readable in one place.
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from decimal import Decimal
 from typing import Any
@@ -20,7 +22,18 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
 from psycopg.errors import LockNotAvailable
 from pydantic import BaseModel
-from sqlalchemy import BigInteger, Engine, Integer, delete, event, func, select, text, update
+from sqlalchemy import (
+    BigInteger,
+    Engine,
+    Integer,
+    delete,
+    event,
+    func,
+    insert,
+    select,
+    text,
+    update,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import DataError, IntegrityError, InvalidRequestError, OperationalError
 from sqlalchemy.orm import Session
@@ -570,7 +583,9 @@ def test_an_offset_past_the_bigint_range_is_a_payload_error(
 # deletes answered 503), and on 2026-09-23 by replaying each race below
 # against the previous code: 14 of the 16 shapes in LOST_RACES answered 503
 # and the other two 409 although the row was gone; the upload, refused-delete
-# and create cases answered 503.
+# and create cases answered 503. Three of those shapes can no longer happen,
+# since their routes now hold the row from reading it to committing; they are
+# pinned in section 9.
 #
 # Each case replays its race deterministically: the other request's statement
 # runs on its own connection when the endpoint's session reaches its commit
@@ -648,16 +663,12 @@ LOST_RACES = [
                  404, GONE.format("Application", "application"), id="reopen-deleted"),
     pytest.param("post", "/applications/{application}/reopen", None, AFTER, _delete_application,
                  404, GONE_AFTER.format("Application", "application"), id="reopen-deleted-after"),
-    pytest.param("patch", "/jobs/{job}", {"title": "Senior Analyst"}, BEFORE, _delete_job,
-                 404, GONE.format("Job", "job"), id="patch-job-deleted"),
     pytest.param("patch", "/jobs/{job}", {"title": "Senior Analyst"}, AFTER, _delete_job,
                  404, GONE_AFTER.format("Job", "job"), id="patch-job-deleted-after"),
     pytest.param("post", "/jobs/{job}/close", None, BEFORE, _delete_job,
                  404, GONE.format("Job", "job"), id="close-job-deleted"),
     pytest.param("post", "/jobs/{job}/close", None, AFTER, _delete_job,
                  404, GONE_AFTER.format("Job", "job"), id="close-job-deleted-after"),
-    pytest.param("delete", "/jobs/{job}", None, BEFORE, _delete_job,
-                 404, GONE.format("Job", "job"), id="delete-job-deleted"),
     pytest.param("delete", "/jobs/{job}", None, BEFORE, _edit_application,
                  409, CHANGED.format("Job", "job"), id="delete-job-application-edited"),
     pytest.param("patch", "/candidates/{candidate}", {"location": "Atlanta, GA"}, BEFORE,
@@ -666,8 +677,6 @@ LOST_RACES = [
     pytest.param("patch", "/candidates/{candidate}", {"location": "Atlanta, GA"}, AFTER,
                  _delete_candidate, 404, GONE_AFTER.format("Candidate", "candidate"),
                  id="patch-candidate-deleted-after"),
-    pytest.param("delete", "/candidates/{candidate}", None, BEFORE, _delete_candidate,
-                 404, GONE.format("Candidate", "candidate"), id="delete-candidate-deleted"),
     pytest.param("delete", "/candidates/{candidate}", None, BEFORE, _delete_application,
                  409, CHANGED.format("Candidate", "candidate"),
                  id="delete-candidate-application-gone"),
@@ -997,3 +1006,153 @@ def test_a_422_stays_encodable_whatever_its_messages_hold(app: FastAPI) -> None:
     assert json.loads(response.body) == {
         "detail": [{"type": "value_error", "loc": ["body", "skills"], "msg": message}]
     }
+
+
+# --- 9. two requests writing one job or candidate at once (2026-09-11, -23) --
+#
+# Was: two PATCHes of a job, each valid but together inverting its salary band,
+# answered 409 "Resource conflicts with an existing record" in 11 of 20 races:
+# both checked the band against the ends they had read, and the check
+# constraint refused the second. One after the other, the second is a 422
+# naming the band. And a DELETE of a job or candidate with no applications,
+# beaten by another DELETE, answered 204 as though it had won, where one after
+# the other it is a 404.
+#
+# The fix reads the row under the lock its write takes anyway, so the second
+# request waits for the first and then sees what it left. Each case holds the
+# other request's write open on its own connection, sends the request from a
+# thread, and commits the other write once the request is seen waiting for a
+# lock, or after ten seconds, so a case can fail but never hang.
+
+LOCK_WAITS = text(
+    "SELECT count(*) FROM pg_stat_activity "
+    "WHERE datname = current_database() AND wait_event_type = 'Lock'"
+)
+
+
+def _waiting_for_a_lock(engine: Engine) -> bool:
+    with engine.connect() as watcher:
+        return watcher.scalar(LOCK_WAITS) > 0
+
+
+def _behind_another_write(
+    engine: Engine, statement: Any, request: Callable[[], Any]
+) -> tuple[bool, Any]:
+    """Send ``request`` while another request's ``statement`` is written but uncommitted.
+
+    Returns whether the request was seen waiting for a lock, and its response.
+    """
+    with ThreadPoolExecutor(max_workers=1) as pool, engine.connect() as other:
+        with other.begin():
+            other.execute(statement)
+            response = pool.submit(request)
+            deadline = time.monotonic() + 10
+            while not _waiting_for_a_lock(engine) and time.monotonic() < deadline:
+                time.sleep(0.01)
+            waited = _waiting_for_a_lock(engine)
+        return waited, response.result(timeout=30)
+
+
+def test_two_edits_that_together_invert_a_salary_band_refuse_the_second_as_invalid(
+    client: TestClient, clean_db: Engine, make_job: Factory
+) -> None:
+    job = make_job(salary_min=50000, salary_max=100000)
+    raise_the_minimum = update(Job).where(Job.id == job["id"]).values(salary_min=90000)
+
+    waited, response = _behind_another_write(
+        clean_db,
+        raise_the_minimum,
+        lambda: client.patch(f"/jobs/{job['id']}", json={"salary_max": 60000}),
+    )
+
+    assert waited, "the edit never waited for the other one"
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"] == "salary_max must be greater than or equal to salary_min"
+    stored = client.get(f"/jobs/{job['id']}").json()
+    assert Decimal(stored["salary_min"]) == 90000
+    assert Decimal(stored["salary_max"]) == 100000
+
+
+def test_two_edits_of_different_fields_both_land(
+    client: TestClient, clean_db: Engine, make_job: Factory
+) -> None:
+    """Guards against refusing every concurrent edit, as a version check would."""
+    job = make_job()
+    retitle = update(Job).where(Job.id == job["id"]).values(title="Senior Data Analyst")
+
+    waited, response = _behind_another_write(
+        clean_db,
+        retitle,
+        lambda: client.patch(f"/jobs/{job['id']}", json={"location": "Atlanta, GA"}),
+    )
+
+    assert waited, "the edit never waited for the other one"
+    assert response.status_code == 200, response.text
+    assert (response.json()["title"], response.json()["location"]) == (
+        "Senior Data Analyst",
+        "Atlanta, GA",
+    )
+
+
+@pytest.mark.parametrize("model", [Job, Candidate], ids=lambda m: m.__name__)
+def test_a_delete_beaten_by_another_delete_is_a_404(
+    client: TestClient, clean_db: Engine, make_job: Factory, make_candidate: Factory, model: Any
+) -> None:
+    row_id = (make_job if model is Job else make_candidate)()["id"]
+
+    waited, response = _behind_another_write(
+        clean_db,
+        delete(model).where(model.id == row_id),
+        lambda: client.delete(f"/{model.__tablename__}/{row_id}"),
+    )
+
+    assert waited, "the delete never waited for the other one"
+    assert response.status_code == 404, response.text
+    assert response.json()["detail"] == f"{model.__name__} {row_id} not found"
+
+
+# fmt: off
+HELD_ROWS = [
+    pytest.param("patch", "/jobs/{job}", {"title": "Senior Analyst"}, _delete_job, 200,
+                 id="patch-job"),
+    pytest.param("delete", "/jobs/{job}", None, _delete_job, 204, id="delete-job"),
+    pytest.param("delete", "/candidates/{candidate}", None, _delete_candidate, 204,
+                 id="delete-candidate"),
+]
+# fmt: on
+
+
+@pytest.mark.parametrize(("method", "path", "body", "interloper", "status"), HELD_ROWS)
+def test_a_write_holds_its_row_from_reading_it_to_committing(
+    client: TestClient,
+    clean_db: Engine,
+    make_job: Factory,
+    make_candidate: Factory,
+    method: str,
+    path: str,
+    body: dict[str, Any] | None,
+    interloper: Callable[[dict[str, int]], Any],
+    status: int,
+) -> None:
+    """A delete arriving between the read and the commit waits, and this write lands."""
+    ids = {"job": make_job()["id"], "candidate": make_candidate()["id"]}
+
+    with _interloper(clean_db, BEFORE, interloper(ids)) as fired:
+        response = client.request(method.upper(), path.format(**ids), json=body)
+
+    assert fired == ["waited"], fired
+    assert response.status_code == status, response.text
+
+
+def test_an_edit_holding_its_job_lets_new_applications_through(
+    client: TestClient, clean_db: Engine, make_job: Factory, make_candidate: Factory
+) -> None:
+    """The edit takes FOR NO KEY UPDATE, which a new row referencing the job does not wait on."""
+    job_id, candidate_id = make_job()["id"], make_candidate()["id"]
+    apply = insert(Application).values(job_id=job_id, candidate_id=candidate_id)
+
+    with _interloper(clean_db, BEFORE, apply) as fired:
+        response = client.patch(f"/jobs/{job_id}", json={"title": "Senior Analyst"})
+
+    assert fired == ["ran"], fired
+    assert response.status_code == 200, response.text

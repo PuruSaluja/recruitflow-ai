@@ -7,7 +7,14 @@ from fastapi import status as http_status
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import Pagination, commit_row, pagination, refresh_row
+from app.api.deps import (
+    DELETE_LOCK,
+    EDIT_LOCK,
+    Pagination,
+    commit_row,
+    pagination,
+    refresh_row,
+)
 from app.db.session import get_db
 from app.models.enums import EmploymentType, JobStatus, SeniorityLevel
 from app.models.job import Job
@@ -17,8 +24,8 @@ from app.schemas.job import JobCreate, JobRead, JobUpdate
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
-def _get_or_404(db: Session, job_id: int) -> Job:
-    job = db.get(Job, job_id)
+def _get_or_404(db: Session, job_id: int, *, lock: bool | dict[str, bool] = False) -> Job:
+    job = db.get(Job, job_id, with_for_update=lock)
     if job is None:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND, detail=f"Job {job_id} not found"
@@ -110,7 +117,7 @@ def get_job(job_id: int = Path(gt=0, le=MAX_ID), db: Session = Depends(get_db)) 
 def update_job(
     payload: JobUpdate, job_id: int = Path(gt=0, le=MAX_ID), db: Session = Depends(get_db)
 ) -> Job:
-    job = _get_or_404(db, job_id)
+    job = _get_or_404(db, job_id, lock=EDIT_LOCK)
 
     # exclude_unset distinguishes "field omitted" from "field set to null", so
     # a PATCH only touches what the caller actually sent.
@@ -154,6 +161,6 @@ def close_job(job_id: int = Path(gt=0, le=MAX_ID), db: Session = Depends(get_db)
 )
 def delete_job(job_id: int = Path(gt=0, le=MAX_ID), db: Session = Depends(get_db)) -> None:
     """Hard-delete a job; applications and cached match scores cascade."""
-    job = _get_or_404(db, job_id)
+    job = _get_or_404(db, job_id, lock=DELETE_LOCK)
     db.delete(job)
     commit_row(db, Job, job_id)

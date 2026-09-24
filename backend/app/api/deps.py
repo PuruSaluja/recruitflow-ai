@@ -14,6 +14,18 @@ from sqlalchemy.orm.exc import StaleDataError
 
 from app.schemas.common import MAX_OFFSET
 
+#: Row locks, as ``Session.get``'s ``with_for_update``, for a write whose
+#: answer depends on the row as it stands when the write lands: a job's PATCH
+#: checks the salary band against the stored ends, and a DELETE answers 404
+#: once the row is gone. Taken when the row is read and held to the commit, so
+#: a second request writing the same row waits, then sees what the first left
+#: and answers as it would have one after the other. ``EDIT_LOCK`` is FOR NO
+#: KEY UPDATE, the lock an UPDATE takes anyway, which still lets new
+#: applications and match scores reference the row; ``DELETE_LOCK`` is FOR
+#: UPDATE, the lock a DELETE takes.
+EDIT_LOCK: dict[str, bool] = {"key_share": True}
+DELETE_LOCK = True
+
 
 @dataclass(frozen=True)
 class Pagination:
@@ -48,9 +60,10 @@ def commit_row(db: Session, model: Any, row_id: int) -> None:
     drops anything written alongside, such as a stage event, so no trail
     records a move that failed.
 
-    A DELETE of a job or candidate with no applications has nothing versioned
-    to check: SQLAlchemy only warns that it matched no row, and the request
-    answers 204 as though it had won.
+    Jobs and candidates carry no version, so a DELETE of one with no
+    applications would have nothing to check: SQLAlchemy only warns when it
+    matches no row. Their DELETE routes read the row under ``DELETE_LOCK``
+    instead, so a second DELETE waits and then finds the row gone.
     """
     try:
         db.commit()
