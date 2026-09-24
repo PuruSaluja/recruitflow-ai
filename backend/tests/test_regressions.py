@@ -18,10 +18,11 @@ import pytest
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
+from psycopg.errors import LockNotAvailable
 from pydantic import BaseModel
 from sqlalchemy import BigInteger, Engine, Integer, delete, event, func, select, text, update
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.exc import DataError, IntegrityError, InvalidRequestError
+from sqlalchemy.exc import DataError, IntegrityError, InvalidRequestError, OperationalError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
 
@@ -577,15 +578,28 @@ def test_an_offset_past_the_bigint_range_is_a_payload_error(
 
 
 @contextmanager
-def _interloper(engine: Engine, moment: str, statement: Any) -> Iterator[list[bool]]:
-    """Run ``statement`` once, from another connection, at ``moment`` in any session."""
-    fired: list[bool] = []
+def _interloper(engine: Engine, moment: str, statement: Any) -> Iterator[list[str]]:
+    """Run ``statement`` once, from another connection, at ``moment`` in any session.
+
+    Records ``"ran"``, or ``"waited"`` when a row lock held by the endpoint's
+    session stood in the way. The statement gives up after half a second rather
+    than wait for a session that cannot finish until it returns.
+    """
+    fired: list[str] = []
 
     def run(session: Session) -> None:
-        if not fired:
-            fired.append(True)
+        if fired:
+            return
+        try:
             with engine.begin() as connection:
+                connection.execute(text("SET LOCAL lock_timeout = '500ms'"))
                 connection.execute(statement)
+        except OperationalError as exc:
+            if not isinstance(exc.orig, LockNotAvailable):
+                raise
+            fired.append("waited")
+        else:
+            fired.append("ran")
 
     event.listen(Session, moment, run)
     try:
@@ -686,7 +700,7 @@ def test_a_write_that_lost_a_race_says_what_happened_not_that_the_database_is_do
     with _interloper(clean_db, moment, interloper(ids)) as fired:
         response = client.request(method.upper(), path.format(**ids), json=body)
 
-    assert fired, "the race was never replayed"
+    assert fired == ["ran"], f"the race was not replayed: {fired}"
     assert response.status_code == status, response.text
     assert response.json()["detail"].startswith(detail.format(**ids))
 
@@ -703,7 +717,7 @@ def test_a_resume_upload_whose_row_was_deleted_is_a_404(
     with _interloper(clean_db, moment, _delete_candidate(ids)) as fired:
         response = client.put(f"/candidates/{ids['candidate']}/resume", files=upload)
 
-    assert fired, "the race was never replayed"
+    assert fired == ["ran"], f"the race was not replayed: {fired}"
     assert response.status_code == 404, response.text
     assert response.json()["detail"] == detail.format("Candidate", "candidate").format(**ids)
 
@@ -733,7 +747,7 @@ def test_a_create_whose_new_row_was_deleted_before_it_was_read_back_is_a_404(
     with _interloper(clean_db, AFTER, delete(model).where(model.id == newest)) as fired:
         response = client.post(path, json=body)
 
-    assert fired, "the race was never replayed"
+    assert fired == ["ran"], f"the race was not replayed: {fired}"
     assert response.status_code == 404, response.text
     detail = response.json()["detail"]
     assert detail.startswith(f"{model.__name__} ")
