@@ -82,8 +82,10 @@ pytest backend/tests/test_resume_service.py
 
 `backend/tests/test_regressions.py` pins bugs found by probing the API with
 awkward input — explicit nulls on required fields, JSONB storing a JSON `null`,
-and `%`/`_` in search text acting as wildcards. Each pin fails if its fix is
-reverted.
+`%`/`_` in search text acting as wildcards, a stage change overwriting a
+simultaneous one, non-positive ids, ids and offsets past what PostgreSQL can
+hold, writes that lose a race to another request, and values the database or
+the response cannot hold. Each pin fails if its fix is reverted.
 
 ## API
 
@@ -122,6 +124,32 @@ both — and matching is case-insensitive, so stored `"Python"` answers
 `?skill=python`.
 
 Application listings filter on `job_id`, `candidate_id`, `status` and `source`.
+
+### Limits and errors
+
+- Every id, in a path, a body or a query, is at most 2,147,483,647, the
+  largest PostgreSQL `INTEGER`, and `offset` at most
+  9,223,372,036,854,775,807, the largest `BIGINT`.
+- A candidate's `resume_text` holds at most 100,000 characters and each of
+  their skills at most 100, counted after spacing is tidied. Salaries fit
+  their `NUMERIC(10, 2)` columns: at most 99,999,999.99, in whole cents.
+- Text may not contain the NUL character (U+0000), which no PostgreSQL text
+  column can store.
+
+Breaking any of these in a path, body or query is a **422**; an uploaded
+resume whose text is too long is refused like any other unusable file, with a
+400. A 422 names each problem's type, location and message but does not repeat
+the rejected value, so a 5 MB resume refused for its length gets a short
+answer. A value only the database can refuse, such as the NUL character, is a
+422 with `code: "invalid_value"`.
+
+A write that loses a race to another request says what happened: **404** if
+the other request deleted the row, whether just before this one committed or
+just after, before it could be read back, and **409** if it changed the row.
+The one exception is a delete beaten by another delete of a job or candidate
+with no applications: nothing is left for it to check, so it answers 204 as
+the winner did. None of these is reported as the database being unavailable,
+which is kept for real outages (**503**).
 
 ## Hiring pipeline
 
@@ -173,6 +201,11 @@ not in the API responses and cannot be sent in a `PATCH`.
 file up to 2 MB and replaces the candidate's `resume_text` with the extracted
 content. The format is decided by sniffing the file's magic bytes, not its
 name, so a PDF mailed as `resume.txt` is still read as a PDF.
+
+The extracted text, once normalised as below, may be at most 100,000
+characters, the same cap `resume_text` has in a create or update. The 2 MB
+limit cannot stand in for it, because it bounds the file's bytes: a
+20,414-byte PDF generated for the tests extracts to 108,028 characters.
 
 Extracted text is normalised before it is stored, because every artefact left
 in it becomes a token for the matching layer downstream:
