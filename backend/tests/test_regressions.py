@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -33,7 +34,7 @@ from app.models.application import Application
 from app.models.enums import ApplicationStatus
 from app.schemas.candidate import CandidateUpdate
 from app.schemas.common import MAX_ID, MAX_OFFSET
-from app.schemas.job import JobUpdate
+from app.schemas.job import SALARY_DIGITS, SALARY_PLACES, JobUpdate
 
 Factory = Callable[..., dict[str, Any]]
 
@@ -774,6 +775,9 @@ def test_a_refresh_that_fails_for_another_reason_is_not_reported_as_a_lost_race(
 # can store, answered 503 "Database unavailable" in all 13 body fields and
 # search parameters tried, and so did a lone surrogate inside a skill list,
 # which PostgreSQL refuses as JSON.
+#
+# Was: a salary past the NUMERIC(10, 2) columns, from 100,000,000 up, answered
+# 503 as well, and a fraction of a cent was rounded away without a word.
 
 NUL = chr(0)
 LONE_SURROGATE = chr(0xD800)
@@ -867,3 +871,40 @@ def test_an_update_with_a_nul_character_is_a_422_and_changes_nothing(
         assert response.status_code == 422, f"{path} {body} -> {response.text}"
         assert response.json()["code"] == "invalid_value"
         assert client.get(path).json() == before
+
+
+@pytest.mark.parametrize(
+    ("salary", "status"),
+    [
+        pytest.param("99999999.99", 201, id="largest"),
+        pytest.param("100000000", 422, id="one-digit-too-many"),
+        pytest.param("99999999.995", 422, id="rounds-up-past-the-column"),
+        pytest.param("85000.001", 422, id="a-fraction-of-a-cent"),
+        pytest.param("85000.5", 201, id="half-a-unit"),
+    ],
+)
+def test_a_salary_must_fit_the_numeric_10_2_columns(
+    client: TestClient, salary: str, status: int
+) -> None:
+    response = client.post("/jobs", json={**JOB_BODY, "salary_min": salary})
+
+    assert response.status_code == status, response.text
+    if status == 201:
+        assert Decimal(response.json()["salary_min"]) == Decimal(salary)
+    else:
+        assert [error["loc"] for error in response.json()["detail"]] == [["body", "salary_min"]]
+
+
+def test_a_salary_update_past_the_column_is_a_422(client: TestClient, make_job: Factory) -> None:
+    job = make_job()
+
+    response = client.patch(f"/jobs/{job['id']}", json={"salary_max": 10**15})
+
+    assert response.status_code == 422, response.text
+    assert [error["loc"] for error in response.json()["detail"]] == [["body", "salary_max"]]
+    assert client.get(f"/jobs/{job['id']}").json() == job
+
+
+def test_the_salary_bounds_are_the_columns_own() -> None:
+    for column in (Job.__table__.c.salary_min, Job.__table__.c.salary_max):
+        assert (column.type.precision, column.type.scale) == (SALARY_DIGITS, SALARY_PLACES)

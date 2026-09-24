@@ -11,6 +11,13 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.models.enums import EducationLevel, EmploymentType, JobStatus, SeniorityLevel
 from app.schemas.common import reject_null_fields
 
+#: Mirrors the salary columns' ``NUMERIC(10, 2)``: at most 99,999,999.99, in
+#: whole cents. A larger value, or one that rounds up past it, made PostgreSQL
+#: raise "numeric field overflow", reported as an outage, and a fraction of a
+#: cent was rounded away without a word.
+SALARY_DIGITS = 10
+SALARY_PLACES = 2
+
 #: Columns the database declares NOT NULL, so a PATCH may omit them but must
 #: never send an explicit null.
 REQUIRED_JOB_FIELDS = frozenset(
@@ -39,8 +46,12 @@ class JobBase(BaseModel):
     description: str = Field(min_length=20)
     required_skills: list[str] = Field(default_factory=list)
     preferred_skills: list[str] = Field(default_factory=list)
-    salary_min: Decimal | None = Field(default=None, ge=0)
-    salary_max: Decimal | None = Field(default=None, ge=0)
+    salary_min: Decimal | None = Field(
+        default=None, ge=0, max_digits=SALARY_DIGITS, decimal_places=SALARY_PLACES
+    )
+    salary_max: Decimal | None = Field(
+        default=None, ge=0, max_digits=SALARY_DIGITS, decimal_places=SALARY_PLACES
+    )
 
     @model_validator(mode="after")
     def _check_salary_band(self) -> JobBase:
@@ -77,8 +88,12 @@ class JobUpdate(BaseModel):
     description: str | None = Field(default=None, min_length=20)
     required_skills: list[str] | None = None
     preferred_skills: list[str] | None = None
-    salary_min: Decimal | None = Field(default=None, ge=0)
-    salary_max: Decimal | None = Field(default=None, ge=0)
+    salary_min: Decimal | None = Field(
+        default=None, ge=0, max_digits=SALARY_DIGITS, decimal_places=SALARY_PLACES
+    )
+    salary_max: Decimal | None = Field(
+        default=None, ge=0, max_digits=SALARY_DIGITS, decimal_places=SALARY_PLACES
+    )
     status: JobStatus | None = None
 
 
