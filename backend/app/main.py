@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Iterator
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.exc import DataError, IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -99,6 +102,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "code": "matcher_unavailable",
             },
         )
+
+    @app.exception_handler(RequestValidationError)
+    def _handle_validation_error(request: Request, exc: RequestValidationError) -> Response:
+        """Say what is wrong with a request without sending the request back.
+
+        FastAPI's own 422 repeats every rejected value as ``input``: a
+        5,000,000-character resume refused for its length came back as a
+        5,000,160-byte answer, and a missing field echoed the whole body. A
+        string holding a lone surrogate, valid JSON but not valid Unicode,
+        could not be encoded at all, so that 422 became a 500. Each error keeps
+        its type, location, message and context, and the body is written as
+        ASCII JSON, so nothing a client sends can make the answer unencodable.
+        """
+        errors = [{key: value for key, value in e.items() if key != "input"} for e in exc.errors()]
+        body = json.dumps(
+            {"detail": jsonable_encoder(errors)}, ensure_ascii=True, separators=(",", ":")
+        )
+        return Response(content=body, status_code=422, media_type="application/json")
 
     @app.exception_handler(DataError)
     def _handle_data_error(request: Request, exc: DataError) -> JSONResponse:

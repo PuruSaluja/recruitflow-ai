@@ -778,6 +778,11 @@ def test_a_refresh_that_fails_for_another_reason_is_not_reported_as_a_lost_race(
 #
 # Was: a salary past the NUMERIC(10, 2) columns, from 100,000,000 up, answered
 # 503 as well, and a fraction of a cent was rounded away without a word.
+#
+# Was: every 422 repeated its input, 5,000,160 bytes back for a
+# 5,000,000-character resume. A lone surrogate in a plain text field was
+# refused by validation, but could not be encoded into that answer, so it
+# became a 500.
 
 NUL = chr(0)
 LONE_SURROGATE = chr(0xD800)
@@ -908,3 +913,40 @@ def test_a_salary_update_past_the_column_is_a_422(client: TestClient, make_job: 
 def test_the_salary_bounds_are_the_columns_own() -> None:
     for column in (Job.__table__.c.salary_min, Job.__table__.c.salary_max):
         assert (column.type.precision, column.type.scale) == (SALARY_DIGITS, SALARY_PLACES)
+
+
+def test_a_validation_error_does_not_send_the_request_back(client: TestClient) -> None:
+    resume = "a" * 5_000_000
+    payload = {"full_name": "Long Resume", "email": "long@example.com", "resume_text": resume}
+
+    response = client.post("/candidates", json=payload)
+
+    assert response.status_code == 422
+    assert len(response.content) < 500
+    assert response.json()["detail"] == [
+        {
+            "type": "string_too_long",
+            "loc": ["body", "resume_text"],
+            "msg": "String should have at most 100000 characters",
+            "ctx": {"max_length": 100000},
+        }
+    ]
+
+
+def test_a_missing_field_does_not_send_the_whole_body_back(client: TestClient) -> None:
+    response = client.post("/jobs", json={"title": "Data Analyst", "department": "x" * 100})
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == [
+        {"type": "missing", "loc": ["body", "description"], "msg": "Field required"}
+    ]
+
+
+def test_a_lone_surrogate_in_a_text_field_is_a_422_not_a_500(client: TestClient) -> None:
+    response = _post_ascii_json(client, "/jobs", {**JOB_BODY, "title": f"Data{LONE_SURROGATE}"})
+
+    assert response.status_code == 422
+    assert response.content.isascii()
+    assert [(e["type"], e["loc"]) for e in response.json()["detail"]] == [
+        ("string_unicode", ["body", "title"])
+    ]
