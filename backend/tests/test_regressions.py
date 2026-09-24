@@ -16,6 +16,7 @@ from typing import Any
 
 import pytest
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 from sqlalchemy import BigInteger, Engine, Integer, delete, event, func, select, text, update
@@ -878,36 +879,48 @@ def test_an_update_with_a_nul_character_is_a_422_and_changes_nothing(
         assert client.get(path).json() == before
 
 
-@pytest.mark.parametrize(
-    ("salary", "status"),
-    [
-        pytest.param("99999999.99", 201, id="largest"),
-        pytest.param("100000000", 422, id="one-digit-too-many"),
-        pytest.param("99999999.995", 422, id="rounds-up-past-the-column"),
-        pytest.param("85000.001", 422, id="a-fraction-of-a-cent"),
-        pytest.param("85000.5", 201, id="half-a-unit"),
-    ],
-)
-def test_a_salary_must_fit_the_numeric_10_2_columns(
-    client: TestClient, salary: str, status: int
+SALARIES = [
+    pytest.param("99999999.99", True, id="largest"),
+    pytest.param("100000000", False, id="one-digit-too-many"),
+    pytest.param("99999999.995", False, id="rounds-up-past-the-column"),
+    pytest.param("85000.001", False, id="a-fraction-of-a-cent"),
+    pytest.param(10**15, False, id="a-json-integer"),
+    pytest.param("85000.5", True, id="half-a-unit"),
+]
+
+
+@pytest.mark.parametrize("field", ["salary_min", "salary_max"])
+@pytest.mark.parametrize(("salary", "fits"), SALARIES)
+def test_a_new_salary_must_fit_the_numeric_10_2_columns(
+    client: TestClient, field: str, salary: str | int, fits: bool
 ) -> None:
-    response = client.post("/jobs", json={**JOB_BODY, "salary_min": salary})
+    response = client.post("/jobs", json={**JOB_BODY, field: salary})
 
-    assert response.status_code == status, response.text
-    if status == 201:
-        assert Decimal(response.json()["salary_min"]) == Decimal(salary)
+    if fits:
+        assert response.status_code == 201, response.text
+        assert Decimal(response.json()[field]) == Decimal(salary)
     else:
-        assert [error["loc"] for error in response.json()["detail"]] == [["body", "salary_min"]]
+        assert response.status_code == 422, response.text
+        assert [error["loc"] for error in response.json()["detail"]] == [["body", field]]
+        assert client.get("/jobs").json()["total"] == 0
 
 
-def test_a_salary_update_past_the_column_is_a_422(client: TestClient, make_job: Factory) -> None:
+@pytest.mark.parametrize("field", ["salary_min", "salary_max"])
+@pytest.mark.parametrize(("salary", "fits"), SALARIES)
+def test_an_updated_salary_must_fit_the_numeric_10_2_columns(
+    client: TestClient, make_job: Factory, field: str, salary: str | int, fits: bool
+) -> None:
     job = make_job()
 
-    response = client.patch(f"/jobs/{job['id']}", json={"salary_max": 10**15})
+    response = client.patch(f"/jobs/{job['id']}", json={field: salary})
 
-    assert response.status_code == 422, response.text
-    assert [error["loc"] for error in response.json()["detail"]] == [["body", "salary_max"]]
-    assert client.get(f"/jobs/{job['id']}").json() == job
+    if fits:
+        assert response.status_code == 200, response.text
+        assert Decimal(response.json()[field]) == Decimal(salary)
+    else:
+        assert response.status_code == 422, response.text
+        assert [error["loc"] for error in response.json()["detail"]] == [["body", field]]
+        assert client.get(f"/jobs/{job['id']}").json() == job
 
 
 def test_the_salary_bounds_are_the_columns_own() -> None:
@@ -950,3 +963,23 @@ def test_a_lone_surrogate_in_a_text_field_is_a_422_not_a_500(client: TestClient)
     assert [(e["type"], e["loc"]) for e in response.json()["detail"]] == [
         ("string_unicode", ["body", "title"])
     ]
+
+
+def test_a_422_stays_encodable_whatever_its_messages_hold(app: FastAPI) -> None:
+    """Pins the handler's promise directly, since no request tried can reach it now.
+
+    With the input left out, a lone surrogate has no way into the answer: one in
+    a field name is refused at the body's own location. The answer is written as
+    ASCII JSON regardless, so a message that ever quotes one stays encodable.
+    """
+    handler = app.exception_handlers[RequestValidationError]
+    message = f"Unknown skill {LONE_SURROGATE}"
+    error = {"type": "value_error", "loc": ("body", "skills"), "msg": message, "input": "x"}
+
+    response = handler(None, RequestValidationError([error]))
+
+    assert response.status_code == 422
+    assert response.body.isascii()
+    assert json.loads(response.body) == {
+        "detail": [{"type": "value_error", "loc": ["body", "skills"], "msg": message}]
+    }
