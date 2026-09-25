@@ -50,7 +50,7 @@ from app.db.session import get_db
 from app.models import ApplicationStageEvent, Candidate, Job, MatchScore
 from app.models.application import Application
 from app.models.enums import ApplicationStatus
-from app.schemas.candidate import CandidateUpdate
+from app.schemas.candidate import MAX_SKILL_CHARS, CandidateUpdate
 from app.schemas.common import MAX_ID, MAX_OFFSET
 from app.schemas.job import SALARY_DIGITS, SALARY_PLACES, JobUpdate
 from app.services.resume import MAX_RESUME_CHARS, MAX_UPLOAD_BYTES
@@ -1419,14 +1419,19 @@ def test_an_upload_near_the_limit_still_gets_the_endpoints_own_answer(
     assert response.json()["detail"].startswith(detail)
 
 
-def test_the_largest_valid_candidate_body_is_under_the_cap(client: TestClient) -> None:
-    """A resume at the character limit, each character sent as a surrogate-pair escape."""
+def test_a_candidate_at_every_limit_fits_under_the_cap(client: TestClient) -> None:
+    """Every text field at its limit, each character sent as a surrogate-pair escape."""
+    wide = chr(0x1F600)
     payload = {
-        "full_name": "Longest Resume",
-        "email": "longest@example.com",
-        "resume_text": chr(0x1F600) * MAX_RESUME_CHARS,
+        "full_name": wide * 200,
+        "email": "a" * 64 + "@" + ".".join(["b" * 63, "c" * 63, "d" * 57, "com"]),
+        "phone": wide * 40,
+        "location": wide * 150,
+        "current_title": wide * 200,
+        "resume_text": wide * MAX_RESUME_CHARS,
+        "skills": [chr(0x1F600 + n) + wide * (MAX_SKILL_CHARS - 1) for n in range(100)],
     }
-    assert len(json.dumps(payload, ensure_ascii=True)) > 1_200_000
+    assert 1_300_000 < len(json.dumps(payload, ensure_ascii=True)) < MAX_REQUEST_BYTES
 
     response = _post_ascii_json(client, "/candidates", payload)
 
