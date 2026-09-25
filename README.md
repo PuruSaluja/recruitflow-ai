@@ -177,7 +177,8 @@ reported as the database being unavailable, which is kept for real outages
 A 503 with `code: "db_unavailable"` means the database could not be reached or
 could not serve the request: a refused or dropped connection, a deadlock, a
 cancelled statement, or no pooled connection free. Any other database error is
-a fault in the server's own code and is an ordinary **500**.
+a fault in the server's own code and is a **500** with
+`code: "internal_error"`.
 
 ## Hiring pipeline
 
@@ -630,13 +631,27 @@ alternating between them:
 | Scoring them again | 3,524 ms median | 2,517 ms median |
 | Scoring them again, a second round (6 each) | 3,094 ms median | 2,576 ms median |
 
-Both servers returned the same ranks, scores and features for the same job.
+For the same job, both servers returned the same ranks, scores and features
+for the 500 best, the most one response carries. Run in-process, all 4,000
+matched exactly for six jobs, and a matcher retrained on the new code is
+byte-identical to the old one, so its version and every figure above stand.
 
-The pool has no size limit from the database side. The cached rows used to be
-looked up with one query parameter per candidate, and psycopg refuses more
-than 65,535, so scoring everyone failed once more than 65,533 candidates were
-on file; they are now looked up with one array parameter. On the test
-database, 65,540 candidates scored and then rescored in place.
+Timed without a profiler, in-process and without the database, skill
+normalisation was 48-52% of the scoring work on the old code in three runs,
+and is 17-19% on the new in six. A profiler puts the new code at 41%, because it
+slows many small Python calls far more than the numerical code. Most of what
+remains is the five calibration folds' TF-IDF passes over the resumes, 63-79%
+of the time in three runs, against 27-32% for all the engineered features.
+Absolute times varied more than threefold between runs on a busy machine, so
+only the shares are given here.
+
+Scoring everyone also no longer stops at 65,533 candidates. The cached rows
+were looked up with one query parameter per candidate, and psycopg refuses
+more than 65,535. Over HTTP on a throwaway database, the old code scored
+65,533 candidates but answered 503 "Database unavailable" for 65,534, after
+43 s of scoring. The rows are now looked up with one array parameter: the
+same 65,534 scored in 54 s and rescored in 44 s, and looking up 1,000 of
+them uses the unique index (2 ms).
 
 ## License
 
