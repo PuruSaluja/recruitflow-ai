@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
-from app.models import Application, MatchScore
+from app.models import Application, Job, MatchScore
 
 Factory = Callable[..., dict[str, Any]]
 
@@ -299,3 +299,126 @@ def test_delete_cascades_to_applications_and_match_scores(
         assert session.scalar(select(func.count()).select_from(Application)) == 0
         assert session.scalar(select(func.count()).select_from(MatchScore)) == 0
     assert client.get(f"/candidates/{candidate['id']}").status_code == 200
+
+
+# --- input caps --------------------------------------------------------------
+#
+# The limits are written out rather than read from the constants, so changing a
+# constant without updating these tests fails here.
+
+
+@pytest.mark.parametrize(("length", "expected_status"), [(20_000, 201), (20_001, 422)])
+def test_description_is_capped_at_20_000_characters_on_create(
+    client: TestClient, length: int, expected_status: int
+) -> None:
+    response = client.post("/jobs", json={**VALID, "description": "d" * length})
+
+    assert response.status_code == expected_status
+    assert client.get("/jobs").json()["total"] == (1 if expected_status == 201 else 0)
+
+
+@pytest.mark.parametrize("field", ["required_skills", "preferred_skills"])
+@pytest.mark.parametrize(
+    ("skill", "expected_status"),
+    [
+        pytest.param("s" * 100, 201, id="100"),
+        pytest.param("s" * 101, 422, id="101"),
+        pytest.param("s" * 50_000, 422, id="50000"),
+    ],
+)
+def test_each_skill_is_capped_at_100_characters(
+    client: TestClient, field: str, skill: str, expected_status: int
+) -> None:
+    response = client.post("/jobs", json={**VALID, field: ["SQL", skill]})
+
+    assert response.status_code == expected_status
+    if expected_status == 201:
+        assert response.json()[field] == ["SQL", skill]
+    else:
+        assert response.json()["detail"][0]["loc"] == ["body", field, 1]
+
+
+@pytest.mark.parametrize("field", ["required_skills", "preferred_skills"])
+@pytest.mark.parametrize(("count", "expected_status"), [(100, 201), (101, 422)])
+def test_each_skill_list_is_capped_at_100(
+    client: TestClient, field: str, count: int, expected_status: int
+) -> None:
+    response = client.post("/jobs", json={**VALID, field: [f"skill-{n}" for n in range(count)]})
+
+    assert response.status_code == expected_status
+
+
+@pytest.mark.parametrize(
+    ("updates", "field"),
+    [
+        pytest.param({"description": "d" * 20_001}, "description", id="description"),
+        pytest.param(
+            {"required_skills": ["SQL", "s" * 101]}, "required_skills", id="required-skill"
+        ),
+        pytest.param(
+            {"required_skills": [f"skill-{n}" for n in range(101)]},
+            "required_skills",
+            id="required-list",
+        ),
+        pytest.param(
+            {"preferred_skills": ["SQL", "s" * 101]}, "preferred_skills", id="preferred-skill"
+        ),
+        pytest.param(
+            {"preferred_skills": [f"skill-{n}" for n in range(101)]},
+            "preferred_skills",
+            id="preferred-list",
+        ),
+    ],
+)
+def test_patch_applies_the_same_caps_and_keeps_the_stored_row(
+    client: TestClient, make_job: Factory, updates: dict[str, Any], field: str
+) -> None:
+    job = make_job(required_skills=["Python"])
+
+    response = client.patch(f"/jobs/{job['id']}", json=updates)
+
+    assert response.status_code == 422
+    assert field in response.json()["detail"][0]["loc"]
+    assert client.get(f"/jobs/{job['id']}").json() == job
+
+
+def test_patch_accepts_values_exactly_at_the_caps(client: TestClient, make_job: Factory) -> None:
+    job = make_job()
+    at_the_caps = ["s" * 100] + [f"skill-{n}" for n in range(99)]
+
+    response = client.patch(
+        f"/jobs/{job['id']}",
+        json={
+            "description": "d" * 20_000,
+            "required_skills": at_the_caps,
+            "preferred_skills": at_the_caps,
+        },
+    )
+
+    assert response.status_code == 200
+    assert len(response.json()["description"]) == 20_000
+    assert response.json()["required_skills"] == at_the_caps
+    assert response.json()["preferred_skills"] == at_the_caps
+
+
+def test_a_job_stored_before_the_caps_is_still_readable(
+    client: TestClient, clean_db: Engine
+) -> None:
+    """The caps guard what comes in, so rows already stored over them still serialise."""
+    with Session(clean_db) as session:
+        row = Job(
+            title="Legacy Row",
+            description="d" * 20_001,
+            required_skills=["s" * 101],
+            preferred_skills=[f"skill-{n}" for n in range(101)],
+        )
+        session.add(row)
+        session.commit()
+        job_id = row.id
+
+    assert client.get(f"/jobs/{job_id}").status_code == 200
+    assert client.get("/jobs").json()["items"][0]["id"] == job_id
+    # Editing another field leaves the oversized ones alone rather than refusing.
+    response = client.patch(f"/jobs/{job_id}", json={"location": "Atlanta, GA"})
+    assert response.status_code == 200
+    assert len(response.json()["description"]) == 20_001

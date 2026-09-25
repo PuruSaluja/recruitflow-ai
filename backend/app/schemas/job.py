@@ -4,12 +4,27 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.enums import EducationLevel, EmploymentType, JobStatus, SeniorityLevel
+from app.schemas.candidate import MAX_SKILL_CHARS
 from app.schemas.common import reject_null_fields
+
+#: The longest job description accepted: as long as a normal job description
+#: would or should be. A typical one runs to a few
+#: thousand characters and a long one to about 10,000 (rough figures, as for
+#: the resume cap); 20,000, some 3,000 words, leaves room for the long ones
+#: without taking in whole pasted documents. The generated corpus's
+#: descriptions run 327 to 467 characters (seeds 42 and 5).
+MAX_DESCRIPTION_CHARS = 20_000
+
+#: A job's skills take a candidate's caps: at most 100 in each list, each at
+#: most ``MAX_SKILL_CHARS`` characters. Jobs store their skills as sent, where
+#: a candidate's are tidied first, so the length counted here is the stored one.
+MAX_SKILLS_PER_LIST = 100
+SkillName = Annotated[str, Field(max_length=MAX_SKILL_CHARS)]
 
 #: Mirrors the salary columns' ``NUMERIC(10, 2)``: at most 99,999,999.99, in
 #: whole cents. A larger value, or one that rounds up past it, made PostgreSQL
@@ -65,6 +80,12 @@ class JobBase(BaseModel):
 
 
 class JobCreate(JobBase):
+    # The caps sit on the request models, not on ``JobBase``, because
+    # ``JobRead`` inherits the base: a row stored before the caps existed must
+    # still be readable rather than failing every response.
+    description: str = Field(min_length=20, max_length=MAX_DESCRIPTION_CHARS)
+    required_skills: list[SkillName] = Field(default_factory=list, max_length=MAX_SKILLS_PER_LIST)
+    preferred_skills: list[SkillName] = Field(default_factory=list, max_length=MAX_SKILLS_PER_LIST)
     status: JobStatus = JobStatus.OPEN
 
 
@@ -85,9 +106,9 @@ class JobUpdate(BaseModel):
     seniority: SeniorityLevel | None = None
     education_required: EducationLevel | None = None
     min_years_experience: int | None = Field(default=None, ge=0, le=50)
-    description: str | None = Field(default=None, min_length=20)
-    required_skills: list[str] | None = None
-    preferred_skills: list[str] | None = None
+    description: str | None = Field(default=None, min_length=20, max_length=MAX_DESCRIPTION_CHARS)
+    required_skills: list[SkillName] | None = Field(default=None, max_length=MAX_SKILLS_PER_LIST)
+    preferred_skills: list[SkillName] | None = Field(default=None, max_length=MAX_SKILLS_PER_LIST)
     salary_min: Decimal | None = Field(
         default=None, ge=0, max_digits=SALARY_DIGITS, decimal_places=SALARY_PLACES
     )

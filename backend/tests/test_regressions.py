@@ -830,9 +830,6 @@ def _post_ascii_json(client: TestClient, path: str, payload: Any) -> Any:
         pytest.param("/jobs", {**JOB_BODY, "description": f"{NUL}" * 30}, id="job-description"),
         pytest.param("/jobs", {**JOB_BODY, "required_skills": [f"S{NUL}QL"]}, id="job-skills"),
         pytest.param(
-            "/jobs", {**JOB_BODY, "preferred_skills": [LONE_SURROGATE]}, id="job-skills-surrogate"
-        ),
-        pytest.param(
             "/candidates",
             {
                 "full_name": "Nul Byte",
@@ -850,6 +847,16 @@ def _post_ascii_json(client: TestClient, path: str, payload: Any) -> Any:
                 "skills": [f"S{NUL}QL"],
             },
             id="candidate-skills",
+        ),
+        pytest.param(
+            "/candidates",
+            {
+                "full_name": "Lone Surrogate",
+                "email": "surrogate@example.com",
+                "resume_text": RACE_RESUME,
+                "skills": [LONE_SURROGATE],
+            },
+            id="candidate-skills-surrogate",
         ),
     ],
 )
@@ -984,14 +991,25 @@ def test_a_missing_field_does_not_send_the_whole_body_back(client: TestClient) -
     ]
 
 
-def test_a_lone_surrogate_in_a_text_field_is_a_422_not_a_500(client: TestClient) -> None:
-    response = _post_ascii_json(client, "/jobs", {**JOB_BODY, "title": f"Data{LONE_SURROGATE}"})
+@pytest.mark.parametrize(
+    ("overrides", "loc"),
+    [
+        pytest.param({"title": f"Data{LONE_SURROGATE}"}, ["body", "title"], id="title"),
+        # A job's skills are length-checked since 2026-09-24, so validation
+        # reads each one and refuses the surrogate before the database sees it.
+        pytest.param(
+            {"preferred_skills": [LONE_SURROGATE]}, ["body", "preferred_skills", 0], id="skill"
+        ),
+    ],
+)
+def test_a_lone_surrogate_in_a_text_field_is_a_422_not_a_500(
+    client: TestClient, overrides: dict[str, Any], loc: list[Any]
+) -> None:
+    response = _post_ascii_json(client, "/jobs", {**JOB_BODY, **overrides})
 
     assert response.status_code == 422
     assert response.content.isascii()
-    assert [(e["type"], e["loc"]) for e in response.json()["detail"]] == [
-        ("string_unicode", ["body", "title"])
-    ]
+    assert [(e["type"], e["loc"]) for e in response.json()["detail"]] == [("string_unicode", loc)]
 
 
 def test_a_422_stays_encodable_whatever_its_messages_hold(app: FastAPI) -> None:
