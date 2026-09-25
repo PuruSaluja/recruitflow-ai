@@ -1030,9 +1030,11 @@ def test_a_422_stays_encodable_whatever_its_messages_hold(app: FastAPI) -> None:
 # thread, and commits the other write once the request is seen waiting for a
 # lock, or after ten seconds, so a case can fail but never hang.
 
+# Client backends only: an autovacuum worker waiting on a lock would otherwise
+# count, and the other write would commit before the request had reached it.
 LOCK_WAITS = text(
-    "SELECT count(*) FROM pg_stat_activity "
-    "WHERE datname = current_database() AND wait_event_type = 'Lock'"
+    "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() "
+    "AND backend_type = 'client backend' AND wait_event_type = 'Lock'"
 )
 
 
