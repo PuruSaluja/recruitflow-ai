@@ -15,6 +15,7 @@ from sqlalchemy.exc import DataError, IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app import __version__
+from app.api.body_limit import BodySizeLimit, RequestTooLarge, too_large_response
 from app.api.v1 import api_router
 from app.config import Settings, get_settings
 from app.db.session import get_db, make_session_factory
@@ -45,6 +46,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url="/openapi.json",
     )
 
+    # Added before CORS, which makes it the inner of the two, so a refused body
+    # still gets CORS headers and a browser client can read the 413.
+    app.add_middleware(BodySizeLimit)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
@@ -69,6 +73,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 session.close()
 
         app.dependency_overrides[get_db] = _scoped_db
+
+    @app.exception_handler(RequestTooLarge)
+    def _handle_request_too_large(request: Request, exc: RequestTooLarge) -> JSONResponse:
+        """The same 413 ``BodySizeLimit`` sends for a declared length over the cap."""
+        return too_large_response()
 
     @app.exception_handler(IntegrityError)
     def _handle_integrity_error(request: Request, exc: IntegrityError) -> JSONResponse:

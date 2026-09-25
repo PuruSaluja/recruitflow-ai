@@ -8,6 +8,7 @@ stays readable in one place.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from collections.abc import Callable, Iterator
@@ -40,6 +41,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
 
 import app.models  # noqa: F401  (registers every table on Base.metadata)
+from app.api.body_limit import MAX_REQUEST_BYTES
 from app.api.deps import refresh_row
 from app.api.v1 import applications as applications_api
 from app.config import get_settings
@@ -50,6 +52,7 @@ from app.models.enums import ApplicationStatus
 from app.schemas.candidate import CandidateUpdate
 from app.schemas.common import MAX_ID, MAX_OFFSET
 from app.schemas.job import SALARY_DIGITS, SALARY_PLACES, JobUpdate
+from app.services.resume import MAX_RESUME_CHARS, MAX_UPLOAD_BYTES
 
 Factory = Callable[..., dict[str, Any]]
 
@@ -952,7 +955,9 @@ def test_the_salary_bounds_are_the_columns_own() -> None:
 
 
 def test_a_validation_error_does_not_send_the_request_back(client: TestClient) -> None:
-    resume = "a" * 5_000_000
+    # One character past the limit: a body past the request size cap (section 10)
+    # is refused before validation, so it can no longer reach this handler.
+    resume = "a" * (MAX_RESUME_CHARS + 1)
     payload = {"full_name": "Long Resume", "email": "long@example.com", "resume_text": resume}
 
     response = client.post("/candidates", json=payload)
@@ -1197,3 +1202,166 @@ def test_an_application_to_a_job_being_edited_does_not_wait(
         response = pool.submit(lambda: client.post("/applications", json=body)).result(5)
 
     assert response.status_code == 201, response.text
+
+
+# --- 10. an oversized body read in full before it was refused (2026-09-12) --
+#
+# Was: the 2 MB resume limit was checked only after Starlette had received the
+# whole body. Re-measured live on 2026-09-24: a 12,583,050-byte upload was taken
+# in whole before its 400, whether its length was declared or it came chunked,
+# and a request declaring that length but sending no body got no answer while
+# the server waited for it. These run the app as ASGI directly, so they can
+# count the body bytes it reads.
+
+BOUNDARY = "limitprobe"
+MULTIPART = f"multipart/form-data; boundary={BOUNDARY}"
+CHUNK = 64 * 1024
+TOO_LARGE = {
+    "detail": f"Request body is larger than the {MAX_REQUEST_BYTES:,}-byte limit",
+    "code": "request_too_large",
+}
+
+
+def _upload_chunks(file_bytes: int) -> Iterator[bytes]:
+    yield (
+        f'--{BOUNDARY}\r\nContent-Disposition: form-data; name="file"; filename="cv.txt"\r\n'
+        "Content-Type: text/plain\r\n\r\n"
+    ).encode()
+    for start in range(0, file_bytes, CHUNK):
+        yield b"a" * min(CHUNK, file_bytes - start)
+    yield f"\r\n--{BOUNDARY}--\r\n".encode()
+
+
+def _through_asgi(
+    app: FastAPI, path: str, headers: dict[str, str], body: Iterator[bytes]
+) -> tuple[int, int, dict[str, Any]]:
+    """POST ``body`` straight through the ASGI app; return its status, bytes read and answer."""
+    read = 0
+    answer: dict[str, Any] = {"status": None, "headers": {}, "body": b""}
+
+    async def receive() -> dict[str, Any]:
+        nonlocal read
+        chunk = next(body, None)
+        if chunk is None:
+            return {"type": "http.request", "body": b"", "more_body": False}
+        read += len(chunk)
+        return {"type": "http.request", "body": chunk, "more_body": True}
+
+    async def send(message: dict[str, Any]) -> None:
+        if message["type"] == "http.response.start":
+            answer["status"] = message["status"]
+            answer["headers"] = dict(message["headers"])
+        elif message["type"] == "http.response.body":
+            answer["body"] += message.get("body", b"")
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": path,
+        "raw_path": path.encode(),
+        "query_string": b"",
+        "root_path": "",
+        "headers": [(name.encode(), value.encode()) for name, value in headers.items()],
+        "client": ("127.0.0.1", 50000),
+        "server": ("testserver", 80),
+    }
+    asyncio.run(app(scope, receive, send))
+    return answer["status"], read, answer
+
+
+def _preview_path() -> str:
+    return f"{get_settings().api_prefix}/candidates/resume-preview"
+
+
+def test_a_body_declared_over_the_cap_is_refused_before_it_is_read(app: FastAPI) -> None:
+    headers = {"content-type": MULTIPART, "content-length": str(MAX_REQUEST_BYTES + 1)}
+
+    status, read, answer = _through_asgi(
+        app, _preview_path(), headers, _upload_chunks(MAX_REQUEST_BYTES)
+    )
+
+    assert (status, read) == (413, 0)
+    assert json.loads(answer["body"]) == TOO_LARGE
+    assert answer["headers"][b"connection"] == b"close"
+
+
+def test_a_body_sent_without_a_length_is_cut_off_once_past_the_cap(app: FastAPI) -> None:
+    headers = {"content-type": MULTIPART, "transfer-encoding": "chunked"}
+
+    status, read, answer = _through_asgi(
+        app, _preview_path(), headers, _upload_chunks(12 * 1024 * 1024)
+    )
+
+    assert status == 413
+    assert MAX_REQUEST_BYTES < read <= MAX_REQUEST_BYTES + CHUNK
+    assert json.loads(answer["body"]) == TOO_LARGE
+    assert answer["headers"][b"connection"] == b"close"
+
+
+@pytest.mark.parametrize("declared", [True, False], ids=["declared", "chunked"])
+def test_a_body_of_exactly_the_cap_is_read(app: FastAPI, declared: bool) -> None:
+    framing = sum(len(chunk) for chunk in _upload_chunks(0))
+    headers = {"content-type": MULTIPART}
+    if declared:
+        headers["content-length"] = str(MAX_REQUEST_BYTES)
+    else:
+        headers["transfer-encoding"] = "chunked"
+
+    status, read, answer = _through_asgi(
+        app, _preview_path(), headers, _upload_chunks(MAX_REQUEST_BYTES - framing)
+    )
+
+    assert (status, read) == (400, MAX_REQUEST_BYTES)
+    assert json.loads(answer["body"])["detail"] == "Resume is larger than the 2 MB limit"
+
+
+@pytest.mark.parametrize(
+    ("file_bytes", "detail"),
+    [
+        (MAX_UPLOAD_BYTES, "The extracted text is 2,097,152 characters, over the 100,000"),
+        (MAX_UPLOAD_BYTES + 1, "Resume is larger than the 2 MB limit"),
+    ],
+    ids=["at-the-upload-limit", "one-byte-over"],
+)
+def test_an_upload_near_the_limit_still_gets_the_endpoints_own_answer(
+    client: TestClient, file_bytes: int, detail: str
+) -> None:
+    """The cap leaves room for the framing around the largest file, long name and all."""
+    name = "r" * 251 + ".txt"
+
+    response = client.post(
+        "/candidates/resume-preview", files={"file": (name, b"a" * file_bytes, "text/plain")}
+    )
+
+    assert response.status_code == 400, response.text
+    assert response.json()["detail"].startswith(detail)
+
+
+def test_the_largest_valid_candidate_body_is_under_the_cap(client: TestClient) -> None:
+    """A resume at the character limit, each character sent as a surrogate-pair escape."""
+    payload = {
+        "full_name": "Longest Resume",
+        "email": "longest@example.com",
+        "resume_text": chr(0x1F600) * MAX_RESUME_CHARS,
+    }
+    assert len(json.dumps(payload, ensure_ascii=True)) > 1_200_000
+
+    response = _post_ascii_json(client, "/candidates", payload)
+
+    assert response.status_code == 201, response.text[:200]
+
+
+def test_a_refused_body_still_carries_cors_headers(client: TestClient) -> None:
+    origin = get_settings().cors_origin_list[0]
+
+    response = client.post(
+        "/candidates/resume-preview",
+        content=b"a" * (MAX_REQUEST_BYTES + 1),
+        headers={"origin": origin, "content-type": MULTIPART},
+    )
+
+    assert response.status_code == 413
+    assert response.headers["access-control-allow-origin"] == origin
