@@ -84,8 +84,9 @@ pytest backend/tests/test_resume_service.py
 awkward input — explicit nulls on required fields, JSONB storing a JSON `null`,
 `%`/`_` in search text acting as wildcards, a stage change overwriting a
 simultaneous one, non-positive ids, ids and offsets past what PostgreSQL can
-hold, writes that lose a race to another request, and values the database or
-the response cannot hold. Each pin fails if its fix is reverted.
+hold, writes that lose a race to another request, values the database or the
+response cannot hold, and oversized bodies read in full before they were
+refused. Each pin fails if its fix is reverted.
 
 ## API
 
@@ -139,9 +140,16 @@ Application listings filter on `job_id`, `candidate_id`, `status` and `source`.
 Breaking any of these in a path, body or query is a **422**; an uploaded
 resume whose text is too long is refused like any other unusable file, with a
 400. A 422 names each problem's type, location and message but does not repeat
-the rejected value, so a 5 MB resume refused for its length gets a short
-answer. A value only the database can refuse, such as the NUL character, is a
-422 with `code: "invalid_value"`.
+the rejected value, so a resume refused for its length gets a short answer. A
+value only the database can refuse, such as the NUL character, is a 422 with
+`code: "invalid_value"`.
+
+A request body holds at most 2,162,688 bytes: the 2 MB resume upload limit
+plus 64 KiB for the multipart framing around the file. A larger one is a
+**413** with `code: "request_too_large"`, sent before any of the body is read
+when the request declares its length, and as soon as the limit is passed when
+it does not; the connection is then closed. A client sending
+`Expect: 100-continue`, as curl does for large uploads, sends none of the file.
 
 A write that loses a race to another request says what happened: **404** if
 the other request deleted the row, whether just before this one committed or
