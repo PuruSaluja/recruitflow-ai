@@ -1438,7 +1438,7 @@ def test_an_upload_near_the_limit_still_gets_the_endpoints_own_answer(
 
 
 def test_a_candidate_at_every_limit_fits_under_the_cap(client: TestClient) -> None:
-    """Every text field at its limit, each character sent as a surrogate-pair escape."""
+    """Every text field at its limit, all but the email sent as surrogate-pair escapes."""
     wide = chr(0x1F600)
     payload = {
         "full_name": wide * 200,

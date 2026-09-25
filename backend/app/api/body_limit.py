@@ -14,9 +14,10 @@ from app.services.resume import MAX_UPLOAD_BYTES
 #: 478 bytes with a 255-character file name and a long content type. The upload
 #: limit alone was only checked once Starlette had received the whole body, so
 #: a 12 MB upload streamed in whole before its 400. JSON bodies fit easily: a
-#: candidate with every text field at its limit and every character escaped as
-#: a surrogate pair measured 1,327,845 bytes, 61% of the cap. (Nothing can make
-#: every valid JSON body fit, since JSON allows any amount of whitespace.)
+#: candidate with every text field at its limit, all but the plain-ASCII email
+#: written as surrogate-pair escapes, measured 1,327,845 bytes, 61% of the cap.
+#: (Nothing can make every valid JSON body fit, since JSON allows any amount of
+#: whitespace.)
 MAX_REQUEST_BYTES = MAX_UPLOAD_BYTES + 64 * 1024
 
 
