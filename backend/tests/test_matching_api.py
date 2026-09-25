@@ -431,11 +431,8 @@ def test_the_listing_repeats_the_ranking_scoring_returned(
     assert listed["job_id"] == job["id"]
     assert listed["model_version"] == scored["model_version"]
     assert listed["total"] == scored["scored_count"]
-    for got, want in zip(listed["items"], scored["results"], strict=True):
-        assert datetime.fromisoformat(got.pop("scored_at")) == datetime.fromisoformat(
-            want.pop("scored_at")
-        )
-        assert got == want
+    # scored_at included, as text: both routes give it in UTC, written alike.
+    assert listed["items"] == scored["results"]
 
 
 def test_the_listing_pages_with_ranks_continuing_across_pages(

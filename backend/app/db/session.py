@@ -23,13 +23,19 @@ def _build_engine(database_url: str) -> Engine:
     ``connect_timeout`` is the important one: without it a dead database makes
     every request hang on the TCP connect instead of returning an error, so
     /health never gets to report 503 and an orchestrator has nothing to act on.
+
+    Every session runs in UTC, so every timestamp the API returns is written
+    the same way. PostgreSQL renders a ``timestamptz`` in the session's zone,
+    which otherwise follows the server's configuration (``-04:00`` on the
+    development machine), while a scoring response's ``scored_at`` comes from
+    Python in UTC: the same instant, but different text.
     """
     settings = get_settings()
     return create_engine(
         database_url,
         pool_pre_ping=True,
         pool_timeout=settings.db_pool_timeout,
-        connect_args={"connect_timeout": settings.db_connect_timeout},
+        connect_args={"connect_timeout": settings.db_connect_timeout, "options": "-c timezone=UTC"},
         future=True,
     )
 

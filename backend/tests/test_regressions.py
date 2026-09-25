@@ -46,6 +46,7 @@ from app.api.deps import refresh_row
 from app.api.v1 import applications as applications_api
 from app.config import get_settings
 from app.db.base import Base
+from app.db.session import get_db
 from app.models import Candidate, Job
 from app.models.application import Application
 from app.models.enums import ApplicationStatus
@@ -1365,3 +1366,39 @@ def test_a_refused_body_still_carries_cors_headers(client: TestClient) -> None:
 
     assert response.status_code == 413
     assert response.headers["access-control-allow-origin"] == origin
+
+
+# --- 11. timestamps written in two formats (found 2026-09-22) ---------------
+#
+# Was: a scoring response's scored_at came from Python, in UTC ("...Z"), while
+# every timestamp read back from the database came in the database session's
+# zone, "...-04:00" on the development machine: the same instant, but not the
+# same text, so a client comparing them as strings disagreed. The listing test
+# in test_matching_api.py compares scored_at across the two routes as text.
+
+
+def test_the_apps_database_sessions_run_in_utc(app: FastAPI) -> None:
+    """Pinned directly, since a server already configured for UTC would hide a regression."""
+    sessions = app.dependency_overrides[get_db]()
+    try:
+        assert next(sessions).scalar(text("SHOW TimeZone")) == "UTC"
+    finally:
+        sessions.close()
+
+
+def test_every_timestamp_the_api_returns_is_utc(
+    client: TestClient, make_job: Factory, make_candidate: Factory, make_application: Factory
+) -> None:
+    job, candidate = make_job(), make_candidate()
+    application = make_application(job_id=job["id"], candidate_id=candidate["id"])
+    events = client.get(f"/applications/{application['id']}/stage-events").json()
+
+    stamps = [
+        *(job[field] for field in ("created_at", "updated_at")),
+        *(candidate[field] for field in ("created_at", "updated_at")),
+        *(application[field] for field in ("applied_at", "created_at", "updated_at")),
+        *(event["occurred_at"] for event in events),
+    ]
+
+    assert len(stamps) == 8
+    assert [stamp for stamp in stamps if not stamp.endswith("Z")] == []
