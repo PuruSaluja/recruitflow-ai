@@ -11,7 +11,8 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
-from sqlalchemy.exc import DataError, IntegrityError, SQLAlchemyError
+from sqlalchemy.exc import DataError, IntegrityError, InterfaceError, OperationalError
+from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 from sqlalchemy.orm import Session
 
 from app import __version__
@@ -22,6 +23,18 @@ from app.db.session import get_db, make_session_factory
 from app.ml.artifact import REGENERATE_COMMAND, MatcherUnavailable
 
 logger = logging.getLogger(__name__)
+
+#: The database errors answered 503. PostgreSQL files deadlocks, lock and
+#: statement timeouts, shutdowns and connection limits under
+#: ``OperationalError``; ``InterfaceError`` is a connection the driver can no
+#: longer use; ``PoolTimeoutError`` is every pooled connection staying busy.
+#: ``IntegrityError`` and ``DataError`` have their own handlers, and every
+#: other SQLAlchemy error is a 500.
+DB_UNAVAILABLE_ERRORS: tuple[type[Exception], ...] = (
+    OperationalError,
+    InterfaceError,
+    PoolTimeoutError,
+)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -152,8 +165,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             },
         )
 
-    @app.exception_handler(SQLAlchemyError)
-    def _handle_db_error(request: Request, exc: SQLAlchemyError) -> JSONResponse:
+    def _handle_db_unavailable(request: Request, exc: Exception) -> JSONResponse:
+        """Answer 503 when the database cannot be reached or cannot serve the request.
+
+        Only the errors in :data:`DB_UNAVAILABLE_ERRORS` get here: a refused
+        or dropped connection, a server shutting down, a deadlock or lock
+        timeout the next attempt may not meet, a pool with no connection to
+        spare. Any other SQLAlchemy error means this code asked for something
+        wrong, so it is left to the ordinary 500 rather than telling the
+        client and whoever reads the logs that the database is down.
+        """
         # exc_info=exc rather than logger.exception: a handler runs outside the
         # except block, so there is no active exception for it to pick up and
         # the traceback logged only ever read "NoneType: None".
@@ -162,6 +183,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             status_code=503,
             content={"detail": "Database unavailable", "code": "db_unavailable"},
         )
+
+    for error in DB_UNAVAILABLE_ERRORS:
+        app.add_exception_handler(error, _handle_db_unavailable)
 
     return app
 

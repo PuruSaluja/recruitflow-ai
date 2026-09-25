@@ -5,10 +5,21 @@ from __future__ import annotations
 import logging
 
 import pytest
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import (
+    InterfaceError,
+    InternalError,
+    InvalidRequestError,
+    NoResultFound,
+    OperationalError,
+    ProgrammingError,
+    SQLAlchemyError,
+)
+from sqlalchemy.exc import TimeoutError as PoolTimeoutError
+from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import StaleDataError
 
 from app import __version__
 from app.config import Settings, get_settings
@@ -91,3 +102,93 @@ def test_process_wide_engine_is_also_bound_to_the_test_database() -> None:
         database = conn.execute(text("SELECT current_database()")).scalar_one()
 
     assert database.endswith("_test")
+
+
+# --- which database errors are an outage ------------------------------------
+# Was: every SQLAlchemy error but IntegrityError answered 503 "Database
+# unavailable", so a bug in a query told the client, and whoever read the
+# logs, that the database was down. Now only the errors that mean it could not
+# be reached or could not serve the request do.
+
+
+def _app_raising(error: Exception) -> FastAPI:
+    app = create_app(_unreachable_settings())
+
+    def boom() -> None:
+        raise error
+
+    app.add_api_route("/boom", boom)
+    return app
+
+
+def _app_running(statement: str) -> FastAPI:
+    """An app on the test database with one route that runs ``statement``."""
+    app = create_app(Settings(database_url=Settings().test_database_url))
+
+    def run(db: Session = Depends(get_db)) -> None:
+        db.execute(text(statement))
+
+    app.add_api_route("/run", run)
+    return app
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        OperationalError("SELECT 1", {}, Exception("server closed the connection")),
+        InterfaceError("SELECT 1", {}, Exception("connection already closed")),
+        PoolTimeoutError("QueuePool limit of size 5 overflow 10 reached"),
+    ],
+    ids=lambda error: type(error).__name__,
+)
+def test_an_error_meaning_the_database_cannot_serve_is_a_503(error: Exception) -> None:
+    with TestClient(_app_raising(error)) as client:
+        response = client.get("/boom")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Database unavailable", "code": "db_unavailable"}
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        ProgrammingError("SELECT * FROM nowhere", {}, Exception('relation "nowhere"')),
+        InternalError("SELECT 1", {}, Exception("current transaction is aborted")),
+        InvalidRequestError("This session is in 'prepared' state"),
+        StaleDataError("UPDATE statement on table 'jobs' expected to update 1 row(s)"),
+        NoResultFound("No row was found when one was required"),
+    ],
+    ids=lambda error: type(error).__name__,
+)
+def test_any_other_database_error_is_a_500_not_an_outage(error: Exception) -> None:
+    with TestClient(_app_raising(error), raise_server_exceptions=False) as client:
+        response = client.get("/boom")
+
+    assert response.status_code == 500
+    assert "db_unavailable" not in response.text
+
+
+def test_a_real_query_bug_is_a_500() -> None:
+    """PostgreSQL's own ProgrammingError, not a constructed one."""
+    app = _app_running("SELECT * FROM no_such_table")
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.get("/run")
+
+    assert response.status_code == 500
+    assert "db_unavailable" not in response.text
+
+
+def test_a_real_statement_timeout_is_a_503(caplog: pytest.LogCaptureFixture) -> None:
+    """PostgreSQL cancelling a statement files it under OperationalError: busy, not broken."""
+    statement = "SET LOCAL statement_timeout = 50; SELECT pg_sleep(2)"
+    with (
+        caplog.at_level(logging.ERROR, logger="app.main"),
+        TestClient(_app_running(statement)) as client,
+    ):
+        response = client.get("/run")
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "db_unavailable"
+    logged = [record.exc_info[1] for record in caplog.records if record.exc_info]
+    assert len(logged) == 1
+    assert "canceling statement due to statement timeout" in str(logged[0])
