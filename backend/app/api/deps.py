@@ -14,21 +14,27 @@ from sqlalchemy.orm.exc import StaleDataError
 
 from app.schemas.common import MAX_OFFSET
 
-#: Row locks, as ``Session.get``'s ``with_for_update``, for a write whose
-#: answer depends on the row as it stands when the write lands: a job's PATCH
-#: checks the salary band against the stored ends, and a DELETE answers 404
-#: once the row is gone. Taken when the row is read and held to the commit, so
-#: a second request writing the same row waits, then sees what the first left
-#: and answers as it would have one after the other. ``EDIT_LOCK`` is FOR NO
-#: KEY UPDATE, the lock an UPDATE takes anyway, which still lets new
-#: applications and match scores reference the row; ``DELETE_LOCK`` is FOR
-#: UPDATE, the lock a DELETE takes. ``REFERENCE_LOCK`` is FOR KEY SHARE, the
-#: lock a new row's foreign key check takes on the row it names, taken on the
-#: job and candidate a new application names when they are checked: a DELETE of
-#: either then waits for the application, or the application waits for the
-#: DELETE and finds the row gone, while edits of either go ahead.
-EDIT_LOCK: dict[str, bool] = {"key_share": True}
-DELETE_LOCK = True
+#: Row locks, as ``Session.get``'s ``with_for_update``. ``WRITE_LOCK`` is for
+#: a write whose answer depends on the row as it stands when the write lands: a
+#: job's PATCH checks the salary band against the stored ends, and a DELETE
+#: answers 404 once the row is gone. Taken when the row is read and held to the
+#: commit, so a second request writing the same row waits, then sees what the
+#: first left and answers as it would have one after the other.
+#:
+#: It is FOR NO KEY UPDATE, the lock an UPDATE takes anyway, for deletes too.
+#: A DELETE statement takes FOR UPDATE, but only once the rows referencing
+#: this one are gone; taken at the read, FOR UPDATE also blocks every new row
+#: referencing it, whose foreign key check takes FOR KEY SHARE, while the
+#: delete waits on child rows that new row's transaction may hold. A job delete
+#: and a scoring run that had rescored one of the job's cached rows deadlocked
+#: that way, and the loser answered 503.
+#:
+#: ``REFERENCE_LOCK`` is FOR KEY SHARE, that foreign key check's own lock,
+#: taken on the job and candidate a new application names when they are
+#: checked: a DELETE of either then waits for the application, or the
+#: application waits for the DELETE and finds the row gone, while edits of
+#: either go ahead.
+WRITE_LOCK: dict[str, bool] = {"key_share": True}
 REFERENCE_LOCK: dict[str, bool] = {"read": True, "key_share": True}
 
 
@@ -67,7 +73,7 @@ def commit_row(db: Session, model: Any, row_id: int) -> None:
 
     Jobs and candidates carry no version, so a DELETE of one with no
     applications would have nothing to check: SQLAlchemy only warns when it
-    matches no row. Their DELETE routes read the row under ``DELETE_LOCK``
+    matches no row. Their DELETE routes read the row under ``WRITE_LOCK``
     instead, so a second DELETE waits and then finds the row gone.
     """
     try:

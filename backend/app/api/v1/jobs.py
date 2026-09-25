@@ -7,14 +7,7 @@ from fastapi import status as http_status
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import (
-    DELETE_LOCK,
-    EDIT_LOCK,
-    Pagination,
-    commit_row,
-    pagination,
-    refresh_row,
-)
+from app.api.deps import WRITE_LOCK, Pagination, commit_row, pagination, refresh_row
 from app.db.session import get_db
 from app.models.enums import EmploymentType, JobStatus, SeniorityLevel
 from app.models.job import Job
@@ -117,7 +110,7 @@ def get_job(job_id: int = Path(gt=0, le=MAX_ID), db: Session = Depends(get_db)) 
 def update_job(
     payload: JobUpdate, job_id: int = Path(gt=0, le=MAX_ID), db: Session = Depends(get_db)
 ) -> Job:
-    job = _get_or_404(db, job_id, lock=EDIT_LOCK)
+    job = _get_or_404(db, job_id, lock=WRITE_LOCK)
 
     # exclude_unset distinguishes "field omitted" from "field set to null", so
     # a PATCH only touches what the caller actually sent.
@@ -161,6 +154,6 @@ def close_job(job_id: int = Path(gt=0, le=MAX_ID), db: Session = Depends(get_db)
 )
 def delete_job(job_id: int = Path(gt=0, le=MAX_ID), db: Session = Depends(get_db)) -> None:
     """Hard-delete a job; applications and cached match scores cascade."""
-    job = _get_or_404(db, job_id, lock=DELETE_LOCK)
+    job = _get_or_404(db, job_id, lock=WRITE_LOCK)
     db.delete(job)
     commit_row(db, Job, job_id)

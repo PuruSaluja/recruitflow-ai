@@ -47,7 +47,7 @@ from app.api.v1 import applications as applications_api
 from app.config import get_settings
 from app.db.base import Base
 from app.db.session import get_db
-from app.models import Candidate, Job
+from app.models import Candidate, Job, MatchScore
 from app.models.application import Application
 from app.models.enums import ApplicationStatus
 from app.schemas.candidate import CandidateUpdate
@@ -1115,6 +1115,38 @@ def test_a_delete_beaten_by_another_delete_is_a_404(
     assert waited, "the delete never waited for the other one"
     assert response.status_code == 404, response.text
     assert response.json()["detail"] == f"{model.__name__} {row_id} not found"
+
+
+def test_a_job_delete_and_a_scoring_run_on_it_do_not_deadlock(
+    client: TestClient, clean_db: Engine, make_job: Factory, make_candidate: Factory
+) -> None:
+    """Found by a live soak on 2026-09-24: one of the two was answered 503.
+
+    A scoring run rescores the job's cached rows before inserting new ones,
+    whose foreign key check takes FOR KEY SHARE on the job. A delete that held
+    the job FOR UPDATE from its read then waited on a rescored row, while the
+    insert waited on the job.
+    """
+    job_id, rescored, added = make_job()["id"], make_candidate()["id"], make_candidate()["id"]
+    score = {"job_id": job_id, "score": 0.5, "features": {}, "model_version": "v1"}
+    with clean_db.begin() as setup:
+        cached = setup.scalar(
+            insert(MatchScore).values(candidate_id=rescored, **score).returning(MatchScore.id)
+        )
+
+    with ThreadPoolExecutor(max_workers=1) as pool, clean_db.connect() as scoring:
+        with scoring.begin():
+            scoring.execute(text("SET LOCAL lock_timeout = '5s'"))
+            scoring.execute(update(MatchScore).where(MatchScore.id == cached).values(score=0.6))
+            response = pool.submit(lambda: client.delete(f"/jobs/{job_id}"))
+            deadline = time.monotonic() + 10
+            while not _waiting_for_a_lock(clean_db) and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert _waiting_for_a_lock(clean_db), "the delete never waited for the rescored row"
+            scoring.execute(insert(MatchScore).values(candidate_id=added, **score))
+        answer = response.result(timeout=30)
+
+    assert answer.status_code == 204, answer.text
 
 
 # fmt: off

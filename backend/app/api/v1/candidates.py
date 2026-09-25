@@ -8,7 +8,7 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import DELETE_LOCK, Pagination, commit_row, pagination, refresh_row
+from app.api.deps import WRITE_LOCK, Pagination, commit_row, pagination, refresh_row
 from app.db.session import get_db
 from app.models.candidate import Candidate
 from app.models.enums import EducationLevel, SeniorityLevel
@@ -19,7 +19,9 @@ from app.services.resume import MAX_UPLOAD_BYTES, ResumeIngestError, extract_tex
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
 
-def _get_or_404(db: Session, candidate_id: int, *, lock: bool = False) -> Candidate:
+def _get_or_404(
+    db: Session, candidate_id: int, *, lock: bool | dict[str, bool] = False
+) -> Candidate:
     candidate = db.get(Candidate, candidate_id, with_for_update=lock)
     if candidate is None:
         raise HTTPException(
@@ -202,7 +204,7 @@ def delete_candidate(
     candidate_id: int = Path(gt=0, le=MAX_ID), db: Session = Depends(get_db)
 ) -> None:
     """Hard-delete a candidate; applications and cached match scores cascade."""
-    candidate = _get_or_404(db, candidate_id, lock=DELETE_LOCK)
+    candidate = _get_or_404(db, candidate_id, lock=WRITE_LOCK)
     db.delete(candidate)
     commit_row(db, Candidate, candidate_id)
 
