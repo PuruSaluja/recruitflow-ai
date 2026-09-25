@@ -146,10 +146,15 @@ answer. A value only the database can refuse, such as the NUL character, is a
 A write that loses a race to another request says what happened: **404** if
 the other request deleted the row, whether just before this one committed or
 just after, before it could be read back, and **409** if it changed the row.
-The one exception is a delete beaten by another delete of a job or candidate
-with no applications: nothing is left for it to check, so it answers 204 as
-the winner did. None of these is reported as the database being unavailable,
-which is kept for real outages (**503**).
+Where the answer depends on the row as the write finds it, the write holds the
+row from reading it to committing, so a second request writing it waits and
+then answers as it would have one after the other: a job `PATCH` whose salary
+band someone else just changed into one this edit would invert is a **422**,
+a `DELETE` of a job or candidate beaten by another `DELETE` is a **404**, and
+so is an application whose job or candidate is deleted while it is created.
+An edit of a job and a new application to it do not wait for each other. None
+of these is reported as the database being unavailable, which is kept for real
+outages (**503**).
 
 ## Hiring pipeline
 
