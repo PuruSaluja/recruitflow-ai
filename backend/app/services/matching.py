@@ -19,7 +19,7 @@ from sklearn.calibration import CalibratedClassifierCV
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ml.features import feature_dict
+from app.ml.features import feature_dict, job_skill_keys
 from app.models.candidate import Candidate
 from app.models.job import Job
 from app.models.match import MatchScore
@@ -86,6 +86,7 @@ def score_pool(
         )
     }
 
+    job_keys = job_skill_keys(job)
     scored_at = datetime.now(UTC)
     ranked: list[MatchScore] = []
     for rank, index in enumerate(order, start=1):
@@ -96,7 +97,7 @@ def score_pool(
             db.add(row)
         row.score = float(scores[index])
         row.rank = rank
-        row.features = feature_dict(job, candidate)
+        row.features = feature_dict(job, candidate, job_keys=job_keys)
         # Assigned explicitly, not left to the column's default: a rescore
         # that reproduces the same score, rank and features would otherwise
         # leave nothing for SQLAlchemy to consider changed, and an existing

@@ -15,6 +15,7 @@ import pytest
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
+from app.ml import features as features_module
 from app.ml.artifact import matcher_version, save_matcher
 from app.ml.corpus import CorpusConfig, SyntheticCandidate, SyntheticJob, generate_corpus
 from app.ml.features import FEATURE_NAMES, feature_dict
@@ -155,6 +156,33 @@ def test_nothing_is_written_before_the_caller_commits(pool, matcher, version) ->
     db.rollback()
 
     assert _stored(db, job) == []
+
+
+def test_the_jobs_skills_are_keyed_once_per_featurisation_not_per_candidate(
+    pool, matcher, version, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Measured on 2026-09-22: keying the job's lists again for every candidate was
+    18 of the 24 ``skill_keys`` calls each scored pair cost, and ``skill_keys``
+    was about half of a whole-pool request's time.
+
+    The pool is featurised once per calibration fold and once more for the
+    stored breakdown. Each of those keys every candidate's list once and the
+    job's three lists (required, preferred, both) once.
+    """
+    db, job, candidates = pool
+    calls = 0
+    real = features_module.skill_keys
+
+    def counting(spellings):
+        nonlocal calls
+        calls += 1
+        return real(spellings)
+
+    monkeypatch.setattr(features_module, "skill_keys", counting)
+    score_pool(db, job, candidates, matcher, version)
+
+    featurisations = len(matcher.calibrated_classifiers_) + 1
+    assert calls == featurisations * (len(candidates) + 3)
 
 
 # --- a duplicate in the pool --------------------------------------------------
