@@ -11,7 +11,13 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
-from sqlalchemy.exc import DataError, IntegrityError, InterfaceError, OperationalError
+from sqlalchemy.exc import (
+    DataError,
+    IntegrityError,
+    InterfaceError,
+    OperationalError,
+    SQLAlchemyError,
+)
 from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 from sqlalchemy.orm import Session
 
@@ -29,7 +35,7 @@ logger = logging.getLogger(__name__)
 #: ``OperationalError``; ``InterfaceError`` is a connection the driver can no
 #: longer use; ``PoolTimeoutError`` is every pooled connection staying busy.
 #: ``IntegrityError`` and ``DataError`` have their own handlers, and every
-#: other SQLAlchemy error is a 500.
+#: other SQLAlchemy error is a 500 with ``code: "internal_error"``.
 DB_UNAVAILABLE_ERRORS: tuple[type[Exception], ...] = (
     OperationalError,
     InterfaceError,
@@ -172,8 +178,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         or dropped connection, a server shutting down, a deadlock or lock
         timeout the next attempt may not meet, a pool with no connection to
         spare. Any other SQLAlchemy error means this code asked for something
-        wrong, so it is left to the ordinary 500 rather than telling the
-        client and whoever reads the logs that the database is down.
+        wrong, and :func:`_handle_db_fault` answers it with a 500 rather than
+        telling the client and whoever reads the logs that the database is
+        down.
         """
         # exc_info=exc rather than logger.exception: a handler runs outside the
         # except block, so there is no active exception for it to pick up and
@@ -186,6 +193,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     for error in DB_UNAVAILABLE_ERRORS:
         app.add_exception_handler(error, _handle_db_unavailable)
+
+    @app.exception_handler(SQLAlchemyError)
+    def _handle_db_fault(request: Request, exc: SQLAlchemyError) -> JSONResponse:
+        """Answer any other database error as the server's own fault: a 500.
+
+        Handled here rather than left to Starlette's default 500, which is
+        sent from outside the CORS middleware: that answer is plain text and
+        carries no CORS headers, so a browser client could not read it and
+        would report a network error instead.
+        """
+        logger.error("unexpected database error on %s", request.url.path, exc_info=exc)
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error", "code": "internal_error"},
+        )
 
     return app
 

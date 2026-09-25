@@ -108,11 +108,15 @@ def test_process_wide_engine_is_also_bound_to_the_test_database() -> None:
 # Was: every SQLAlchemy error but IntegrityError answered 503 "Database
 # unavailable", so a bug in a query told the client, and whoever read the
 # logs, that the database was down. Now only the errors that mean it could not
-# be reached or could not serve the request do.
+# be reached or could not serve the request do; any other is a 500.
+
+ORIGIN = "http://localhost:5173"
+INTERNAL_ERROR = {"detail": "Internal server error", "code": "internal_error"}
 
 
 def _app_raising(error: Exception) -> FastAPI:
-    app = create_app(_unreachable_settings())
+    settings = _unreachable_settings().model_copy(update={"cors_origins": ORIGIN})
+    app = create_app(settings)
 
     def boom() -> None:
         raise error
@@ -132,15 +136,25 @@ def _app_running(statement: str) -> FastAPI:
     return app
 
 
-@pytest.mark.parametrize(
-    "error",
-    [
-        OperationalError("SELECT 1", {}, Exception("server closed the connection")),
-        InterfaceError("SELECT 1", {}, Exception("connection already closed")),
-        PoolTimeoutError("QueuePool limit of size 5 overflow 10 reached"),
-    ],
-    ids=lambda error: type(error).__name__,
-)
+UNAVAILABLE = [
+    OperationalError("SELECT 1", {}, Exception("server closed the connection")),
+    InterfaceError("SELECT 1", {}, Exception("connection already closed")),
+    PoolTimeoutError("QueuePool limit of size 5 overflow 10 reached"),
+]
+FAULTS = [
+    ProgrammingError("SELECT * FROM nowhere", {}, Exception('relation "nowhere"')),
+    InternalError("SELECT 1", {}, Exception("current transaction is aborted")),
+    InvalidRequestError("This session is in 'prepared' state"),
+    StaleDataError("UPDATE statement on table 'jobs' expected to update 1 row(s)"),
+    NoResultFound("No row was found when one was required"),
+]
+
+
+def _name(error: Exception) -> str:
+    return type(error).__name__
+
+
+@pytest.mark.parametrize("error", UNAVAILABLE, ids=_name)
 def test_an_error_meaning_the_database_cannot_serve_is_a_503(error: Exception) -> None:
     with TestClient(_app_raising(error)) as client:
         response = client.get("/boom")
@@ -149,33 +163,53 @@ def test_an_error_meaning_the_database_cannot_serve_is_a_503(error: Exception) -
     assert response.json() == {"detail": "Database unavailable", "code": "db_unavailable"}
 
 
-@pytest.mark.parametrize(
-    "error",
-    [
-        ProgrammingError("SELECT * FROM nowhere", {}, Exception('relation "nowhere"')),
-        InternalError("SELECT 1", {}, Exception("current transaction is aborted")),
-        InvalidRequestError("This session is in 'prepared' state"),
-        StaleDataError("UPDATE statement on table 'jobs' expected to update 1 row(s)"),
-        NoResultFound("No row was found when one was required"),
-    ],
-    ids=lambda error: type(error).__name__,
-)
+@pytest.mark.parametrize("error", FAULTS, ids=_name)
 def test_any_other_database_error_is_a_500_not_an_outage(error: Exception) -> None:
-    with TestClient(_app_raising(error), raise_server_exceptions=False) as client:
+    """Answered by the app's own handler: the test client would raise one that escaped."""
+    with TestClient(_app_raising(error)) as client:
         response = client.get("/boom")
 
     assert response.status_code == 500
-    assert "db_unavailable" not in response.text
+    assert response.json() == INTERNAL_ERROR
+
+
+@pytest.mark.parametrize("error", [UNAVAILABLE[0], FAULTS[0]], ids=_name)
+def test_a_browser_client_can_read_either_answer(error: Exception) -> None:
+    """Found in the 2026-09-25 recheck: the narrowed handler first left the 500 to Starlette.
+
+    Starlette sends its default 500 from outside the CORS middleware, as plain
+    text with no CORS headers, so a browser client saw a network error where
+    the 503 before it had been readable.
+    """
+    with TestClient(_app_raising(error)) as client:
+        response = client.get("/boom", headers={"Origin": ORIGIN})
+
+    assert response.headers.get("access-control-allow-origin") == ORIGIN
+    assert response.headers["content-type"] == "application/json"
+
+
+def test_the_500_log_carries_the_real_cause(caplog: pytest.LogCaptureFixture) -> None:
+    """Handled, so nothing else logs it: the handler has to, traceback included."""
+    with (
+        caplog.at_level(logging.ERROR, logger="app.main"),
+        TestClient(_app_raising(FAULTS[0])) as client,
+    ):
+        client.get("/boom")
+
+    errors = [record for record in caplog.records if record.levelno >= logging.ERROR]
+    assert len(errors) == 1
+    assert errors[0].exc_info is not None
+    assert errors[0].exc_info[1] is FAULTS[0]
+    assert "/boom" in errors[0].getMessage()
 
 
 def test_a_real_query_bug_is_a_500() -> None:
     """PostgreSQL's own ProgrammingError, not a constructed one."""
-    app = _app_running("SELECT * FROM no_such_table")
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(_app_running("SELECT * FROM no_such_table")) as client:
         response = client.get("/run")
 
     assert response.status_code == 500
-    assert "db_unavailable" not in response.text
+    assert response.json() == INTERNAL_ERROR
 
 
 def test_a_real_statement_timeout_is_a_503(caplog: pytest.LogCaptureFixture) -> None:
