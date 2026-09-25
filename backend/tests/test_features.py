@@ -19,6 +19,7 @@ from app.ml.features import (
     experience_surplus,
     feature_dict,
     feature_vector,
+    job_skill_keys,
     seniority_direction,
     seniority_distance,
     skill_keys,
@@ -93,7 +94,7 @@ def test_the_vector_looks_features_up_by_name_not_by_dict_order(monkeypatch) -> 
     job, candidate = make_job(), make_candidate(years_experience=9, skills=["Python"])
     correct = feature_dict(job, candidate)
     monkeypatch.setattr(
-        features_module, "feature_dict", lambda j, c: dict(reversed(list(correct.items())))
+        features_module, "feature_dict", lambda j, c, **_: dict(reversed(list(correct.items())))
     )
 
     assert features_module.feature_vector(job, candidate) == tuple(
@@ -138,6 +139,49 @@ def test_the_orm_models_and_the_synthetic_ones_agree(corpus) -> None:
         job, candidate = jobs[pair.job_ref], people[pair.candidate_ref]
         orm_job, orm_candidate = _as_orm(job, candidate)
         assert feature_dict(orm_job, orm_candidate) == feature_dict(job, candidate), pair
+
+
+def test_keys_computed_once_per_job_give_exactly_the_same_features(corpus) -> None:
+    """Keying a job once for its whole slate is a speed-up only, never a different answer.
+
+    Compared with ``==``, not approximately: a stored breakdown or a model
+    input that moved in the last bit would still be a different number.
+    """
+    jobs = {job.ref: job for job in corpus.jobs}
+    people = {person.ref: person for person in corpus.candidates}
+    keys = {ref: job_skill_keys(job) for ref, job in jobs.items()}
+
+    for pair in corpus.pairs:
+        job, person = jobs[pair.job_ref], people[pair.candidate_ref]
+        hoisted = keys[pair.job_ref]
+        assert feature_dict(job, person, job_keys=hoisted) == feature_dict(job, person), pair
+        assert feature_vector(job, person, job_keys=hoisted) == feature_vector(job, person), pair
+
+
+def test_job_skill_keys_key_each_list_and_both_together() -> None:
+    keys = job_skill_keys(
+        make_job(required_skills=["postgres", "Python"], preferred_skills=["python3", "Rust Lang"])
+    )
+
+    assert keys.required == skill_keys(["PostgreSQL", "Python"])
+    assert keys.preferred == skill_keys(["Python", "rust lang"])
+    assert keys.either == skill_keys(["PostgreSQL", "Python", "rust lang"])
+
+
+def test_the_job_keys_passed_in_are_the_ones_used() -> None:
+    """Not recomputed from the job, or the hoisting would save nothing.
+
+    Which is also why they must come from the same job: keys from another one
+    are believed.
+    """
+    job = make_job(required_skills=["Python", "SQL"], preferred_skills=["AWS"])
+    cobol = job_skill_keys(make_job(required_skills=["Cobol"], preferred_skills=[]))
+
+    features = feature_dict(job, make_candidate(skills=["Python", "SQL"]), job_keys=cobol)
+
+    assert features["required_skill_coverage"] == 0.0
+    assert features["preferred_skill_coverage"] == 1.0
+    assert features["skill_jaccard"] == 0.0
 
 
 @pytest.mark.parametrize(

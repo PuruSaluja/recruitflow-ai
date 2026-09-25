@@ -21,7 +21,8 @@ lists, misspellings, omissions and all.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Sequence, Set
+from dataclasses import dataclass
 from typing import Protocol
 
 from app.ml.taxonomy import normalise_skills, spelling_key
@@ -89,13 +90,17 @@ def _coverage(wanted: Iterable[str], held_keys: set[str]) -> float:
     spellings would not raise -- they would quietly intersect to the wrong
     answer -- which is why this is private and ``feature_dict`` is the way in.
     """
-    keys = skill_keys(wanted)
-    if not keys:
+    return _share(skill_keys(wanted), held_keys)
+
+
+def _share(wanted_keys: Set[str], held_keys: Set[str]) -> float:
+    """:func:`_coverage` with both sides already keyed."""
+    if not wanted_keys:
         return 1.0
-    return len(keys & held_keys) / len(keys)
+    return len(wanted_keys & held_keys) / len(wanted_keys)
 
 
-def _jaccard(left_keys: set[str], right_keys: set[str]) -> float:
+def _jaccard(left_keys: Set[str], right_keys: Set[str]) -> float:
     """Overlap of two keyed skill sets over their union; 0.0 when both are empty.
 
     Two empty sets are conventionally identical, but scoring that 1.0 would
@@ -154,18 +159,49 @@ def education_fit(job: JobLike, candidate: CandidateLike) -> float:
     return 1.0 - shortfall / _MAX_EDUCATION_STEPS
 
 
-def feature_dict(job: JobLike, candidate: CandidateLike) -> dict[str, float]:
+@dataclass(frozen=True)
+class JobSkillKeys:
+    """A job's skill lists, keyed once so a whole pool can be compared against them.
+
+    Keying is the costly part of the skill features, and the job's side is the
+    same for every candidate on its slate: scoring one job against a pool used
+    to key the job's lists three times per candidate, which was most of the
+    keying a scoring run did.
+    """
+
+    required: frozenset[str]
+    preferred: frozenset[str]
+    either: frozenset[str]
+
+
+def job_skill_keys(job: JobLike) -> JobSkillKeys:
+    """Key ``job``'s skill lists once, for :func:`feature_dict`'s ``job_keys``."""
+    return JobSkillKeys(
+        required=frozenset(skill_keys(job.required_skills)),
+        preferred=frozenset(skill_keys(job.preferred_skills)),
+        either=frozenset(skill_keys([*job.required_skills, *job.preferred_skills])),
+    )
+
+
+def feature_dict(
+    job: JobLike, candidate: CandidateLike, *, job_keys: JobSkillKeys | None = None
+) -> dict[str, float]:
     """Every feature for one pair, keyed by name.
 
     This is the shape ``match_scores.features`` stores, so a ranking can be
     explained field by field.
+
+    ``job_keys`` is ``job_skill_keys(job)`` computed once by a caller scoring
+    many candidates against the same job; the result is the same either way.
+    It must come from this ``job``: nothing here can tell that it does not.
     """
+    if job_keys is None:
+        job_keys = job_skill_keys(job)
     held = skill_keys(candidate.skills)
-    job_skills = skill_keys([*job.required_skills, *job.preferred_skills])
     return {
-        "required_skill_coverage": _coverage(job.required_skills, held),
-        "preferred_skill_coverage": _coverage(job.preferred_skills, held),
-        "skill_jaccard": _jaccard(job_skills, held),
+        "required_skill_coverage": _share(job_keys.required, held),
+        "preferred_skill_coverage": _share(job_keys.preferred, held),
+        "skill_jaccard": _jaccard(job_keys.either, held),
         "experience_gap": experience_gap(job, candidate),
         "experience_surplus": experience_surplus(job, candidate),
         "seniority_distance": seniority_distance(job, candidate),
@@ -174,7 +210,9 @@ def feature_dict(job: JobLike, candidate: CandidateLike) -> dict[str, float]:
     }
 
 
-def feature_vector(job: JobLike, candidate: CandidateLike) -> tuple[float, ...]:
+def feature_vector(
+    job: JobLike, candidate: CandidateLike, *, job_keys: JobSkillKeys | None = None
+) -> tuple[float, ...]:
     """The same features as a tuple ordered by :data:`FEATURE_NAMES`."""
-    features = feature_dict(job, candidate)
+    features = feature_dict(job, candidate, job_keys=job_keys)
     return tuple(features[name] for name in FEATURE_NAMES)

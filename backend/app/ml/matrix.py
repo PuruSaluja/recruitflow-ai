@@ -38,7 +38,13 @@ from scipy import sparse
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.utils.validation import check_is_fitted
 
-from app.ml.features import FEATURE_NAMES, CandidateLike, JobLike, feature_vector
+from app.ml.features import (
+    FEATURE_NAMES,
+    CandidateLike,
+    JobLike,
+    feature_vector,
+    job_skill_keys,
+)
 from app.ml.text import CandidateText, JobText, candidate_text, job_text, make_vectoriser
 
 
@@ -81,7 +87,10 @@ class PairFeaturiser(TransformerMixin, BaseEstimator):
         # Both sides are L2-normalised, so the row-wise dot product is the cosine.
         # Identical texts land a rounding error past 1.0; the range is [0, 1].
         similarity = np.minimum(jobs.multiply(resumes).sum(axis=1), 1.0)
-        engineered = np.array([feature_vector(job, c) for job, c in pairs], dtype=float)
+        keys = {job: job_skill_keys(job) for job in job_rows}
+        engineered = np.array(
+            [feature_vector(job, c, job_keys=keys[job]) for job, c in pairs], dtype=float
+        )
 
         return sparse.hstack(
             [sparse.csr_matrix(engineered), sparse.csr_matrix(similarity), resumes], format="csr"

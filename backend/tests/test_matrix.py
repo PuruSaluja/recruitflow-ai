@@ -10,6 +10,7 @@ import pytest
 from sklearn.base import clone
 from sklearn.exceptions import NotFittedError
 
+from app.ml import features as features_module
 from app.ml.corpus import CorpusConfig, SyntheticCandidate, SyntheticJob, generate_corpus
 from app.ml.features import FEATURE_NAMES, feature_vector
 from app.ml.matrix import PairFeaturiser
@@ -311,3 +312,26 @@ def test_text_similarity_is_higher_for_better_fits(matrix, corpus) -> None:
     relevance = np.array([pair.relevance for pair in corpus.pairs])
 
     assert similarity[relevance == 2].mean() > similarity[relevance == 0].mean()
+
+
+def test_each_jobs_skills_are_keyed_once_per_transform(fitted, pairs, monkeypatch) -> None:
+    """A job's own lists are keyed once for its whole slate, not again for every candidate.
+
+    Every pair still keys its candidate's list, so a transform keys one list
+    per pair plus three per distinct job (required, preferred, and both).
+    Before the job's keys were hoisted it was four per pair.
+    """
+    calls = 0
+    real = features_module.skill_keys
+
+    def counting(spellings):
+        nonlocal calls
+        calls += 1
+        return real(spellings)
+
+    monkeypatch.setattr(features_module, "skill_keys", counting)
+    fitted.transform(pairs)
+
+    jobs = {job for job, _ in pairs}
+    assert len(jobs) < len(pairs)
+    assert calls == len(pairs) + 3 * len(jobs)
