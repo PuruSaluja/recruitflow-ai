@@ -161,11 +161,13 @@ Where the answer depends on the row as the write finds it, the write holds the
 row from reading it to committing, so a second request writing it waits and
 then answers as it would have one after the other: a job `PATCH` whose salary
 band someone else just changed into one this edit would invert is a **422**,
-a `DELETE` of a job or candidate beaten by another `DELETE` is a **404**, and
-so is an application whose job or candidate is deleted while it is created.
-An edit of a job and a new application to it do not wait for each other. None
-of these is reported as the database being unavailable, which is kept for real
-outages (**503**).
+and a `DELETE` of a job or candidate beaten by another `DELETE` is a **404**.
+An application whose job or candidate is deleted while it is being created is
+a **404** too, the foreign key refusing it. Creating one holds neither row
+while it checks them, so it does not wait on an edit of the job, and a repeat
+application no longer deadlocks with a delete of either. None of these is
+reported as the database being unavailable, which is kept for real outages
+(**503**).
 
 ## Hiring pipeline
 
