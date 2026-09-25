@@ -22,9 +22,14 @@ from app.schemas.common import MAX_OFFSET
 #: and answers as it would have one after the other. ``EDIT_LOCK`` is FOR NO
 #: KEY UPDATE, the lock an UPDATE takes anyway, which still lets new
 #: applications and match scores reference the row; ``DELETE_LOCK`` is FOR
-#: UPDATE, the lock a DELETE takes.
+#: UPDATE, the lock a DELETE takes. ``REFERENCE_LOCK`` is FOR KEY SHARE, the
+#: lock a new row's foreign key check takes on the row it names, taken on the
+#: job and candidate a new application names when they are checked: a DELETE of
+#: either then waits for the application, or the application waits for the
+#: DELETE and finds the row gone, while edits of either go ahead.
 EDIT_LOCK: dict[str, bool] = {"key_share": True}
 DELETE_LOCK = True
+REFERENCE_LOCK: dict[str, bool] = {"read": True, "key_share": True}
 
 
 @dataclass(frozen=True)

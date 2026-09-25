@@ -8,7 +8,7 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import Pagination, commit_row, pagination, refresh_row
+from app.api.deps import REFERENCE_LOCK, Pagination, commit_row, pagination, refresh_row
 from app.db.session import get_db
 from app.models.application import Application
 from app.models.candidate import Candidate
@@ -111,15 +111,16 @@ def create_application(payload: ApplicationCreate, db: Session = Depends(get_db)
 
     A missing job or candidate is a 404 naming which one; an unopen requisition
     or a repeat application is a 409, since both conflict with existing state
-    rather than being malformed requests.
+    rather than being malformed requests. Both are read under
+    ``REFERENCE_LOCK``, so one deleted while this request runs is a 404 too.
     """
-    job = db.get(Job, payload.job_id)
+    job = db.get(Job, payload.job_id, with_for_update=REFERENCE_LOCK)
     if job is None:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail=f"Job {payload.job_id} not found",
         )
-    if db.get(Candidate, payload.candidate_id) is None:
+    if db.get(Candidate, payload.candidate_id, with_for_update=REFERENCE_LOCK) is None:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail=f"Candidate {payload.candidate_id} not found",

@@ -1156,3 +1156,44 @@ def test_an_edit_holding_its_job_lets_new_applications_through(
 
     assert fired == ["ran"], fired
     assert response.status_code == 200, response.text
+
+
+# Found 2026-09-24: an application whose job or candidate was deleted between
+# the create's check and its insert answered 409 "Resource conflicts with an
+# existing record", the foreign key refusing the row. One after the other, it
+# is a 404 naming what is gone.
+
+
+@pytest.mark.parametrize("parent", [Job, Candidate], ids=lambda m: m.__name__)
+def test_an_application_to_a_row_being_deleted_is_a_404(
+    client: TestClient, clean_db: Engine, make_job: Factory, make_candidate: Factory, parent: Any
+) -> None:
+    ids = {Job: make_job()["id"], Candidate: make_candidate()["id"]}
+    body = {"job_id": ids[Job], "candidate_id": ids[Candidate]}
+
+    waited, response = _behind_another_write(
+        clean_db,
+        delete(parent).where(parent.id == ids[parent]),
+        lambda: client.post("/applications", json=body),
+    )
+
+    assert waited, "the application never waited for the delete"
+    assert response.status_code == 404, response.text
+    assert response.json()["detail"] == f"{parent.__name__} {ids[parent]} not found"
+
+
+def test_an_application_to_a_job_being_edited_does_not_wait(
+    client: TestClient, clean_db: Engine, make_job: Factory, make_candidate: Factory
+) -> None:
+    """Holding the job against deletion must not hold it against every edit."""
+    job_id, candidate_id = make_job()["id"], make_candidate()["id"]
+    retitle = update(Job).where(Job.id == job_id).values(title="Senior Data Analyst")
+    body = {"job_id": job_id, "candidate_id": candidate_id}
+
+    # The edit stays uncommitted until the application answers, or for five
+    # seconds; an application that waited for it times out instead of hanging.
+    with ThreadPoolExecutor(max_workers=1) as pool, clean_db.connect() as other, other.begin():
+        other.execute(retitle)
+        response = pool.submit(lambda: client.post("/applications", json=body)).result(5)
+
+    assert response.status_code == 201, response.text
