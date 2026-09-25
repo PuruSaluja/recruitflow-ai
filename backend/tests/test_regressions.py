@@ -1225,7 +1225,7 @@ def test_an_application_to_a_row_being_deleted_is_a_404(
 def test_an_application_to_a_job_being_edited_does_not_wait(
     client: TestClient, clean_db: Engine, make_job: Factory, make_candidate: Factory
 ) -> None:
-    """Holding the job against deletion must not hold it against every edit."""
+    """Creating an application must not wait on an edit of its job."""
     job_id, candidate_id = make_job()["id"], make_candidate()["id"]
     retitle = update(Job).where(Job.id == job_id).values(title="Senior Data Analyst")
     body = {"job_id": job_id, "candidate_id": candidate_id}
