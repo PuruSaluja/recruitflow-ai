@@ -174,6 +174,11 @@ application no longer deadlocks with a delete of either. None of these is
 reported as the database being unavailable, which is kept for real outages
 (**503**).
 
+A 503 with `code: "db_unavailable"` means the database could not be reached or
+could not serve the request: a refused or dropped connection, a deadlock, a
+cancelled statement, or no pooled connection free. Any other database error is
+a fault in the server's own code and is an ordinary **500**.
+
 ## Hiring pipeline
 
 An application moves `applied` → `screening` → `interview` → `offer` → `hired`.
@@ -609,10 +614,29 @@ only two attempts, the whole-pool requests answered the retryable 409 in 9 of
 then race each other; that is why there is a third attempt, and with it all
 20 succeeded across two runs. No request in any burst answered 500 or 503.
 
-Most of the scoring time is feature computation: under a profiler,
-normalising skill lists took about half of a whole-pool request, and three of
-every four of those calls redo the job's own lists, which do not change
-across the pool.
+Most of the scoring time is feature computation. Under a profiler, on the
+code the table above measured, normalising skill lists took about half of a
+whole-pool request, and three of every four of those calls redid the job's
+own lists, which do not change across the pool. The job's lists are now
+normalised once per pass over the pool, and the pool is passed over once per
+calibration fold and once more for the stored breakdown: 6 calls per
+candidate instead of 24, with bit-identical scores and features. With an old
+and a new server running side by side on the same 4,000 candidates, requests
+alternating between them:
+
+| | Before | After |
+| --- | --- | --- |
+| Scoring all 4,000 for a new job (3 jobs each) | 3,871 ms median | 3,061 ms median |
+| Scoring them again | 3,524 ms median | 2,517 ms median |
+| Scoring them again, a second round (6 each) | 3,094 ms median | 2,576 ms median |
+
+Both servers returned the same ranks, scores and features for the same job.
+
+The pool has no size limit from the database side. The cached rows used to be
+looked up with one query parameter per candidate, and psycopg refuses more
+than 65,535, so scoring everyone failed once more than 65,533 candidates were
+on file; they are now looked up with one array parameter. On the test
+database, 65,540 candidates scored and then rescored in place.
 
 ## License
 
