@@ -47,7 +47,7 @@ from app.api.v1 import applications as applications_api
 from app.config import get_settings
 from app.db.base import Base
 from app.db.session import get_db
-from app.models import Candidate, Job, MatchScore
+from app.models import ApplicationStageEvent, Candidate, Job, MatchScore
 from app.models.application import Application
 from app.models.enums import ApplicationStatus
 from app.schemas.candidate import CandidateUpdate
@@ -1235,6 +1235,50 @@ def test_an_application_to_a_job_being_edited_does_not_wait(
         response = pool.submit(lambda: client.post("/applications", json=body)).result(5)
 
     assert response.status_code == 201, response.text
+
+
+@pytest.mark.parametrize("parent", [Job, Candidate], ids=lambda m: m.__name__)
+def test_a_repeat_application_racing_a_delete_of_its_job_or_candidate_is_a_404(
+    client: TestClient,
+    clean_db: Engine,
+    make_job: Factory,
+    make_candidate: Factory,
+    make_application: Factory,
+    parent: Any,
+) -> None:
+    """Found in the 2026-09-24 recheck: the two deadlocked, and the loser answered 503.
+
+    The delete has removed the first application and is about to remove the row
+    itself, the way the delete route does it. The repeat application's insert
+    waits to learn whether that first application is really gone, and must not
+    be holding anything the delete then waits for.
+    """
+    ids = {Job: make_job()["id"], Candidate: make_candidate()["id"]}
+    first = make_application(job_id=ids[Job], candidate_id=ids[Candidate])["id"]
+    body = {"job_id": ids[Job], "candidate_id": ids[Candidate]}
+    row = parent.__table__.c.id
+
+    with ThreadPoolExecutor(max_workers=1) as pool, clean_db.connect() as deleting:
+        with deleting.begin():
+            deleting.execute(text("SET LOCAL lock_timeout = '5s'"))
+            deleting.execute(select(row).where(row == ids[parent]).with_for_update(key_share=True))
+            deleting.execute(
+                delete(ApplicationStageEvent).where(ApplicationStageEvent.application_id == first)
+            )
+            deleting.execute(delete(Application).where(Application.id == first))
+            response = pool.submit(lambda: client.post("/applications", json=body))
+            deadline = time.monotonic() + 10
+            while not _waiting_for_a_lock(clean_db) and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert _waiting_for_a_lock(clean_db), "the repeat application never waited"
+            try:
+                deleting.execute(delete(parent).where(parent.id == ids[parent]))
+            except OperationalError as exc:
+                pytest.fail(f"the delete could not finish: {exc.orig}")
+        answer = response.result(timeout=30)
+
+    assert answer.status_code == 404, answer.text
+    assert answer.json()["detail"] == f"{parent.__name__} {ids[parent]} not found"
 
 
 # --- 10. an oversized body read in full before it was refused (2026-09-12) --

@@ -29,13 +29,13 @@ from app.schemas.common import MAX_OFFSET
 #: and a scoring run that had rescored one of the job's cached rows deadlocked
 #: that way, and the loser answered 503.
 #:
-#: ``REFERENCE_LOCK`` is FOR KEY SHARE, that foreign key check's own lock,
-#: taken on the job and candidate a new application names when they are
-#: checked: a DELETE of either then waits for the application, or the
-#: application waits for the DELETE and finds the row gone, while edits of
-#: either go ahead.
+#: For the same reason nothing takes FOR KEY SHARE on a job or candidate ahead
+#: of an insert that refers to it: the delete's FOR UPDATE comes last, so it
+#: would wait on that lock while the insert waited on a row the delete was
+#: removing. A repeat application deadlocked that way with a delete of its job
+#: or candidate, waiting to learn whether the first application was gone. The
+#: foreign key check takes the lock itself, at the end of the insert.
 WRITE_LOCK: dict[str, bool] = {"key_share": True}
-REFERENCE_LOCK: dict[str, bool] = {"read": True, "key_share": True}
 
 
 @dataclass(frozen=True)
@@ -53,7 +53,7 @@ def pagination(
     return Pagination(limit=limit, offset=offset)
 
 
-def _row_exists(db: Session, model: Any, row_id: int) -> bool:
+def row_exists(db: Session, model: Any, row_id: int) -> bool:
     return db.scalar(select(model.id).where(model.id == row_id)) is not None
 
 
@@ -81,7 +81,7 @@ def commit_row(db: Session, model: Any, row_id: int) -> None:
     except StaleDataError as exc:
         db.rollback()
         name = model.__name__
-        if not _row_exists(db, model, row_id):
+        if not row_exists(db, model, row_id):
             raise HTTPException(
                 status_code=http_status.HTTP_404_NOT_FOUND, detail=f"{name} {row_id} not found"
             ) from exc
@@ -104,7 +104,7 @@ def refresh_row(db: Session, instance: Any, model: Any, row_id: int) -> None:
     try:
         db.refresh(instance)
     except InvalidRequestError as exc:
-        if _row_exists(db, model, row_id):
+        if row_exists(db, model, row_id):
             raise
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,

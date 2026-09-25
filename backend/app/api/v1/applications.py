@@ -8,7 +8,7 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import REFERENCE_LOCK, Pagination, commit_row, pagination, refresh_row
+from app.api.deps import Pagination, commit_row, pagination, refresh_row, row_exists
 from app.db.session import get_db
 from app.models.application import Application
 from app.models.candidate import Candidate
@@ -111,16 +111,16 @@ def create_application(payload: ApplicationCreate, db: Session = Depends(get_db)
 
     A missing job or candidate is a 404 naming which one; an unopen requisition
     or a repeat application is a 409, since both conflict with existing state
-    rather than being malformed requests. Both are read under
-    ``REFERENCE_LOCK``, so one deleted while this request runs is a 404 too.
+    rather than being malformed requests. A job or candidate deleted while the
+    request runs is refused by its foreign key and gets the same 404.
     """
-    job = db.get(Job, payload.job_id, with_for_update=REFERENCE_LOCK)
+    job = db.get(Job, payload.job_id)
     if job is None:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail=f"Job {payload.job_id} not found",
         )
-    if db.get(Candidate, payload.candidate_id, with_for_update=REFERENCE_LOCK) is None:
+    if db.get(Candidate, payload.candidate_id) is None:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail=f"Candidate {payload.candidate_id} not found",
@@ -144,8 +144,15 @@ def create_application(payload: ApplicationCreate, db: Session = Depends(get_db)
     except IntegrityError as exc:
         # The unique constraint is the real guard against a double-apply: two
         # simultaneous requests both pass the checks above, and the database
-        # settles it. Anything else is left to the global handler.
+        # settles it. The foreign keys settle a job or candidate deleted since
+        # those checks. Anything else is left to the global handler.
         db.rollback()
+        for model, row_id in ((Job, payload.job_id), (Candidate, payload.candidate_id)):
+            if not row_exists(db, model, row_id):
+                raise HTTPException(
+                    status_code=http_status.HTTP_404_NOT_FOUND,
+                    detail=f"{model.__name__} {row_id} not found",
+                ) from exc
         if "uq_applications_job_candidate" not in str(exc.orig):
             raise
         raise HTTPException(
