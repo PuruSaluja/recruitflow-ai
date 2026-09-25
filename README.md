@@ -126,6 +126,9 @@ both — and matching is case-insensitive, so stored `"Python"` answers
 
 Application listings filter on `job_id`, `candidate_id`, `status` and `source`.
 
+Every timestamp is ISO 8601 in UTC, ending in `Z`, such as
+`2026-09-25T01:48:29.260762Z`.
+
 ### Limits and errors
 
 - Every id, in a path, a body or a query, is at most 2,147,483,647, the
