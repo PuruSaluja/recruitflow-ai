@@ -134,9 +134,14 @@ Every timestamp is ISO 8601 in UTC, ending in `Z`, such as
 - Every id, in a path, a body or a query, is at most 2,147,483,647, the
   largest PostgreSQL `INTEGER`, and `offset` at most
   9,223,372,036,854,775,807, the largest `BIGINT`.
-- A candidate's `resume_text` holds at most 100,000 characters and each of
-  their skills at most 100, counted after spacing is tidied. Salaries fit
-  their `NUMERIC(10, 2)` columns: at most 99,999,999.99, in whole cents.
+- A candidate's `resume_text` holds at most 100,000 characters, and their
+  `skills` at most 100 entries of at most 100 characters each, counted after
+  spacing is tidied.
+- A job's `description` holds at most 20,000 characters, and its
+  `required_skills` and `preferred_skills` at most 100 entries each, of at
+  most 100 characters as sent.
+- Salaries fit their `NUMERIC(10, 2)` columns: at most 99,999,999.99, in
+  whole cents.
 - Text may not contain the NUL character (U+0000), which no PostgreSQL text
   column can store.
 
