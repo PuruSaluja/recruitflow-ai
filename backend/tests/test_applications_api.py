@@ -7,6 +7,8 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 Factory = Callable[..., dict[str, Any]]
 
@@ -58,6 +60,31 @@ def test_the_same_candidate_cannot_apply_twice(
     detail = response.json()["detail"]
     assert str(application["candidate_id"]) in detail
     assert str(application["job_id"]) in detail
+
+
+def test_only_the_one_application_per_job_rule_answers_already_applied(
+    client: TestClient,
+    job: dict[str, Any],
+    candidate: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Any other constraint that refuses the row is left to the generic 409."""
+
+    def refuse(self: Session, *args: Any, **kwargs: Any) -> None:
+        raise IntegrityError(
+            "INSERT INTO applications", {}, Exception('violates check constraint "ck_other"')
+        )
+
+    monkeypatch.setattr(Session, "flush", refuse)
+    response = client.post(
+        "/applications", json={"job_id": job["id"], "candidate_id": candidate["id"]}
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "Resource conflicts with an existing record",
+        "code": "conflict",
+    }
 
 
 def test_a_candidate_may_apply_to_a_second_job(
