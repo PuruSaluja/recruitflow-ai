@@ -11,8 +11,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+import numpy as np
 import pytest
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine, inspect, select
 from sqlalchemy.orm import Session
 
 from app.ml import features as features_module
@@ -21,6 +22,7 @@ from app.ml.corpus import CorpusConfig, SyntheticCandidate, SyntheticJob, genera
 from app.ml.features import FEATURE_NAMES, feature_dict
 from app.ml.train import train_matcher, training_data
 from app.models import Candidate, Job, MatchScore
+from app.models.enums import EducationLevel, SeniorityLevel
 from app.services.matching import score_pool
 
 Factory = Callable[..., dict[str, Any]]
@@ -183,6 +185,53 @@ def test_the_jobs_skills_are_keyed_once_per_featurisation_not_per_candidate(
 
     featurisations = len(matcher.calibrated_classifiers_) + 1
     assert calls == featurisations * (len(candidates) + 3)
+
+
+class _SpreadMatcher:
+    """Scores a pool evenly from 0.01 to 0.99 in the order given, without featurising it."""
+
+    def predict_proba(self, pairs: list[object]) -> np.ndarray:
+        scores = np.linspace(0.01, 0.99, len(pairs))
+        return np.column_stack([1 - scores, scores])
+
+
+def test_a_pool_past_psycopgs_parameter_limit_still_finds_its_cached_rows(pool) -> None:
+    """Found 2026-09-22: the cached rows were looked up with one parameter per id.
+
+    psycopg refuses a statement with more than 65,535 parameters, so with the
+    query's two others, whole-pool scoring failed from 65,534 candidates on
+    file, and the client was told the database was unavailable. The ids now
+    travel as one array.
+
+    Only the lookup is under test, and it runs before anything is added, so
+    the candidates past the five real ones are never saved; the new rows the
+    run adds for them are rolled back. The five real ones were scored first,
+    and the big run must find their rows and update them rather than add more.
+    """
+    db, job, candidates = pool
+    first = score_pool(db, job, candidates, _SpreadMatcher(), "v1")
+    db.commit()
+
+    start = max(candidate.id for candidate in candidates) + 1
+    unsaved = [
+        Candidate(
+            id=start + i,
+            skills=["Python"],
+            years_experience=3,
+            seniority=SeniorityLevel.MID,
+            education_level=EducationLevel.BACHELOR,
+        )
+        for i in range(65_536)
+    ]
+    rows = score_pool(db, job, [*candidates, *unsaved], _SpreadMatcher(), "v1")
+
+    assert len(rows) == len(candidates) + len(unsaved)
+    real_ids = {candidate.id for candidate in candidates}
+    found = [row for row in rows if row.candidate_id in real_ids]
+    assert {id(row) for row in found} == {id(row) for row in first}
+    assert all(inspect(row).persistent for row in found)
+    assert all(inspect(row).pending for row in rows if row.candidate_id not in real_ids)
+    db.rollback()
 
 
 # --- a duplicate in the pool --------------------------------------------------

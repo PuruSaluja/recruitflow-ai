@@ -16,7 +16,8 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from sklearn.calibration import CalibratedClassifierCV
-from sqlalchemy import select
+from sqlalchemy import Integer, any_, bindparam, select
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Session
 
 from app.ml.features import feature_dict, job_skill_keys
@@ -81,7 +82,18 @@ def score_pool(
             select(MatchScore).where(
                 MatchScore.job_id == job.id,
                 MatchScore.model_version == model_version,
-                MatchScore.candidate_id.in_([candidate.id for candidate in candidates]),
+                # One array parameter, not ``in_``'s one parameter per id:
+                # psycopg refuses a statement with more than 65,535, which
+                # made scoring everyone fail once more than 65,533 candidates
+                # were on file.
+                MatchScore.candidate_id
+                == any_(
+                    bindparam(
+                        "candidate_ids",
+                        [candidate.id for candidate in candidates],
+                        type_=ARRAY(Integer),
+                    )
+                ),
             )
         )
     }
