@@ -592,6 +592,16 @@ flight at once, leaving no winner, so their first retries race each other;
 the third attempt covers that. Only a third failure is answered with a 409
 asking the client to retry.
 
+A run saves new scores 1,000 rows to a statement, and the foreign key to the
+job is checked when the run commits, not after each statement. Checked per
+statement, a run held a lock on the job from its first batch, so a delete of
+the job that removed a row due in a later batch (another run having just
+saved it) deadlocked with it, and the delete answered 503. A replay of that
+order through both routes gave 503 every time; now the delete lands and the
+run answers 404. A live soak on a 1,500-candidate pool, two whole-pool runs
+racing a delete each round, never hit the window in 150 rounds on the old
+code, and answered no 5xx in 150 on the new.
+
 ### Measured on the default corpus
 
 Real numbers from a live server on the development database, loaded through
