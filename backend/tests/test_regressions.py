@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 import time
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -43,7 +44,7 @@ from sqlalchemy.orm.exc import StaleDataError
 
 import app.models  # noqa: F401  (registers every table on Base.metadata)
 from app.api.body_limit import MAX_REQUEST_BYTES
-from app.api.deps import refresh_row
+from app.api.deps import WRITE_LOCK, refresh_row
 from app.api.v1 import applications as applications_api
 from app.api.v1 import matches as matches_api
 from app.config import get_settings
@@ -1374,6 +1375,188 @@ def test_a_job_delete_during_a_scoring_insert_of_several_batches_does_not_deadlo
     assert deleted.status_code == 204, deleted.text
     assert scored.status_code == 404, scored.text
     assert scored.json()["detail"] == f"Job {job_id} not found"
+
+
+# Found in the 2026-09-26 recheck: deferring that check left a job delete and a
+# scoring run able to deadlock in other orders, and made one more. They now
+# take turns: the run holds its job FOR SHARE from before its first write to
+# its commit, which refuses the lock a job delete takes first.
+
+SCORE_WRITES = ("INSERT INTO match_scores", "UPDATE match_scores")
+
+
+@contextmanager
+def _after_first_score_write(
+    action: Callable[[], None], prefixes: tuple[str, ...] = SCORE_WRITES
+) -> Iterator[list[str]]:
+    """Call ``action`` once, in the scoring run's own thread, just after its first write."""
+    seen: list[str] = []
+
+    def hook(conn, cursor, statement, parameters, context, executemany) -> None:
+        if seen or not statement.startswith(prefixes):
+            return
+        seen.append(statement)
+        action()
+
+    event.listen(Engine, "after_cursor_execute", hook)
+    try:
+        yield seen
+    finally:
+        event.remove(Engine, "after_cursor_execute", hook)
+
+
+def _until(condition: Callable[[], bool], timeout: float = 10) -> None:
+    deadline = time.monotonic() + timeout
+    while not condition() and time.monotonic() < deadline:
+        time.sleep(0.01)
+
+
+# fmt: off
+HOLD_PROBES = [
+    pytest.param(WRITE_LOCK, False, id="a-job-delete-or-edit-is-refused"),
+    pytest.param({"read": True}, True, id="another-scoring-run-is-granted"),
+    pytest.param({"read": True, "key_share": True}, True, id="an-application-is-granted"),
+]
+# fmt: on
+
+
+@pytest.mark.parametrize(("lock", "granted"), HOLD_PROBES)
+def test_a_scoring_run_holds_its_job_while_it_writes(
+    client: TestClient,
+    clean_db: Engine,
+    make_job: Factory,
+    make_candidate: Factory,
+    monkeypatch: pytest.MonkeyPatch,
+    lock: dict[str, bool],
+    granted: bool,
+) -> None:
+    """Probed from another connection just after the run's first write, a rescore."""
+    job_id, cached, _ = make_job()["id"], make_candidate()["id"], make_candidate()["id"]
+    with clean_db.begin() as setup:
+        setup.execute(
+            insert(MatchScore).values(
+                job_id=job_id, candidate_id=cached, model_version="v1", score=0.5, features={}
+            )
+        )
+    monkeypatch.setattr(matches_api, "load_versioned_matcher", lambda: (_EvenMatcher(), "v1"))
+    answers: list[bool] = []
+
+    def probe() -> None:
+        wanted = select(Job.id).where(Job.id == job_id).with_for_update(nowait=True, **lock)
+        try:
+            with clean_db.begin() as other:
+                other.execute(wanted)
+        except OperationalError as exc:
+            if not isinstance(exc.orig, LockNotAvailable):
+                raise
+            answers.append(False)
+        else:
+            answers.append(True)
+
+    with _after_first_score_write(probe) as seen:
+        response = client.post(f"/jobs/{job_id}/score")
+
+    assert response.status_code == 200, response.text
+    assert seen and seen[0].startswith("UPDATE match_scores"), seen
+    assert answers == [granted]
+
+
+def test_a_job_delete_arriving_while_a_scoring_run_writes_waits_for_it(
+    client: TestClient,
+    clean_db: Engine,
+    make_job: Factory,
+    make_candidate: Factory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    job_id = make_job()["id"]
+    pool_ids = [make_candidate()["id"] for _ in range(3)]
+    monkeypatch.setattr(matches_api, "load_versioned_matcher", lambda: (_EvenMatcher(), "v1"))
+    deleting: dict[str, Any] = {}
+
+    def delete_now() -> None:
+        deleting["response"] = pool.submit(lambda: client.delete(f"/jobs/{job_id}"))
+        _until(lambda: deleting["response"].done() or _waiting_for_a_lock(clean_db))
+        deleting["waited"] = _waiting_for_a_lock(clean_db)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        with _after_first_score_write(delete_now):
+            scored = client.post(f"/jobs/{job_id}/score")
+        deleted = deleting["response"].result(timeout=30)
+
+    assert deleting["waited"], "the delete went ahead while the run was writing"
+    assert scored.status_code == 200, scored.text
+    assert scored.json()["scored_count"] == len(pool_ids)
+    assert deleted.status_code == 204, deleted.text
+    with clean_db.connect() as conn:
+        assert conn.scalar(select(func.count()).select_from(MatchScore)) == 0
+
+
+@pytest.mark.parametrize(
+    "after", ["UPDATE match_scores", "INSERT INTO match_scores"], ids=["rescore", "insert"]
+)
+def test_a_job_delete_whose_cascade_meets_a_rescored_row_does_not_deadlock(
+    client: TestClient,
+    clean_db: Engine,
+    make_job: Factory,
+    make_candidate: Factory,
+    monkeypatch: pytest.MonkeyPatch,
+    after: str,
+) -> None:
+    """Another run saves a score just after the delete has loaded the job's scores.
+
+    So only the delete's cascade removes it, while this run finds it and
+    rescores it. The delete then removes the job, as the route does, once this
+    run has rescored the row, or once it has also inserted its new score.
+    Before, both orders deadlocked, and the delete was the one refused.
+    """
+    job_id = make_job()["id"]
+    rescored, _ = make_candidate()["id"], make_candidate()["id"]
+    monkeypatch.setattr(matches_api, "load_versioned_matcher", lambda: (_EvenMatcher(), "v1"))
+    loaded, go, reached, release = (threading.Event() for _ in range(4))
+    outcome: dict[str, Any] = {}
+
+    def delete_job() -> None:
+        with clean_db.connect() as conn:
+            deleting = conn.begin()
+            conn.execute(text("SET LOCAL lock_timeout = '5s'"))
+            conn.execute(select(Job.id).where(Job.id == job_id).with_for_update(**WRITE_LOCK))
+            conn.execute(select(MatchScore.id).where(MatchScore.job_id == job_id))
+            loaded.set()
+            go.wait(10)
+            try:
+                conn.execute(delete(Job).where(Job.id == job_id))
+                deleting.commit()
+                outcome["delete"] = "committed"
+            except OperationalError as exc:
+                deleting.rollback()
+                outcome["delete"] = exc.orig
+
+    def hold() -> None:
+        reached.set()
+        release.wait(10)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        finished = pool.submit(delete_job)
+        assert loaded.wait(10), "the delete never loaded the job's scores"
+        with clean_db.begin() as other_run:
+            other_run.execute(
+                insert(MatchScore).values(
+                    job_id=job_id, candidate_id=rescored, model_version="v1", score=0.5, features={}
+                )
+            )
+        with _after_first_score_write(hold, prefixes=(after,)):
+            response = pool.submit(lambda: client.post(f"/jobs/{job_id}/score"))
+            _until(lambda: reached.is_set() or _waiting_for_a_lock(clean_db))
+            go.set()
+            _until(lambda: finished.done() or _waiting_for_a_lock(clean_db))
+            release.set()
+            answer = response.result(timeout=30)
+        finished.result(timeout=30)
+
+    if outcome["delete"] != "committed":
+        pytest.fail(f"the delete could not finish: {outcome['delete']}")
+    assert answer.status_code == 404, answer.text
+    assert answer.json()["detail"] == f"Job {job_id} not found"
 
 
 # --- 10. an oversized body read in full before it was refused (2026-09-12) --
