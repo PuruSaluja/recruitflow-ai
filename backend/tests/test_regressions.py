@@ -56,6 +56,7 @@ from app.models.enums import ApplicationStatus
 from app.schemas.candidate import MAX_SKILL_CHARS, CandidateUpdate
 from app.schemas.common import MAX_ID, MAX_OFFSET
 from app.schemas.job import SALARY_DIGITS, SALARY_PLACES, JobUpdate
+from app.services.matching import score_pool
 from app.services.resume import MAX_RESUME_CHARS, MAX_UPLOAD_BYTES
 
 Factory = Callable[..., dict[str, Any]]
@@ -1556,6 +1557,79 @@ def test_a_job_delete_whose_cascade_meets_a_rescored_row_does_not_deadlock(
         pytest.fail(f"the delete could not finish: {outcome['delete']}")
     assert answer.status_code == 404, answer.text
     assert answer.json()["detail"] == f"Job {job_id} not found"
+
+
+class _ReversingMatcher:
+    """Scores rise along the pool on odd calls and fall on even ones.
+
+    So two runs rank the same candidates in opposite orders, as an edit of the
+    job landing between their reads can make them do.
+    """
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def predict_proba(self, pairs: list[Any]) -> Any:
+        self.calls += 1
+        scores = np.linspace(0.1, 0.9, len(pairs))
+        if self.calls % 2 == 0:
+            scores = scores[::-1]
+        return np.column_stack([1 - scores, scores])
+
+
+def test_two_scoring_runs_of_one_job_that_rank_it_differently_take_turns(
+    client: TestClient,
+    clean_db: Engine,
+    make_job: Factory,
+    make_candidate: Factory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Found in the 2026-09-26 recheck: holding the job FOR SHARE let them write at once.
+
+    Each run inserts its new scores in rank order, 1,000 to a statement, so
+    here they insert the same 2,000 rows in opposite orders. Each would wait on
+    a row the other had inserted. Now the second waits for the first's write,
+    then finds its rows and updates them, without a second attempt.
+    """
+    job_id, first = make_job()["id"], make_candidate()["id"]
+    with clean_db.begin() as setup:
+        setup.execute(
+            text(
+                "INSERT INTO candidates (full_name, email, years_experience, seniority, "
+                "education_level, resume_text, skills) "
+                "SELECT full_name, 'pool' || n || '@example.com', years_experience, seniority, "
+                "education_level, resume_text, skills "
+                "FROM candidates, generate_series(1, 1999) AS n WHERE id = :id"
+            ),
+            {"id": first},
+        )
+    matcher = _ReversingMatcher()
+    monkeypatch.setattr(matches_api, "load_versioned_matcher", lambda: (matcher, "v1"))
+    scored_pools: list[int] = []
+
+    def counted(db, job, candidates, model, version):
+        scored_pools.append(len(candidates))
+        return score_pool(db, job, candidates, model, version)
+
+    monkeypatch.setattr(matches_api, "score_pool", counted)
+    second: dict[str, Any] = {}
+
+    def start_second() -> None:
+        second["response"] = pool.submit(
+            lambda: client.post(f"/jobs/{job_id}/score", json={"limit": 1})
+        )
+        _until(lambda: second["response"].done() or _waiting_for_a_lock(clean_db))
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        with _after_first_score_write(start_second):
+            first_answer = client.post(f"/jobs/{job_id}/score", json={"limit": 1})
+        second_answer = second["response"].result(timeout=60)
+
+    assert first_answer.status_code == 200, first_answer.text
+    assert second_answer.status_code == 200, second_answer.text
+    assert scored_pools == [2000, 2000], "a run had to be scored again"
+    with clean_db.connect() as conn:
+        assert conn.scalar(select(func.count()).select_from(MatchScore)) == 2000
 
 
 # --- 10. an oversized body read in full before it was refused (2026-09-12) --
