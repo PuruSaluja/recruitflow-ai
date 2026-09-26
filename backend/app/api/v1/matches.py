@@ -94,19 +94,16 @@ def score_job(
     loaded. A missing or unreadable matcher is a 503 naming the command that
     regenerates it (see ``app.main``).
 
-    Two runs scoring the same new rows at once can both find a row missing
-    and both insert it, and the loser's commit fails; a candidate deleted
-    mid-run fails the commit too. Either way the run is rolled back, re-read
-    and scored again. After a lost insert race the winner's rows are
-    committed, so the retry updates them instead of inserting, and anything
-    deleted has dropped out of the pool (or is now a 404, if it was asked for
-    by id). A delete can knock back every concurrent run at once, though,
-    leaving no winner, so their first retries race each other; that is what
-    the third attempt is for. Only a third failure is answered with a 409.
+    A candidate deleted mid-run fails the commit. The run is then rolled back,
+    re-read and scored again, and the candidate has dropped out of the pool
+    (or is now a 404, if it was asked for by id). A row someone else inserted
+    first fails it the same way, and the retry then updates that row. Up to
+    three attempts are made, and only a third failure is answered with a 409.
 
-    A delete of the job itself takes turns with the run's write (see
-    :func:`score_pool`): one already under way finishes first and the run is
-    a 404, and one arriving later waits for the run to commit.
+    Other runs of the same job, an edit of the job and a delete of it take
+    turns with this run's write (see :func:`score_pool`). A run that waited on
+    another updates the rows that one saved instead of racing it to insert
+    them, and a delete already under way finishes first, making this a 404.
     """
     request = payload or ScoreJobRequest()
     job = _get_job_or_404(db, job_id)

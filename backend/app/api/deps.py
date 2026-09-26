@@ -36,10 +36,10 @@ from app.schemas.common import MAX_OFFSET
 #: or candidate, waiting to learn whether the first application was gone. The
 #: foreign key check takes the lock itself, at the end of the insert.
 #:
-#: A scoring run holds its job FOR SHARE while it writes the job's scores,
-#: which conflicts with this lock but not with another run's: a job delete and
-#: a scoring run's write take turns, and an edit of the job waits for the
-#: write. See ``services.matching.score_pool``.
+#: A scoring run takes this lock on its job before it writes the job's scores
+#: and holds it to its commit, so a delete of the job, an edit of it and
+#: another run scoring it take turns with that write. See
+#: ``services.matching.score_pool``.
 WRITE_LOCK: dict[str, bool] = {"key_share": True}
 
 

@@ -1379,8 +1379,8 @@ def test_a_job_delete_during_a_scoring_insert_of_several_batches_does_not_deadlo
 
 # Found in the 2026-09-26 recheck: deferring that check left a job delete and a
 # scoring run able to deadlock in other orders, and made one more. They now
-# take turns: the run holds its job FOR SHARE from before its first write to
-# its commit, which refuses the lock a job delete takes first.
+# take turns: the run holds its job's write lock from before its first write
+# to its commit, the lock a job delete, an edit and another run take first.
 
 SCORE_WRITES = ("INSERT INTO match_scores", "UPDATE match_scores")
 
@@ -1413,8 +1413,7 @@ def _until(condition: Callable[[], bool], timeout: float = 10) -> None:
 
 # fmt: off
 HOLD_PROBES = [
-    pytest.param(WRITE_LOCK, False, id="a-job-delete-or-edit-is-refused"),
-    pytest.param({"read": True}, True, id="another-scoring-run-is-granted"),
+    pytest.param(WRITE_LOCK, False, id="a-job-delete-edit-or-scoring-run-is-refused"),
     pytest.param({"read": True, "key_share": True}, True, id="an-application-is-granted"),
 ]
 # fmt: on
