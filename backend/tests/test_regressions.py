@@ -17,6 +17,7 @@ from contextlib import contextmanager
 from decimal import Decimal
 from typing import Any
 
+import numpy as np
 import pytest
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
@@ -44,6 +45,7 @@ import app.models  # noqa: F401  (registers every table on Base.metadata)
 from app.api.body_limit import MAX_REQUEST_BYTES
 from app.api.deps import refresh_row
 from app.api.v1 import applications as applications_api
+from app.api.v1 import matches as matches_api
 from app.config import get_settings
 from app.db.base import Base
 from app.db.session import get_db
@@ -1299,6 +1301,79 @@ def test_a_repeat_application_racing_a_delete_of_its_job_or_candidate_is_a_404(
 
     assert answer.status_code == 404, answer.text
     assert answer.json()["detail"] == f"{parent.__name__} {ids[parent]} not found"
+
+
+class _EvenMatcher:
+    """Scores every pair 0.5, so ranks, and therefore insert order, follow candidate id."""
+
+    def predict_proba(self, pairs: list[Any]) -> Any:
+        return np.full((len(pairs), 2), 0.5)
+
+
+def test_a_job_delete_during_a_scoring_insert_of_several_batches_does_not_deadlock(
+    client: TestClient,
+    clean_db: Engine,
+    make_job: Factory,
+    make_candidate: Factory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Found 2026-09-26: the two deadlocked, and the delete answered 503.
+
+    SQLAlchemy inserts new scores 1,000 rows to a statement, and each
+    statement's foreign key checks take FOR KEY SHARE on the job, so a run
+    holds that lock from its first batch on. Here another run commits the
+    score this one is about to insert in its second batch, and a delete of
+    the job removes that row and then waits on the lock to remove the job,
+    while this run's second batch waits to learn whether the row is gone.
+    """
+    job_id, first = make_job()["id"], make_candidate()["id"]
+    with clean_db.begin() as setup:
+        setup.execute(
+            text(
+                "INSERT INTO candidates (full_name, email, years_experience, seniority, "
+                "education_level, resume_text, skills) "
+                "SELECT full_name, 'pool' || n || '@example.com', years_experience, seniority, "
+                "education_level, resume_text, skills "
+                "FROM candidates, generate_series(1, 1000) AS n WHERE id = :id"
+            ),
+            {"id": first},
+        )
+        last = setup.scalar(select(func.max(Candidate.id)))
+    monkeypatch.setattr(matches_api, "load_versioned_matcher", lambda: (_EvenMatcher(), "v1"))
+    batches: list[int] = []
+    deleting: dict[str, Any] = {}
+
+    def between_batches(conn, cursor, statement, parameters, context, executemany) -> None:
+        if not statement.startswith("INSERT INTO match_scores"):
+            return
+        batches.append(len(batches) + 1)
+        if len(batches) > 1:
+            return
+        with clean_db.begin() as other_run:
+            other_run.execute(
+                insert(MatchScore).values(
+                    job_id=job_id, candidate_id=last, model_version="v1", score=0.5, features={}
+                )
+            )
+        deleting["response"] = pool.submit(lambda: client.delete(f"/jobs/{job_id}"))
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and not deleting["response"].done():
+            if _waiting_for_a_lock(clean_db):
+                break
+            time.sleep(0.01)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        event.listen(Engine, "after_cursor_execute", between_batches)
+        try:
+            scored = client.post(f"/jobs/{job_id}/score")
+        finally:
+            event.remove(Engine, "after_cursor_execute", between_batches)
+        deleted = deleting["response"].result(timeout=30)
+
+    assert len(batches) >= 2, "the pool fitted in one insert, so the race never ran"
+    assert deleted.status_code == 204, deleted.text
+    assert scored.status_code == 404, scored.text
+    assert scored.json()["detail"] == f"Job {job_id} not found"
 
 
 # --- 10. an oversized body read in full before it was refused (2026-09-12) --
