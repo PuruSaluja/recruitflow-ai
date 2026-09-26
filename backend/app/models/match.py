@@ -47,18 +47,8 @@ class MatchScore(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    #: Checked at commit, not per statement. SQLAlchemy inserts a scoring run's
-    #: new rows 1,000 to a statement, and each statement's check takes FOR KEY
-    #: SHARE on the job, so from its first batch a run held the lock a job
-    #: delete's last statement waits for. If a later batch then waited on a row
-    #: that delete had removed (another run having committed it meanwhile), the
-    #: two deadlocked and the delete answered 503. Checked at commit, the run
-    #: takes the lock after its last insert, and a job deleted by then fails
-    #: the commit, which the scoring route retries and answers 404.
     job_id: Mapped[int] = mapped_column(
-        ForeignKey("jobs.id", ondelete="CASCADE", deferrable=True, initially="DEFERRED"),
-        nullable=False,
-        index=True,
+        ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True
     )
     candidate_id: Mapped[int] = mapped_column(
         ForeignKey("candidates.id", ondelete="CASCADE"), nullable=False, index=True
