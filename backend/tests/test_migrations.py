@@ -79,6 +79,24 @@ def _table_names(engine: Engine) -> set[str]:
         )
 
 
+def test_head_builds_the_schema_the_models_describe(engine: Engine) -> None:
+    """What `alembic check` reports, as a test: head and the models agree.
+
+    On 2026-09-26 a foreign key's deferral changed in the model and in two
+    migrations the same day, and only running `alembic check` by hand showed
+    the two sides still matched. Compared the way `alembic/env.py` compares.
+    """
+    from alembic.autogenerate import compare_metadata
+    from alembic.migration import MigrationContext
+
+    import app.models  # noqa: F401  (registers every table on Base.metadata)
+    from app.db.base import Base
+
+    with engine.connect() as conn:
+        context = MigrationContext.configure(conn, opts={"compare_type": True})
+        assert compare_metadata(context, Base.metadata) == []
+
+
 def test_upgrade_downgrade_upgrade_on_one_database(scratch_database: Engine) -> None:
     from alembic import command
 
