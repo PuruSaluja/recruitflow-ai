@@ -784,22 +784,40 @@ def test_a_candidate_asked_for_and_deleted_mid_run_is_a_404(
     assert after == {cid: at for cid, at in before.items() if cid != chosen[0]}
 
 
-def test_a_job_deleted_mid_run_is_a_404(
+def test_a_job_deleted_before_the_run_writes_is_a_404_and_nothing_is_written(
     client: TestClient,
     trained: Path,
     pool: Pool,
     clean_db: Engine,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    job, _ = pool
-    monkeypatch.setattr(
-        matches, "score_pool", _Interference({1: _delete(clean_db, Job, job["id"])})
-    )
+    """Deleted after the request read the job, before the run took its hold on it.
 
-    response = client.post(f"/jobs/{job['id']}/score")
+    A delete arriving once the run holds the job waits for it instead; that is
+    pinned in test_regressions.
+    """
+    job, _ = pool
+    delete_job = _delete(clean_db, Job, job["id"])
+    writes: list[str] = []
+
+    def deleted_first(db, job_row, candidates, matcher, model_version):
+        delete_job()
+        return score_pool(db, job_row, candidates, matcher, model_version)
+
+    def record(conn, cursor, statement, parameters, context, executemany) -> None:
+        if statement.startswith(("INSERT INTO match_scores", "UPDATE match_scores")):
+            writes.append(statement)
+
+    monkeypatch.setattr(matches, "score_pool", deleted_first)
+    event.listen(Engine, "before_cursor_execute", record)
+    try:
+        response = client.post(f"/jobs/{job['id']}/score")
+    finally:
+        event.remove(Engine, "before_cursor_execute", record)
 
     assert response.status_code == 404
     assert response.json()["detail"] == f"Job {job['id']} not found"
+    assert writes == []
 
 
 # --- the API description ---------------------------------------------------------

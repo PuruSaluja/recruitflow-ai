@@ -20,7 +20,7 @@ from app.models.match import MatchScore
 from app.schemas.candidate import CandidateSummary
 from app.schemas.common import MAX_ID
 from app.schemas.match import MatchPage, RankedCandidate, ScoreJobRequest, ScoreJobResponse
-from app.services.matching import score_pool
+from app.services.matching import JobGone, score_pool
 
 router = APIRouter(prefix="/jobs", tags=["matching"])
 
@@ -30,12 +30,16 @@ router = APIRouter(prefix="/jobs", tags=["matching"])
 SCORING_ATTEMPTS = 3
 
 
+def _job_not_found(job_id: int) -> HTTPException:
+    return HTTPException(
+        status_code=http_status.HTTP_404_NOT_FOUND, detail=f"Job {job_id} not found"
+    )
+
+
 def _get_job_or_404(db: Session, job_id: int) -> Job:
     job = db.get(Job, job_id)
     if job is None:
-        raise HTTPException(
-            status_code=http_status.HTTP_404_NOT_FOUND, detail=f"Job {job_id} not found"
-        )
+        raise _job_not_found(job_id)
     return job
 
 
@@ -91,14 +95,18 @@ def score_job(
     regenerates it (see ``app.main``).
 
     Two runs scoring the same new rows at once can both find a row missing
-    and both insert it, and the loser's commit fails; a job or candidate
-    deleted mid-run fails the commit too. Either way the run is rolled back,
-    re-read and scored again. After a lost insert race the winner's rows are
+    and both insert it, and the loser's commit fails; a candidate deleted
+    mid-run fails the commit too. Either way the run is rolled back, re-read
+    and scored again. After a lost insert race the winner's rows are
     committed, so the retry updates them instead of inserting, and anything
     deleted has dropped out of the pool (or is now a 404, if it was asked for
     by id). A delete can knock back every concurrent run at once, though,
     leaving no winner, so their first retries race each other; that is what
     the third attempt is for. Only a third failure is answered with a 409.
+
+    A delete of the job itself takes turns with the run's write (see
+    :func:`score_pool`): one already under way finishes first and the run is
+    a 404, and one arriving later waits for the run to commit.
     """
     request = payload or ScoreJobRequest()
     job = _get_job_or_404(db, job_id)
@@ -107,7 +115,11 @@ def score_job(
     started = time.perf_counter()
     matcher, version = load_versioned_matcher()
     for attempt in range(1, SCORING_ATTEMPTS + 1):
-        ranked = score_pool(db, job, candidates, matcher, version)
+        try:
+            ranked = score_pool(db, job, candidates, matcher, version)
+        except JobGone as exc:
+            db.rollback()
+            raise _job_not_found(job_id) from exc
         try:
             db.commit()
             break

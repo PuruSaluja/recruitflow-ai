@@ -35,6 +35,11 @@ from app.schemas.common import MAX_OFFSET
 #: removing. A repeat application deadlocked that way with a delete of its job
 #: or candidate, waiting to learn whether the first application was gone. The
 #: foreign key check takes the lock itself, at the end of the insert.
+#:
+#: A scoring run holds its job FOR SHARE while it writes the job's scores,
+#: which conflicts with this lock but not with another run's: a job delete and
+#: a scoring run's write take turns, and an edit of the job waits for the
+#: write. See ``services.matching.score_pool``.
 WRITE_LOCK: dict[str, bool] = {"key_share": True}
 
 

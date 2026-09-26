@@ -26,6 +26,14 @@ from app.models.job import Job
 from app.models.match import MatchScore
 
 
+class JobGone(LookupError):
+    """The job was deleted before its pool's scores could be written."""
+
+    def __init__(self, job_id: int):
+        super().__init__(f"Job {job_id} not found")
+        self.job_id = job_id
+
+
 def score_pool(
     db: Session,
     job: Job,
@@ -64,6 +72,20 @@ def score_pool(
     should catch it there the way ``commit_row`` catches a lost race for the
     other write routes; measured at 1 to 4 of 10 concurrent first-time scores of
     one row failing this way, with the row always left correct regardless.
+
+    The job's row is held FOR SHARE from before the cached scores are read
+    until the caller commits or rolls back, and :class:`JobGone` is raised if
+    the job has been deleted by then. A job delete locks that row FOR NO KEY
+    UPDATE before it removes any score, which FOR SHARE conflicts with, so a
+    delete and this run's writes take turns instead of interleaving: a delete
+    already under way finishes first, and one that arrives later waits for the
+    commit. Interleaved, they deadlocked in several orders, each with this
+    run holding a lock the delete was waiting for, on one of the job's scores
+    or on the job itself, while it waited on the delete. Other scoring runs of
+    the job, and new applications to it, take locks FOR SHARE does not
+    conflict with; an edit of the job waits for the write. Scores and
+    breakdowns are computed before the lock is taken, so that wait covers only
+    the write itself.
     """
     if not candidates:
         return []
@@ -75,6 +97,12 @@ def score_pool(
     pairs = [(job, candidate) for candidate in candidates]
     scores = matcher.predict_proba(pairs)[:, 1]
     order = sorted(range(len(candidates)), key=lambda i: (-scores[i], candidates[i].id))
+    job_keys = job_skill_keys(job)
+    breakdowns = [feature_dict(job, candidate, job_keys=job_keys) for candidate in candidates]
+
+    held = select(Job.id).where(Job.id == job.id).with_for_update(read=True)
+    if db.scalar(held) is None:
+        raise JobGone(job.id)
 
     existing = {
         row.candidate_id: row
@@ -98,7 +126,6 @@ def score_pool(
         )
     }
 
-    job_keys = job_skill_keys(job)
     scored_at = datetime.now(UTC)
     ranked: list[MatchScore] = []
     for rank, index in enumerate(order, start=1):
@@ -109,7 +136,7 @@ def score_pool(
             db.add(row)
         row.score = float(scores[index])
         row.rank = rank
-        row.features = feature_dict(job, candidate, job_keys=job_keys)
+        row.features = breakdowns[index]
         # Assigned explicitly, not left to the column's default: a rescore
         # that reproduces the same score, rank and features would otherwise
         # leave nothing for SQLAlchemy to consider changed, and an existing
