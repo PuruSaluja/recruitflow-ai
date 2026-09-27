@@ -68,7 +68,8 @@ pytest
 
 API tests run against a separate database, `RECRUITFLOW_TEST_DATABASE_URL`
 (`recruitflow_test` in `.env.example`). Create it once; the suite applies the
-Alembic migrations itself.
+Alembic migrations itself, and checks that they build the schema the models
+describe.
 
 Every database test empties all tables first, so the suite refuses to start
 unless the test database's name ends in `_test` and differs from
@@ -84,9 +85,9 @@ pytest backend/tests/test_resume_service.py
 awkward input — explicit nulls on required fields, JSONB storing a JSON `null`,
 `%`/`_` in search text acting as wildcards, a stage change overwriting a
 simultaneous one, non-positive ids, ids and offsets past what PostgreSQL can
-hold, writes that lose a race to another request, values the database or the
-response cannot hold, and oversized bodies read in full before they were
-refused. Each pin fails if its fix is reverted.
+hold, writes that lose a race to another request or deadlock with one, values
+the database or the response cannot hold, and oversized bodies read in full
+before they were refused. Each pin fails if its fix is reverted.
 
 ## API
 
@@ -583,24 +584,38 @@ score everyone on file. A matcher that is missing or cannot be loaded is a
 503 with `code: "matcher_unavailable"` and the regeneration command; the file
 path and the underlying error go to the server log, not the response.
 
-**Concurrency.** Two requests scoring the same new rows at once can both
-find a row missing and both insert it, and a job or candidate deleted mid-run
-fails the commit too. The run is then rolled back, re-read and scored again,
-up to three attempts in all. After a lost insert race the winner's rows are
-committed, so a retry updates them. A delete can knock back every run in
-flight at once, leaving no winner, so their first retries race each other;
-the third attempt covers that. Only a third failure is answered with a 409
-asking the client to retry.
+**Concurrency.** A run's write takes turns with every other write to the
+job. Once its scores and breakdowns are computed, the run locks the job, as
+an edit or a delete of it does, and holds the lock while it reads the cached
+scores, writes its own and commits. Another run of the same job waits for
+that, then finds the first run's rows and updates them instead of racing it
+to insert them. A delete already under way finishes first, and the run is
+then a 404; one that arrives during the write waits for it, and so does an
+edit. New applications to the job do not wait.
 
-A run saves new scores 1,000 rows to a statement, and the foreign key to the
-job is checked when the run commits, not after each statement. Checked per
-statement, a run held a lock on the job from its first batch, so a delete of
-the job that removed a row due in a later batch (another run having just
-saved it) deadlocked with it, and the delete answered 503. A replay of that
-order through both routes gave 503 every time; now the delete lands and the
-run answers 404. A live soak on a 1,500-candidate pool, two whole-pool runs
-racing a delete each round, never hit the window in 150 rounds on the old
-code, and answered no 5xx in 150 on the new.
+The wait lasts as long as the write. On 2026-09-26, with 4,000 candidates on
+file, the lock was held for a median 2,031 ms by a first scoring and 1,416 ms
+by a rescore, most of it the database flush (1,476 and 978 ms), and an edit
+of the job sent as the lock was taken answered in 1,996–2,484 ms. The machine
+was slow that day: the whole requests took a median 6.8 and 6.0 s, against
+3.1 and 2.5 s measured below, so the hold is better read as a share, 30% of
+a first scoring and 24% of a rescore.
+
+A candidate deleted mid-run fails the commit. The run is then rolled back,
+re-read and scored again, and the candidate has dropped out of the pool (or
+is a 404, if it was asked for by id). Up to three attempts are made, and only
+a third failure is answered with a 409 asking the client to retry.
+
+Before the lock, some interleavings deadlocked, and one of the two requests
+answered 503. A delete of the job could remove a score a run was about to
+insert in a later 1,000-row batch, or one the run had just rescored; and two
+runs that ranked the same new candidates differently, as an edit between
+their reads can make them do, each waited on a row the other had inserted.
+Each order was replayed against the scoring route, and each is now a test.
+On the final code, a 100-round soak of two whole-pool runs of 1,500
+candidates racing a delete of their job, and two 120 s mixed soaks from 12
+and 24 threads (1,094 and 1,083 requests), answered no 5xx, and PostgreSQL
+logged no deadlock.
 
 ### Measured on the default corpus
 
@@ -624,6 +639,15 @@ only two attempts, the whole-pool requests answered the retryable 409 in 9 of
 20 across two runs, because the delete knocks both back and their retries
 then race each other; that is why there is a third attempt, and with it all
 20 succeeded across two runs. No request in any burst answered 500 or 503.
+
+Both bursts were run again on 2026-09-26, once runs of a job took turns, on
+a throwaway database with 4,000 candidates on file. Ten simultaneous first
+scorings of the same 300 answered 200 in 50 of 50 over 5 rounds, with 300
+rows cached each round, and still 50 of 50 with the retry disabled; the code
+from before that day, with the retry disabled, lost the race in 12 of 50 the
+same afternoon. In the delete burst, the 40 requests naming the deleted
+candidate all answered 404 naming it and the 10 whole-pool ones 200, with
+three attempts and also with two, where the older code had needed the third.
 
 Most of the scoring time is feature computation. Under a profiler, on the
 code the table above measured, normalising skill lists took about half of a
