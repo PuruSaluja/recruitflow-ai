@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 
 from app import __version__
 from app.api.body_limit import BodySizeLimit, RequestTooLarge, too_large_response
+from app.api.server_errors import UnexpectedErrors, internal_error_response
 from app.api.v1 import api_router
 from app.config import Settings, get_settings
 from app.db.session import get_db, make_session_factory
@@ -65,9 +66,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url="/openapi.json",
     )
 
-    # Added before CORS, which makes it the inner of the two, so a refused body
-    # still gets CORS headers and a browser client can read the 413.
+    # Both added before CORS, which makes them inner to it, so a refused body
+    # and an unexpected error still get CORS headers: a browser client can read
+    # the 413 and the 500.
     app.add_middleware(BodySizeLimit)
+    app.add_middleware(UnexpectedErrors)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
@@ -198,16 +201,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def _handle_db_fault(request: Request, exc: SQLAlchemyError) -> JSONResponse:
         """Answer any other database error as the server's own fault: a 500.
 
-        Handled here rather than left to Starlette's default 500, which is
-        sent from outside the CORS middleware: that answer is plain text and
-        carries no CORS headers, so a browser client could not read it and
-        would report a network error instead.
+        ``UnexpectedErrors`` would send the same 500; handling it here keeps
+        it logged as a database error, under this module.
         """
         logger.error("unexpected database error on %s", request.url.path, exc_info=exc)
-        return JSONResponse(
-            status_code=500,
-            content={"detail": "Internal server error", "code": "internal_error"},
-        )
+        return internal_error_response()
 
     return app
 
