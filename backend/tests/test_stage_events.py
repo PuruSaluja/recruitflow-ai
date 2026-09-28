@@ -220,6 +220,52 @@ def test_inner_whitespace_in_changed_by_is_collapsed(
     assert _events(client, application["id"])[-1]["changed_by"] == "Dana Q. Rivera"
 
 
+# --- changed_by is capped at the column length -------------------------------
+
+
+@pytest.mark.parametrize(("length", "expected"), [(120, 201), (121, 422)])
+def test_changed_by_on_create_is_capped_at_the_column_length(
+    client: TestClient, job: dict[str, Any], candidate: dict[str, Any], length: int, expected: int
+) -> None:
+    response = client.post(
+        "/applications",
+        json={"job_id": job["id"], "candidate_id": candidate["id"], "changed_by": "x" * length},
+    )
+
+    assert response.status_code == expected, response.text
+    if expected == 201:
+        assert _events(client, response.json()["id"])[0]["changed_by"] == "x" * length
+    else:
+        # The column would refuse it too, but only as a generic invalid_value.
+        assert response.json()["detail"][0]["loc"] == ["body", "changed_by"]
+        assert client.get("/applications").json()["total"] == 0
+
+
+@pytest.mark.parametrize(("length", "expected"), [(120, 200), (121, 422)])
+def test_changed_by_on_a_patch_is_capped_at_the_column_length(
+    client: TestClient,
+    job: dict[str, Any],
+    candidate: dict[str, Any],
+    make_application: Factory,
+    length: int,
+    expected: int,
+) -> None:
+    application = make_application(job_id=job["id"], candidate_id=candidate["id"])
+
+    response = client.patch(
+        f"/applications/{application['id']}",
+        json={"status": "screening", "changed_by": "x" * length},
+    )
+
+    assert response.status_code == expected, response.text
+    events = _events(client, application["id"])
+    if expected == 200:
+        assert events[-1]["changed_by"] == "x" * length
+    else:
+        assert response.json()["detail"][0]["loc"] == ["body", "changed_by"]
+        assert [event["to_status"] for event in events] == ["applied"]
+
+
 # --- lifecycle and errors ----------------------------------------------------
 
 
