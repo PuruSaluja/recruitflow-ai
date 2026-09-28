@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
 
 import pytest
 from fastapi import Depends, FastAPI
+from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.exc import (
@@ -226,3 +228,66 @@ def test_a_real_statement_timeout_is_a_503(caplog: pytest.LogCaptureFixture) -> 
     logged = [record.exc_info[1] for record in caplog.records if record.exc_info]
     assert len(logged) == 1
     assert "canceling statement due to statement timeout" in str(logged[0])
+
+
+# --- any other unexpected error ---------------------------------------------
+# Was: an exception no handler claimed (a plain RuntimeError, say) was answered
+# by Starlette's ServerErrorMiddleware, which sits outside CORS, so the 500 was
+# plain text with no CORS headers and a browser client reported a network error
+# it could not tell from the server being down.
+
+
+@pytest.mark.unexpected_error
+def test_an_unexpected_error_is_a_json_500_a_browser_can_read() -> None:
+    """``raise_server_exceptions=False`` so the old answer shows rather than raising."""
+    app = _app_raising(RuntimeError("not a database error"))
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.get("/boom", headers={"Origin": ORIGIN})
+
+    assert response.status_code == 500
+    assert response.json() == INTERNAL_ERROR
+    assert response.headers.get("access-control-allow-origin") == ORIGIN
+
+
+@pytest.mark.unexpected_error
+def test_the_unexpected_error_is_answered_not_raised_on() -> None:
+    """Answered inside the app: the test client re-raises only what escapes it."""
+    with TestClient(_app_raising(KeyError("no such key"))) as client:
+        response = client.get("/boom", headers={"Origin": ORIGIN})
+
+    assert response.status_code == 500
+    assert response.json() == INTERNAL_ERROR
+
+
+@pytest.mark.unexpected_error
+def test_the_unexpected_error_is_logged_once_with_its_traceback(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Nothing further out sees an answered error, so the middleware has to log it."""
+    error = RuntimeError("not a database error")
+    with (
+        caplog.at_level(logging.ERROR),
+        TestClient(_app_raising(error), raise_server_exceptions=False) as client,
+    ):
+        client.get("/boom")
+
+    errors = [record for record in caplog.records if record.levelno >= logging.ERROR]
+    assert len(errors) == 1
+    assert errors[0].exc_info is not None
+    assert errors[0].exc_info[1] is error
+    assert "/boom" in errors[0].getMessage()
+
+
+def test_an_error_after_the_answer_has_started_is_not_answered_twice() -> None:
+    """Once the status line is out a 500 cannot replace it: the error goes on to the server."""
+    settings = _unreachable_settings().model_copy(update={"cors_origins": ORIGIN})
+    app = create_app(settings)
+
+    def chunks() -> Iterator[bytes]:
+        yield b"first chunk"
+        raise RuntimeError("failed mid-stream")
+
+    app.add_api_route("/stream", lambda: StreamingResponse(chunks()))
+
+    with TestClient(app) as client, pytest.raises(RuntimeError, match="mid-stream"):
+        client.get("/stream")
