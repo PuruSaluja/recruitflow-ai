@@ -1,12 +1,11 @@
 """Database wiring: declarative base, engine, and session helpers."""
 
 from app.db.base import Base, TimestampMixin
-from app.db.session import configure_engine, get_db, get_engine, get_session_factory
+from app.db.session import get_db, get_engine, get_session_factory
 
 __all__ = [
     "Base",
     "TimestampMixin",
-    "configure_engine",
     "get_db",
     "get_engine",
     "get_session_factory",

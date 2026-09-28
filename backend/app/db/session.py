@@ -61,23 +61,13 @@ def get_session_factory() -> sessionmaker[Session]:
 def make_session_factory(database_url: str) -> sessionmaker[Session]:
     """Build an independent session factory bound to ``database_url``.
 
-    Unlike :func:`configure_engine` this touches no module-level state, so an
-    app instance can be bound to its own database without affecting anything
-    else in the process.
+    Unlike :func:`get_session_factory` this touches no module-level state, so
+    an app instance can be bound to its own database without affecting
+    anything else in the process.
     """
     return sessionmaker(
         bind=_build_engine(database_url), autoflush=False, expire_on_commit=False
     )
-
-
-def configure_engine(database_url: str) -> Engine:
-    """Rebind the engine to ``database_url``. Used by the test fixtures."""
-    global _engine, _session_factory
-    if _engine is not None:
-        _engine.dispose()
-    _engine = _build_engine(database_url)
-    _session_factory = sessionmaker(bind=_engine, autoflush=False, expire_on_commit=False)
-    return _engine
 
 
 def get_db() -> Iterator[Session]:
