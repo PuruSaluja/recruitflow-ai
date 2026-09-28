@@ -21,11 +21,15 @@ from app.services.resume import MAX_UPLOAD_BYTES
 MAX_REQUEST_BYTES = MAX_UPLOAD_BYTES + 64 * 1024
 
 
-class RequestTooLarge(HTTPException):
+class RequestTooLarge(HTTPException, OSError):
     """A body sent without a declared length grew past the cap as it was read.
 
     An ``HTTPException``, so FastAPI passes it on as the error it is instead of
-    reporting a body it failed to parse.
+    reporting a body it failed to parse. Also an ``OSError``, the one error
+    besides its own that Starlette's multipart parser cleans up after: it
+    closes the temp file holding the part of an upload read so far, then
+    re-raises. Otherwise that file, on disk once past 1 MB, is left for the
+    garbage collector to close.
     """
 
     def __init__(self) -> None:
