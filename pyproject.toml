@@ -47,6 +47,7 @@ pythonpath = ["backend"]
 addopts = "-q"
 markers = [
     "slow: benchmarks and full training runs",
+    "unexpected_error: the test makes the app answer an unexpected error on purpose",
 ]
 
 [tool.ruff]

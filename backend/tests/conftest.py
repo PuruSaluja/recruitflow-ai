@@ -17,6 +17,7 @@ request these fixtures and run without PostgreSQL.
 from __future__ import annotations
 
 import itertools
+import logging
 import os
 from collections.abc import Callable, Iterator
 from typing import Any
@@ -170,3 +171,36 @@ def make_candidate(client: TestClient) -> Callable[..., dict[str, Any]]:
         return response.json()
 
     return _make
+
+
+class _Collect(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__()
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+
+
+@pytest.fixture(autouse=True)
+def _unexpected_errors_fail_the_test(request: pytest.FixtureRequest) -> Iterator[None]:
+    """Fail any test during which the app answered an unexpected error.
+
+    ``UnexpectedErrors`` answers an exception no handler claimed with a 500, so
+    the test client no longer raises it, and a test that never checks the status
+    code would pass. Tests that raise one on purpose are marked
+    ``unexpected_error``.
+    """
+    collected = _Collect()
+    logger = logging.getLogger("app.api.server_errors")
+    logger.addHandler(collected)
+    try:
+        yield
+    finally:
+        logger.removeHandler(collected)
+    if collected.records and request.node.get_closest_marker("unexpected_error") is None:
+        first = collected.records[0]
+        pytest.fail(
+            f"the app answered {len(collected.records)} unexpected error(s) with a 500, "
+            f"first: {first.getMessage()}: {first.exc_info[1] if first.exc_info else ''!r}"
+        )

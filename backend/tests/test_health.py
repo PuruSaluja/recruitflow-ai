@@ -165,7 +165,7 @@ def test_an_error_meaning_the_database_cannot_serve_is_a_503(error: Exception) -
 
 @pytest.mark.parametrize("error", FAULTS, ids=_name)
 def test_any_other_database_error_is_a_500_not_an_outage(error: Exception) -> None:
-    """Answered by the app's own handler: the test client would raise one that escaped."""
+    """Answered by the app's own handler: one that escaped would fail the test (conftest)."""
     with TestClient(_app_raising(error)) as client:
         response = client.get("/boom")
 
