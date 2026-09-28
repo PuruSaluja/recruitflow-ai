@@ -657,10 +657,20 @@ GONE = "{} {{{}}} not found"
 CHANGED = "{} {{{}}} was changed by someone else while this request was in flight"
 GONE_AFTER = "{} {{{}}} not found: another request deleted it just after this change was saved"
 
+#: When the other request deletes the application first, its stage events go
+#: with it (their foreign key cascades), so the endpoint's own DELETE of them
+#: matches no row. SQLAlchemy warns about that before the versioned application
+#: row raises the StaleDataError these cases are about: the warning is the race.
+EVENTS_ALREADY_GONE = pytest.mark.filterwarnings(
+    "ignore:DELETE statement on table 'application_stage_events' expected to delete"
+    ":sqlalchemy.exc.SAWarning"
+)
+
 # fmt: off
 LOST_RACES = [
     pytest.param("delete", "/applications/{application}", None, BEFORE, _delete_application,
-                 404, GONE.format("Application", "application"), id="delete-application-deleted"),
+                 404, GONE.format("Application", "application"), id="delete-application-deleted",
+                 marks=EVENTS_ALREADY_GONE),
     pytest.param("delete", "/applications/{application}", None, BEFORE, _edit_application,
                  409, CHANGED.format("Application", "application"), id="delete-application-edited"),
     pytest.param("patch", "/applications/{application}", {"notes": "n"}, BEFORE,
@@ -689,7 +699,7 @@ LOST_RACES = [
                  id="patch-candidate-deleted-after"),
     pytest.param("delete", "/candidates/{candidate}", None, BEFORE, _delete_application,
                  409, CHANGED.format("Candidate", "candidate"),
-                 id="delete-candidate-application-gone"),
+                 id="delete-candidate-application-gone", marks=EVENTS_ALREADY_GONE),
 ]
 # fmt: on
 
