@@ -500,6 +500,9 @@ def test_changed_by_on_a_reopen_is_capped_at_the_column_length(
     )
 
     assert response.status_code == expected, response.text
+    if expected == 422:
+        # The column would refuse it too, but only as a generic invalid_value.
+        assert response.json()["detail"][0]["loc"] == ["body", "changed_by"]
 
 
 def test_a_reopen_that_lost_a_race_is_refused_and_leaves_no_event(
