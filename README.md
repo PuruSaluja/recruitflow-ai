@@ -21,7 +21,7 @@ descriptions.
 | ML       | scikit-learn (TF-IDF + engineered features) |
 | Reports  | ReportLab |
 | Frontend | React 18, Vite, TypeScript |
-| Tests    | pytest, httpx |
+| Tests    | pytest, httpx2 |
 
 ## Data model
 
