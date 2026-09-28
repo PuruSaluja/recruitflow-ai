@@ -21,9 +21,7 @@ class Candidate(Base, TimestampMixin):
     """A person in the talent pool, with the resume text used for matching."""
 
     __tablename__ = "candidates"
-    __table_args__ = (
-        CheckConstraint("years_experience >= 0", name="ck_candidates_years_nonneg"),
-    )
+    __table_args__ = (CheckConstraint("years_experience >= 0", name="ck_candidates_years_nonneg"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     full_name: Mapped[str] = mapped_column(String(200), nullable=False)

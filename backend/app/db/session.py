@@ -52,9 +52,7 @@ def get_session_factory() -> sessionmaker[Session]:
     """Return the process-wide session factory."""
     global _session_factory
     if _session_factory is None:
-        _session_factory = sessionmaker(
-            bind=get_engine(), autoflush=False, expire_on_commit=False
-        )
+        _session_factory = sessionmaker(bind=get_engine(), autoflush=False, expire_on_commit=False)
     return _session_factory
 
 
@@ -65,9 +63,7 @@ def make_session_factory(database_url: str) -> sessionmaker[Session]:
     an app instance can be bound to its own database without affecting
     anything else in the process.
     """
-    return sessionmaker(
-        bind=_build_engine(database_url), autoflush=False, expire_on_commit=False
-    )
+    return sessionmaker(bind=_build_engine(database_url), autoflush=False, expire_on_commit=False)
 
 
 def get_db() -> Iterator[Session]:
