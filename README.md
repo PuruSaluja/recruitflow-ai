@@ -181,6 +181,12 @@ cancelled statement, or no pooled connection free. Any other database error is
 a fault in the server's own code and is a **500** with
 `code: "internal_error"`.
 
+So is any other error no handler claims. It is answered from inside the CORS
+middleware, so a browser client can read the 500 rather than seeing a network
+error it cannot tell from the server being down, and the error is logged with
+its traceback. An error raised once a streamed answer has started cannot be
+replaced by a 500; that answer is cut short.
+
 ## Hiring pipeline
 
 An application moves `applied` → `screening` → `interview` → `offer` → `hired`.
