@@ -16,10 +16,12 @@ from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from decimal import Decimal
+from tempfile import SpooledTemporaryFile
 from typing import Any
 
 import numpy as np
 import pytest
+import starlette.formparsers
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
@@ -1727,6 +1729,32 @@ def test_a_body_sent_without_a_length_is_cut_off_once_past_the_cap(app: FastAPI)
     assert MAX_REQUEST_BYTES < read <= MAX_REQUEST_BYTES + CHUNK
     assert json.loads(answer["body"]) == TOO_LARGE
     assert answer["headers"][b"connection"] == b"close"
+
+
+def test_a_cut_off_upload_has_its_temp_file_closed_by_the_413(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Starlette spools the upload to a temp file, and the cut-off must close it.
+
+    The list keeps every file alive, so the garbage collector cannot close it
+    later: only an explicit close counts.
+    """
+    spooled: list[SpooledTemporaryFile[bytes]] = []
+
+    class Recorded(SpooledTemporaryFile):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            spooled.append(self)
+
+    monkeypatch.setattr(starlette.formparsers, "SpooledTemporaryFile", Recorded)
+    headers = {"content-type": MULTIPART, "transfer-encoding": "chunked"}
+
+    status, _, _ = _through_asgi(app, _preview_path(), headers, _upload_chunks(12 * 1024 * 1024))
+
+    assert status == 413
+    assert len(spooled) == 1
+    assert spooled[0]._rolled  # past Starlette's 1 MB spool, so a file on disk
+    assert spooled[0].closed
 
 
 @pytest.mark.parametrize("declared", [True, False], ids=["declared", "chunked"])
