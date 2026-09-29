@@ -155,10 +155,15 @@ value only the database can refuse, such as the NUL character, is a 422 with
 
 A request body holds at most 2,162,688 bytes: the 2 MB resume upload limit
 plus 64 KiB for the multipart framing around the file. A larger one is a
-**413** with `code: "request_too_large"`, sent before any of the body is read
-when the request declares its length, and as soon as the limit is passed when
-it does not; the connection is then closed. A client sending
-`Expect: 100-continue`, as curl does for large uploads, sends none of the file.
+**413** with `code: "request_too_large"`, decided before the app sees any of
+the body when the request declares its length, and as soon as the limit is
+passed when it does not; the connection is then closed. Before the 413 goes
+out, the rest of the body is read and thrown away, up to 16 MiB in all: a
+server that closes a connection while the client is still sending resets it,
+and the client never sees the answer. Past 16 MiB the rest is left unread, so
+a much larger upload can still end in a reset. A client sending
+`Expect: 100-continue`, as curl does for large uploads, is answered at once
+and sends none of the file.
 
 A write that loses a race to another request says what happened: **404** if
 the other request deleted the row, whether just before this one committed or
