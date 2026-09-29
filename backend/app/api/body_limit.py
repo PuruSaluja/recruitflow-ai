@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import HTTPException
 from fastapi import status as http_status
 from fastapi.responses import JSONResponse
+from starlette.requests import ClientDisconnect
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.services.resume import MAX_UPLOAD_BYTES
@@ -45,6 +46,17 @@ class RequestTooLarge(HTTPException, OSError):
         super().__init__(status_code=http_status.HTTP_413_CONTENT_TOO_LARGE)
 
 
+class ClientLeft(ClientDisconnect, OSError):
+    """The client disconnected partway through a multipart body.
+
+    Starlette raises ``ClientDisconnect`` itself when it reads the disconnect,
+    but its multipart parser only cleans up after an ``OSError`` (see
+    :class:`RequestTooLarge`), so the temp file holding the upload read so far
+    was left to the garbage collector. Raised in its place, this closes the
+    file, and is still a ``ClientDisconnect`` to anything that catches one.
+    """
+
+
 def too_large_response() -> JSONResponse:
     """The 413, closing the connection since the rest of the body goes unread."""
     return JSONResponse(
@@ -62,6 +74,13 @@ def _declared_length(scope: Scope) -> int | None:
         if name == b"content-length":
             return int(value) if value.isdigit() else None
     return None
+
+
+def _is_multipart(scope: Scope) -> bool:
+    return any(
+        name == b"content-type" and value.lower().startswith(b"multipart/")
+        for name, value in scope["headers"]
+    )
 
 
 def _expects_continue(scope: Scope) -> bool:
@@ -92,6 +111,10 @@ class BodySizeLimit:
     ``max_drain`` bytes in all, so the client can read the 413 (see
     :data:`MAX_DRAIN_BYTES`); a client waiting for ``100 Continue`` has sent
     nothing, and reading would ask it to, so it is answered at once.
+
+    A client that leaves partway through a multipart body gets ``ClientLeft``
+    raised in place of the disconnect, so the upload's temp file is closed.
+    Any other disconnect reaches the app as the usual message.
     """
 
     def __init__(
@@ -114,11 +137,17 @@ class BodySizeLimit:
             return
 
         received = 0
+        multipart = _is_multipart(scope)
+        body_ended = False
 
         async def counted_receive() -> Message:
-            nonlocal received
+            nonlocal received, body_ended
             message = await receive()
-            # Only "http.request" messages carry a body; a disconnect adds 0.
+            if message["type"] == "http.disconnect":
+                if multipart and not body_ended:
+                    raise ClientLeft()
+                return message
+            body_ended = not message.get("more_body", False)
             received += len(message.get("body", b""))
             if received > self.max_bytes:
                 if message.get("more_body", False):
