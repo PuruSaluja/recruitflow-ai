@@ -46,7 +46,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
 
 import app.models  # noqa: F401  (registers every table on Base.metadata)
-from app.api.body_limit import MAX_DRAIN_BYTES, MAX_REQUEST_BYTES
+from app.api.body_limit import MAX_DRAIN_BYTES, MAX_REQUEST_BYTES, BodySizeLimit, ClientLeft
 from app.api.deps import WRITE_LOCK, refresh_row
 from app.api.v1 import applications as applications_api
 from app.api.v1 import matches as matches_api
@@ -1812,22 +1812,27 @@ def test_a_body_sent_without_a_length_is_left_unread_past_the_drain_bound(app: F
     assert json.loads(answer["body"]) == TOO_LARGE
 
 
-def test_a_cut_off_upload_has_its_temp_file_closed_by_the_413(
-    app: FastAPI, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Starlette spools the upload to a temp file, and the cut-off must close it.
+@pytest.fixture
+def spooled(monkeypatch: pytest.MonkeyPatch) -> list[SpooledTemporaryFile[bytes]]:
+    """Every temp file Starlette spools an upload to, kept alive.
 
-    The list keeps every file alive, so the garbage collector cannot close it
-    later: only an explicit close counts.
+    Held here, a file cannot be closed later by the garbage collector: only an
+    explicit close counts.
     """
-    spooled: list[SpooledTemporaryFile[bytes]] = []
+    files: list[SpooledTemporaryFile[bytes]] = []
 
     class Recorded(SpooledTemporaryFile):
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             super().__init__(*args, **kwargs)
-            spooled.append(self)
+            files.append(self)
 
     monkeypatch.setattr(starlette.formparsers, "SpooledTemporaryFile", Recorded)
+    return files
+
+
+def test_a_cut_off_upload_has_its_temp_file_closed_by_the_413(
+    app: FastAPI, spooled: list[SpooledTemporaryFile[bytes]]
+) -> None:
     headers = {"content-type": MULTIPART, "transfer-encoding": "chunked"}
 
     status, _, _ = _through_asgi(app, _preview_path(), headers, _upload_chunks(12 * 1024 * 1024))
@@ -1836,6 +1841,64 @@ def test_a_cut_off_upload_has_its_temp_file_closed_by_the_413(
     assert len(spooled) == 1
     assert spooled[0]._rolled  # past Starlette's 1 MB spool, so a file on disk
     assert spooled[0].closed
+
+
+@pytest.mark.parametrize("declared", [True, False], ids=["declared", "chunked"])
+def test_an_upload_the_client_abandons_has_its_temp_file_closed(
+    app: FastAPI, spooled: list[SpooledTemporaryFile[bytes]], declared: bool
+) -> None:
+    body = list(itertools.islice(_upload_chunks(1_800_000), 25))  # 1.5 MB of 1.8, then gone
+    headers = {"content-type": MULTIPART}
+    if declared:
+        headers["content-length"] = "1800000"
+    else:
+        headers["transfer-encoding"] = "chunked"
+
+    status, _, _ = _through_asgi(app, _preview_path(), headers, iter(body), client_leaves=True)
+
+    assert status == 400  # what a body that could not be read gets; the client is gone anyway
+    assert len(spooled) == 1
+    assert spooled[0]._rolled
+    assert spooled[0].closed
+
+
+@pytest.mark.parametrize(
+    ("content_type", "body_ended", "outcome"),
+    [
+        ("application/json", False, "message"),
+        (MULTIPART, True, "message"),
+        (MULTIPART, False, "ClientLeft"),
+    ],
+    ids=["json-cut-short", "multipart-complete", "multipart-cut-short"],
+)
+def test_a_disconnect_is_raised_only_to_cut_a_multipart_body_short(
+    content_type: str, body_ended: bool, outcome: str
+) -> None:
+    """Anything else reading ``receive``, such as a streaming response, gets the message."""
+    messages = [
+        {"type": "http.request", "body": b"x", "more_body": not body_ended},
+        {"type": "http.disconnect"},
+    ]
+    seen: list[str] = []
+
+    async def listener(scope: dict[str, Any], receive: Any, send: Any) -> None:
+        try:
+            while (await receive())["type"] != "http.disconnect":
+                pass
+            seen.append("message")
+        except ClientLeft:
+            seen.append("ClientLeft")
+
+    async def receive() -> dict[str, Any]:
+        return messages.pop(0)
+
+    async def send(message: dict[str, Any]) -> None:
+        raise AssertionError(f"nothing should be sent: {message}")
+
+    scope = {"type": "http", "headers": [(b"content-type", content_type.encode())]}
+    asyncio.run(BodySizeLimit(listener)(scope, receive, send))
+
+    assert seen == [outcome]
 
 
 @pytest.mark.parametrize("declared", [True, False], ids=["declared", "chunked"])
