@@ -20,6 +20,15 @@ from app.services.resume import MAX_UPLOAD_BYTES
 #: whitespace.)
 MAX_REQUEST_BYTES = MAX_UPLOAD_BYTES + 64 * 1024
 
+#: How much of a refused body is read and thrown away before the 413 is sent.
+#: The 413 goes out while the client is still sending, and closing a socket
+#: with unread data resets the connection, which discards the answer on the
+#: client's side: on 2026-09-28, 12 of 12 over-cap uploads to a live server
+#: read no answer at all. Reading the rest first lets the answer through, at
+#: the cost of receiving bytes nobody uses. Past this bound the rest is left
+#: unread, so a much larger upload can still end in a reset.
+MAX_DRAIN_BYTES = 16 * 1024 * 1024
+
 
 class RequestTooLarge(HTTPException, OSError):
     """A body sent without a declared length grew past the cap as it was read.
@@ -55,17 +64,42 @@ def _declared_length(scope: Scope) -> int | None:
     return None
 
 
+def _expects_continue(scope: Scope) -> bool:
+    """Whether the client holds its body back until the server says to send it."""
+    return any(
+        name == b"expect" and value.lower() == b"100-continue" for name, value in scope["headers"]
+    )
+
+
+async def _drain(receive: Receive, budget: int) -> None:
+    """Read and discard the rest of a body, stopping once past ``budget`` bytes."""
+    drained = 0
+    while drained <= budget:
+        message = await receive()
+        drained += len(message.get("body", b""))
+        # The body's last part, or a disconnect: neither says more is coming.
+        if not message.get("more_body", False):
+            return
+
+
 class BodySizeLimit:
     """ASGI middleware answering 413 to any request body over ``max_bytes``.
 
-    A declared ``Content-Length`` over the cap is refused before a byte of the
-    body is read. A body sent without one (chunked) is counted as it arrives,
-    and reading it stops with ``RequestTooLarge`` once it passes the cap.
+    A declared ``Content-Length`` over the cap is refused before the app sees a
+    byte of the body. A body sent without one (chunked) is counted as it
+    arrives, and reading it stops with ``RequestTooLarge`` once it passes the
+    cap. Either way the rest of the body is read and thrown away first, up to
+    ``max_drain`` bytes in all, so the client can read the 413 (see
+    :data:`MAX_DRAIN_BYTES`); a client waiting for ``100 Continue`` has sent
+    nothing, and reading would ask it to, so it is answered at once.
     """
 
-    def __init__(self, app: ASGIApp, max_bytes: int = MAX_REQUEST_BYTES) -> None:
+    def __init__(
+        self, app: ASGIApp, max_bytes: int = MAX_REQUEST_BYTES, max_drain: int = MAX_DRAIN_BYTES
+    ) -> None:
         self.app = app
         self.max_bytes = max_bytes
+        self.max_drain = max_drain
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -74,6 +108,8 @@ class BodySizeLimit:
 
         declared = _declared_length(scope)
         if declared is not None and declared > self.max_bytes:
+            if declared <= self.max_drain and not _expects_continue(scope):
+                await _drain(receive, self.max_drain)
             await too_large_response()(scope, receive, send)
             return
 
@@ -85,6 +121,8 @@ class BodySizeLimit:
             # Only "http.request" messages carry a body; a disconnect adds 0.
             received += len(message.get("body", b""))
             if received > self.max_bytes:
+                if message.get("more_body", False):
+                    await _drain(receive, self.max_drain - received)
                 raise RequestTooLarge()
             return message
 

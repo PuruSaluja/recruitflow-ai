@@ -1716,27 +1716,27 @@ def _preview_path() -> str:
     return f"{get_settings().api_prefix}/candidates/resume-preview"
 
 
-def test_a_body_declared_over_the_cap_is_refused_before_it_is_read(app: FastAPI) -> None:
-    headers = {"content-type": MULTIPART, "content-length": str(MAX_REQUEST_BYTES + 1)}
+def test_a_body_declared_over_the_cap_is_refused_and_the_rest_read_off(app: FastAPI) -> None:
+    """The app never sees it, but it is read and discarded so the 413 gets through."""
+    body = list(_upload_chunks(MAX_REQUEST_BYTES))
+    headers = {"content-type": MULTIPART, "content-length": str(sum(map(len, body)))}
 
-    status, read, answer = _through_asgi(
-        app, _preview_path(), headers, _upload_chunks(MAX_REQUEST_BYTES)
-    )
+    status, read, answer = _through_asgi(app, _preview_path(), headers, iter(body))
 
-    assert (status, read) == (413, 0)
+    assert (status, read) == (413, sum(map(len, body)))
     assert json.loads(answer["body"]) == TOO_LARGE
     assert answer["headers"][b"connection"] == b"close"
 
 
 def test_a_body_sent_without_a_length_is_cut_off_once_past_the_cap(app: FastAPI) -> None:
+    body = list(_upload_chunks(12 * 1024 * 1024))
     headers = {"content-type": MULTIPART, "transfer-encoding": "chunked"}
 
-    status, read, answer = _through_asgi(
-        app, _preview_path(), headers, _upload_chunks(12 * 1024 * 1024)
-    )
+    status, read, answer = _through_asgi(app, _preview_path(), headers, iter(body))
 
     assert status == 413
-    assert MAX_REQUEST_BYTES < read <= MAX_REQUEST_BYTES + CHUNK
+    # The app stops at the cap; the rest, well inside the drain bound, is read off.
+    assert read == sum(map(len, body))
     assert json.loads(answer["body"]) == TOO_LARGE
     assert answer["headers"][b"connection"] == b"close"
 
