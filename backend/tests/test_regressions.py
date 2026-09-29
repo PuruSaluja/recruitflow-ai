@@ -9,6 +9,7 @@ stays readable in one place.
 from __future__ import annotations
 
 import asyncio
+import itertools
 import json
 import threading
 import time
@@ -45,7 +46,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
 
 import app.models  # noqa: F401  (registers every table on Base.metadata)
-from app.api.body_limit import MAX_REQUEST_BYTES
+from app.api.body_limit import MAX_DRAIN_BYTES, MAX_REQUEST_BYTES
 from app.api.deps import WRITE_LOCK, refresh_row
 from app.api.v1 import applications as applications_api
 from app.api.v1 import matches as matches_api
@@ -1673,15 +1674,29 @@ def _upload_chunks(file_bytes: int) -> Iterator[bytes]:
 
 
 def _through_asgi(
-    app: FastAPI, path: str, headers: dict[str, str], body: Iterator[bytes]
+    app: FastAPI,
+    path: str,
+    headers: dict[str, str],
+    body: Iterator[bytes],
+    *,
+    client_leaves: bool = False,
 ) -> tuple[int, int, dict[str, Any]]:
-    """POST ``body`` straight through the ASGI app; return its status, bytes read and answer."""
+    """POST ``body`` straight through the ASGI app; return its status, bytes read and answer.
+
+    With ``client_leaves`` the client disconnects after ``body`` instead of
+    ending it, and reading on regardless fails rather than spinning forever.
+    """
     read = 0
+    disconnects = 0
     answer: dict[str, Any] = {"status": None, "headers": {}, "body": b""}
 
     async def receive() -> dict[str, Any]:
-        nonlocal read
+        nonlocal read, disconnects
         chunk = next(body, None)
+        if chunk is None and client_leaves:
+            disconnects += 1
+            assert disconnects < 100, "kept reading after the client left"
+            return {"type": "http.disconnect"}
         if chunk is None:
             return {"type": "http.request", "body": b"", "more_body": False}
         read += len(chunk)
@@ -1728,6 +1743,34 @@ def test_a_body_declared_over_the_cap_is_refused_and_the_rest_read_off(app: Fast
     assert answer["headers"][b"connection"] == b"close"
 
 
+def test_a_body_declared_past_the_drain_bound_is_refused_unread(app: FastAPI) -> None:
+    headers = {"content-type": MULTIPART, "content-length": str(MAX_DRAIN_BYTES + 1)}
+
+    status, read, answer = _through_asgi(
+        app, _preview_path(), headers, _upload_chunks(MAX_DRAIN_BYTES)
+    )
+
+    assert (status, read) == (413, 0)
+    assert json.loads(answer["body"]) == TOO_LARGE
+
+
+def test_a_client_waiting_for_100_continue_is_refused_without_being_asked_to_send(
+    app: FastAPI,
+) -> None:
+    headers = {
+        "content-type": MULTIPART,
+        "content-length": str(MAX_REQUEST_BYTES + 1),
+        "expect": "100-continue",
+    }
+
+    status, read, answer = _through_asgi(
+        app, _preview_path(), headers, _upload_chunks(MAX_REQUEST_BYTES)
+    )
+
+    assert (status, read) == (413, 0)
+    assert json.loads(answer["body"]) == TOO_LARGE
+
+
 def test_a_body_sent_without_a_length_is_cut_off_once_past_the_cap(app: FastAPI) -> None:
     body = list(_upload_chunks(12 * 1024 * 1024))
     headers = {"content-type": MULTIPART, "transfer-encoding": "chunked"}
@@ -1739,6 +1782,34 @@ def test_a_body_sent_without_a_length_is_cut_off_once_past_the_cap(app: FastAPI)
     assert read == sum(map(len, body))
     assert json.loads(answer["body"]) == TOO_LARGE
     assert answer["headers"][b"connection"] == b"close"
+
+
+@pytest.mark.parametrize("declared", [True, False], ids=["declared", "chunked"])
+def test_a_client_that_leaves_while_the_rest_is_read_off_is_not_waited_for(
+    app: FastAPI, declared: bool
+) -> None:
+    body = list(itertools.islice(_upload_chunks(12 * 1024 * 1024), 40))  # 2.5 MB, then gone
+    headers = {"content-type": MULTIPART}
+    if declared:
+        headers["content-length"] = str(12 * 1024 * 1024)
+    else:
+        headers["transfer-encoding"] = "chunked"
+
+    status, read, _ = _through_asgi(app, _preview_path(), headers, iter(body), client_leaves=True)
+
+    assert (status, read) == (413, sum(map(len, body)))
+
+
+def test_a_body_sent_without_a_length_is_left_unread_past_the_drain_bound(app: FastAPI) -> None:
+    headers = {"content-type": MULTIPART, "transfer-encoding": "chunked"}
+
+    status, read, answer = _through_asgi(
+        app, _preview_path(), headers, _upload_chunks(MAX_DRAIN_BYTES + 4 * 1024 * 1024)
+    )
+
+    assert status == 413
+    assert MAX_DRAIN_BYTES < read <= MAX_DRAIN_BYTES + CHUNK
+    assert json.loads(answer["body"]) == TOO_LARGE
 
 
 def test_a_cut_off_upload_has_its_temp_file_closed_by_the_413(
