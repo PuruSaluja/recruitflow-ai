@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -52,6 +54,14 @@ class Settings(BaseSettings):
 
     model_path: str = "backend/app/ml/artifacts/matcher.joblib"
     random_seed: int = 42
+
+    #: The lowest level of the app's own log records that reach stderr.
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+
+    @field_validator("log_level", mode="before")
+    @classmethod
+    def _upper_case_level(cls, value: object) -> object:
+        return value.upper() if isinstance(value, str) else value
 
     @property
     def cors_origin_list(self) -> list[str]:

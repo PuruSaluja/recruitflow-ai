@@ -27,6 +27,7 @@ from app.api.server_errors import UnexpectedErrors, internal_error_response
 from app.api.v1 import api_router
 from app.config import Settings, get_settings
 from app.db.session import get_db, make_session_factory
+from app.logging_setup import configure_logging
 from app.ml.artifact import REGENERATE_COMMAND, MatcherUnavailable
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     """
     explicit_settings = settings is not None
     settings = settings or get_settings()
+    configure_logging(settings.log_level)
 
     app = FastAPI(
         title="RecruitFlow AI",
