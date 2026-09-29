@@ -60,6 +60,10 @@ uvicorn app.main:app --reload --app-dir backend
 
 Interactive docs are then at `http://localhost:8000/docs`.
 
+The app's own log lines go to stderr as `time LEVEL logger: message`, from
+`RECRUITFLOW_LOG_LEVEL` up (default `INFO`); uvicorn's lines keep their own
+format.
+
 ## Tests
 
 ```bash
