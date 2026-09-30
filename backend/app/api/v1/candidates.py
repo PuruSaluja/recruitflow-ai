@@ -19,6 +19,7 @@ from app.api.deps import (
 from app.db.session import get_db
 from app.models.candidate import Candidate
 from app.models.enums import EducationLevel, SeniorityLevel
+from app.models.match import MatchScore
 from app.schemas.candidate import CandidateCreate, CandidateRead, CandidateUpdate, ResumePreview
 from app.schemas.common import MAX_ID, Page, contains_pattern
 from app.services.resume import MAX_UPLOAD_BYTES, ResumeIngestError, extract_text
@@ -216,7 +217,11 @@ def delete_candidate(
     another write to one of its applications answers.
     """
     delete_with_applications(
-        db, Candidate, candidate_id, lambda: _get_or_404(db, candidate_id, lock=WRITE_LOCK)
+        db,
+        Candidate,
+        candidate_id,
+        lambda: _get_or_404(db, candidate_id, lock=WRITE_LOCK),
+        scores_of=MatchScore.candidate_id,
     )
 
 

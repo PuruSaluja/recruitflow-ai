@@ -812,10 +812,12 @@ def test_a_delete_refused_because_the_row_changed_leaves_it_whole(
 # soaks: 5 candidate and 4 job deletes answered 409 in 1,533 requests, and the
 # server logged 104 such warnings over two soaks. Now a DELETE that lost only
 # deleted applications tries again, stage events go by their foreign key's
-# ON DELETE CASCADE instead of being loaded, and a score already gone is not
-# counted. Scores are still deleted by the ORM, before their job or candidate:
-# left to the cascade, the parent's FOR UPDATE came first and a job delete
-# deadlocked (test_a_job_delete_and_a_scoring_run_on_it_do_not_deadlock).
+# ON DELETE CASCADE instead of being loaded, and since 2026-09-30 a job's or
+# candidate's scores go first, in one statement, so a delete of the other side
+# of a pair waits for them instead of finding them gone. They still go before
+# the job or candidate itself: left to the cascade, the parent's FOR UPDATE
+# came first and a job delete deadlocked
+# (test_a_job_delete_and_a_scoring_run_on_it_do_not_deadlock).
 # NO_SAWARNING is defined with section 7.
 
 
@@ -859,12 +861,13 @@ def _left(engine: Engine, ids: dict[str, int]) -> dict[str, int]:
         return {table: conn.scalar(count) for table, count in counts.items()}
 
 
-def _statements_of(request: Callable[[], Any]) -> tuple[Any, list[str]]:
-    """Send ``request`` and return its response with every SQL statement it ran."""
-    statements: list[str] = []
+def _statements_of(request: Callable[[], Any]) -> tuple[Any, list[tuple[str, bool]]]:
+    """Send ``request``; return its response and each SQL statement it ran, with its
+    ``executemany`` flag (the ORM's DELETE by id of many rows is one executemany)."""
+    statements: list[tuple[str, bool]] = []
 
     def record(conn, cursor, statement, parameters, context, executemany) -> None:
-        statements.append(statement)
+        statements.append((statement, executemany))
 
     event.listen(Engine, "before_cursor_execute", record)
     try:
@@ -893,12 +896,12 @@ def test_a_delete_leaves_stage_events_to_the_database_cascade(
     response, statements = _statements_of(lambda: client.delete(path.format(**ids)))
 
     assert response.status_code == 204, response.text
-    assert [s for s in statements if "application_stage_events" in s] == []
+    assert [s for s, _ in statements if "application_stage_events" in s] == []
     assert _left(clean_db, ids)["stage_events"] == 0
 
 
 @pytest.mark.parametrize("parent", ["job", "candidate"])
-def test_a_delete_removes_its_scores_before_the_row_itself(
+def test_a_delete_removes_its_scores_with_one_statement_before_the_row_itself(
     client: TestClient,
     clean_db: Engine,
     make_job: Factory,
@@ -906,32 +909,46 @@ def test_a_delete_removes_its_scores_before_the_row_itself(
     make_application: Factory,
     parent: str,
 ) -> None:
-    """Children first, so the parent's FOR UPDATE comes last (see the section's notes)."""
+    """Children first, so the parent's FOR UPDATE comes last (see the section's notes).
+
+    All of the row's scores go in one plain statement: until 2026-09-30 the
+    ORM loaded them and deleted them by id, an executemany over every score.
+    Scores of the other job, or of another candidate, are left alone.
+    """
     ids = _pair_with_history(clean_db, make_job, make_candidate, make_application)
+    other_job, other_candidate = make_job()["id"], make_candidate()["id"]
+    rows = [
+        (ids["job"], ids["candidate"], "v2"),
+        (ids["job"], ids["candidate"], "v3"),
+        (ids["job"], other_candidate, "v1"),
+        (other_job, ids["candidate"], "v1"),
+    ]
+    with clean_db.begin() as setup:
+        setup.execute(
+            insert(MatchScore),
+            [
+                {"job_id": j, "candidate_id": c, "model_version": v, "score": 0.5, "features": {}}
+                for j, c, v in rows
+            ],
+        )
     table = f"{parent}s"
 
     response, statements = _statements_of(lambda: client.delete(f"/{table}/{ids[parent]}"))
 
     assert response.status_code == 204, response.text
-    deletes = [s.split()[2] for s in statements if s.startswith("DELETE FROM")]
-    assert "match_scores" in deletes
-    assert deletes.index("match_scores") < deletes.index(table)
-    assert deletes[-1] == table
-    assert _left(clean_db, ids)["match_scores"] == 0
-
-
-# fmt: off
-ALREADY_DELETED = [
-    pytest.param("job", _delete_application, id="job-application-deleted"),
-    pytest.param("candidate", _delete_application, id="candidate-application-deleted"),
-    pytest.param("job", _delete_candidate, id="job-candidate-deleted"),
-    pytest.param("candidate", _delete_job, id="candidate-job-deleted"),
-]
-# fmt: on
+    deletes = [(s.split()[2], many) for s, many in statements if s.startswith("DELETE FROM")]
+    assert [d for d in deletes if d[0] == "match_scores"] == [("match_scores", False)]
+    tables = [name for name, _ in deletes]
+    assert tables.index("match_scores") < tables.index(table)
+    assert tables[-1] == table
+    with clean_db.connect() as conn:
+        left = conn.execute(select(MatchScore.job_id, MatchScore.candidate_id)).all()
+    kept = (ids["job"], other_candidate) if parent == "candidate" else (other_job, ids["candidate"])
+    assert left == [kept]
 
 
 @NO_SAWARNING
-@pytest.mark.parametrize(("parent", "interloper"), ALREADY_DELETED)
+@pytest.mark.parametrize("parent", ["job", "candidate"])
 def test_a_delete_whose_application_another_delete_removed_first_still_deletes(
     client: TestClient,
     clean_db: Engine,
@@ -939,17 +956,15 @@ def test_a_delete_whose_application_another_delete_removed_first_still_deletes(
     make_candidate: Factory,
     make_application: Factory,
     parent: str,
-    interloper: Callable[[dict[str, int]], Any],
 ) -> None:
-    """Was a 409 "changed by someone else", and warnings about rows already gone.
+    """Was a 409 "changed by someone else", and a warning about rows already gone.
 
-    The other request deletes the application, or the other side of the pair
-    and with it the application, its stage event and the score, after this
-    DELETE has loaded the application and before it commits.
+    The other request deletes the application, and its stage event with it,
+    after this DELETE has read it and before it commits.
     """
     ids = _pair_with_history(clean_db, make_job, make_candidate, make_application)
 
-    with _interloper(clean_db, BEFORE, interloper(ids)) as fired:
+    with _interloper(clean_db, BEFORE, _delete_application(ids)) as fired:
         response = client.delete(f"/{parent}s/{ids[parent]}")
 
     assert fired == ["ran"], f"the race was not replayed: {fired}"
@@ -960,39 +975,70 @@ def test_a_delete_whose_application_another_delete_removed_first_still_deletes(
 
 
 @NO_SAWARNING
-@pytest.mark.parametrize("parent", ["job", "candidate"])
-def test_a_delete_whose_score_another_delete_removed_first_does_not_warn(
+@pytest.mark.parametrize("with_application", [True, False], ids=["with-application", "score-only"])
+@pytest.mark.parametrize("first", ["job", "candidate"])
+def test_a_job_delete_and_a_candidate_delete_of_one_pair_take_turns(
     client: TestClient,
     clean_db: Engine,
     make_job: Factory,
     make_candidate: Factory,
-    parent: str,
+    make_application: Factory,
+    first: str,
+    with_application: bool,
 ) -> None:
-    """A score and no application: most of the soak's warnings came from pairs like this.
+    """Was the 2026-09-29 soak's 409s and warnings, when the two met on a pair's rows.
 
-    With an application, its version check fails the flush before the score's
-    DELETE runs, and the retry reads the scores afresh.
+    The first DELETE removes the pair's score before anything else. The other,
+    sent just then, waits for it at its own DELETE of that score, then finds
+    the pair's application and score gone and deletes what is left. Both
+    answer 204, and neither retries: the second reads applications only after
+    the wait.
     """
-    ids = {"job": make_job()["id"], "candidate": make_candidate()["id"]}
-    with clean_db.begin() as setup:
-        setup.execute(
-            insert(MatchScore).values(
-                job_id=ids["job"],
-                candidate_id=ids["candidate"],
-                model_version="v1",
-                score=0.5,
-                features={},
+    if with_application:
+        ids = _pair_with_history(clean_db, make_job, make_candidate, make_application)
+    else:
+        ids = {"job": make_job()["id"], "candidate": make_candidate()["id"], "application": 0}
+        with clean_db.begin() as setup:
+            setup.execute(
+                insert(MatchScore).values(
+                    job_id=ids["job"],
+                    candidate_id=ids["candidate"],
+                    model_version="v1",
+                    score=0.5,
+                    features={},
+                )
             )
-        )
-    other = _delete_candidate if parent == "job" else _delete_job
+    second = "candidate" if first == "job" else "job"
+    other: dict[str, Any] = {}
+    commits: list[int] = []
 
-    with _interloper(clean_db, BEFORE, other(ids)) as fired:
-        response = client.delete(f"/{parent}s/{ids[parent]}")
+    def start_second() -> None:
+        other["response"] = pool.submit(lambda: client.delete(f"/{second}s/{ids[second]}"))
+        _until(lambda: other["response"].done() or _waiting_for_a_lock(clean_db))
+        other["waited"] = _waiting_for_a_lock(clean_db)
 
-    assert fired == ["ran"], f"the race was not replayed: {fired}"
-    assert response.status_code == 204, response.text
-    with clean_db.connect() as conn:
-        assert conn.scalar(select(func.count()).select_from(MatchScore)) == 0
+    def count(session: Session) -> None:
+        commits.append(1)
+
+    event.listen(Session, "before_commit", count)
+    try:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with _after_first_score_write(
+                start_second, prefixes=("DELETE FROM match_scores",)
+            ) as seen:
+                first_answer = client.delete(f"/{first}s/{ids[first]}")
+            second_answer = other["response"].result(timeout=30)
+    finally:
+        event.remove(Session, "before_commit", count)
+
+    assert seen, "the first delete never removed the scores"
+    assert other["waited"], "the second delete did not wait for the first"
+    assert first_answer.status_code == 204, first_answer.text
+    assert second_answer.status_code == 204, second_answer.text
+    # One commit each: the second read its applications only after the wait,
+    # so it had none to find gone and no reason to try again.
+    assert len(commits) == 2
+    assert set(_left(clean_db, ids).values()) == {0}
 
 
 @NO_SAWARNING

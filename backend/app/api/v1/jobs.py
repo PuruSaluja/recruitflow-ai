@@ -18,6 +18,7 @@ from app.api.deps import (
 from app.db.session import get_db
 from app.models.enums import EmploymentType, JobStatus, SeniorityLevel
 from app.models.job import Job
+from app.models.match import MatchScore
 from app.schemas.common import MAX_ID, Page, contains_pattern
 from app.schemas.job import JobCreate, JobRead, JobUpdate
 
@@ -165,4 +166,10 @@ def delete_job(job_id: int = Path(gt=0, le=MAX_ID), db: Session = Depends(get_db
     See :func:`app.api.deps.delete_with_applications` for what a race with
     another write to one of its applications answers.
     """
-    delete_with_applications(db, Job, job_id, lambda: _get_or_404(db, job_id, lock=WRITE_LOCK))
+    delete_with_applications(
+        db,
+        Job,
+        job_id,
+        lambda: _get_or_404(db, job_id, lock=WRITE_LOCK),
+        scores_of=MatchScore.job_id,
+    )

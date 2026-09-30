@@ -60,9 +60,11 @@ class Candidate(Base, TimestampMixin):
         JSONB(none_as_null=True), nullable=False, default=list
     )
 
-    # As on Job: both are deleted by the ORM before the candidate, so
-    # applications' versions are checked and the candidate's FOR UPDATE comes
-    # last.
+    # As on Job: both go before the candidate, scores first with one
+    # statement, then applications through the ORM with their versions
+    # checked, so the candidate's FOR UPDATE comes last. The scores' cascade
+    # stays the ORM's, not passive_deletes, for a candidate deleted any other
+    # way.
     applications: Mapped[list[Application]] = relationship(
         back_populates="candidate", cascade="all, delete-orphan"
     )

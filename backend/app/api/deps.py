@@ -8,13 +8,14 @@ from typing import Any
 
 from fastapi import HTTPException, Query
 from fastapi import status as http_status
-from sqlalchemy import Integer, any_, bindparam, select
+from sqlalchemy import Integer, any_, bindparam, delete, select
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
 
 from app.models.application import Application
+from app.models.match import MatchScore
 from app.schemas.common import MAX_OFFSET
 
 #: Row locks, as ``Session.get``'s ``with_for_update``. ``WRITE_LOCK`` is for
@@ -112,10 +113,14 @@ def _lost_race(db: Session, model: Any, row_id: int) -> HTTPException:
 DELETE_ATTEMPTS = 3
 
 
-def delete_with_applications(db: Session, model: Any, row_id: int, load: Callable[[], Any]) -> None:
+def delete_with_applications(
+    db: Session, model: Any, row_id: int, load: Callable[[], Any], scores_of: Any
+) -> None:
     """Delete a job or candidate, and the applications it takes with it.
 
     ``load`` reads the row under ``WRITE_LOCK``, answering 404 if it is gone.
+    ``scores_of`` is the ``MatchScore`` column pointing at it (``job_id`` or
+    ``candidate_id``).
     The applications are deleted by the ORM, which checks each one's version,
     so an application edited meanwhile still makes this a 409, as
     :func:`commit_row` answers. One that another request deleted instead, a
@@ -126,12 +131,20 @@ def delete_with_applications(db: Session, model: Any, row_id: int, load: Callabl
     version makes it a 409 at once. The row itself cannot go meanwhile, since
     ``load`` holds it until the commit; if it had, the next ``load`` is a 404.
 
-    Cached scores are deleted by the ORM before the row, so the row's FOR
-    UPDATE is the last lock taken (see ``Job.match_scores``); stage events go
-    by their foreign key's ON DELETE CASCADE and are not read.
+    Cached scores go first, with one statement, then the applications, then
+    the row, so the row's FOR UPDATE is the last lock taken (see
+    ``Job.match_scores``). Until 2026-09-30 the ORM loaded every score and
+    deleted them by id, thousands for a job scored against a large pool,
+    while the job stayed locked. Stage events go by their foreign key's ON
+    DELETE CASCADE and are not read.
     """
     for _ in range(DELETE_ATTEMPTS):
         row = load()
+        db.execute(
+            delete(MatchScore)
+            .where(scores_of == row_id)
+            .execution_options(synchronize_session=False)
+        )
         read = {application.id: application.version for application in row.applications}
         db.delete(row)
         try:
