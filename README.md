@@ -633,10 +633,24 @@ order. Timed in-process on a throwaway database with the default corpus's
 | Whole call (scoring and commit), first scoring | 2,278 ms median | 1,709 ms median |
 | Whole call, rescore | 2,068 ms median | 1,711 ms median |
 
-An earlier round of 6 jobs, during which the machine slowed about threefold
-for the last two, gave the same shares (35% against 15%, 29% against 14%).
-Over both rounds, 12 jobs, the old and the new code returned the same
-ranking and stored the same score, rank and features in all 48,000 rows.
+An earlier round measured a first version that still built the statement's
+parameters under the lock (35% against 15%, 29% against 14%). Rechecked the
+same evening from exports of the two commits, on a machine then running
+about three times slower, the shares held: 37% against 14% of a first scoring
+(2,290 against 692 ms) and 27% against 12% of a rescore (1,664 against
+631 ms). Over all three rounds, 18 jobs, the old and the new code returned
+the same ranking and stored the same score, rank and features in all
+72,000 rows.
+
+Over HTTP, what changes is how long an edit of the job waits. The old and
+the new code ran as two servers on one throwaway database, each scoring all
+4,000 candidates for 6 jobs of its own, twice, while a client sent an edit
+of the job being scored every 20 ms. The slowest edit during a run took a
+median 2,577 ms against 1,065 ms for a first scoring (2,054–2,989 against
+899–1,108) and 1,826 ms against 935 ms for a rescore (1,445–2,192 against
+694–1,068). That was the same slow evening, and there an edit that did not
+wait still took 0.3–0.5 s, since it shares the server process with the
+scoring.
 
 A candidate deleted mid-run, before the run has written its score, fails the
 write. The run is then rolled back, re-read and scored again, and the
