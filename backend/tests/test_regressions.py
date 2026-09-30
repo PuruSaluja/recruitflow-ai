@@ -1514,6 +1514,53 @@ def test_a_job_delete_arriving_while_a_scoring_run_writes_waits_for_it(
         assert conn.scalar(select(func.count()).select_from(MatchScore)) == 0
 
 
+@pytest.mark.parametrize("cached", [True, False], ids=["rescored-row", "inserted-row"])
+def test_a_candidate_delete_arriving_while_a_scoring_run_writes_its_score_waits_for_it(
+    client: TestClient,
+    clean_db: Engine,
+    make_job: Factory,
+    make_candidate: Factory,
+    monkeypatch: pytest.MonkeyPatch,
+    cached: bool,
+) -> None:
+    """Checked in the 2026-09-29 recheck, once scores were written with one upsert.
+
+    The run has just updated the candidate's cached score, or inserted a new
+    one, when a delete of the candidate arrives. The delete reaches that row
+    through the ORM's cascade, or takes the candidate FOR UPDATE past the
+    run's foreign key check, so it waits for the run's commit, and then
+    removes the candidate and the score. Neither side is refused.
+    """
+    job_id = make_job()["id"]
+    gone, kept = make_candidate()["id"], make_candidate()["id"]
+    if cached:
+        with clean_db.begin() as setup:
+            setup.execute(
+                insert(MatchScore).values(
+                    job_id=job_id, candidate_id=gone, model_version="v1", score=0.5, features={}
+                )
+            )
+    monkeypatch.setattr(matches_api, "load_versioned_matcher", lambda: (_EvenMatcher(), "v1"))
+    deleting: dict[str, Any] = {}
+
+    def delete_now() -> None:
+        deleting["response"] = pool.submit(lambda: client.delete(f"/candidates/{gone}"))
+        _until(lambda: deleting["response"].done() or _waiting_for_a_lock(clean_db))
+        deleting["waited"] = _waiting_for_a_lock(clean_db)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        with _after_first_score_write(delete_now):
+            scored = client.post(f"/jobs/{job_id}/score")
+        deleted = deleting["response"].result(timeout=30)
+
+    assert deleting["waited"], "the delete went ahead while the run was writing"
+    assert scored.status_code == 200, scored.text
+    assert scored.json()["scored_count"] == 2
+    assert deleted.status_code == 204, deleted.text
+    with clean_db.connect() as conn:
+        assert conn.scalars(select(MatchScore.candidate_id)).all() == [kept]
+
+
 def test_a_job_delete_whose_cascade_meets_a_rescored_row_does_not_deadlock(
     client: TestClient,
     clean_db: Engine,
