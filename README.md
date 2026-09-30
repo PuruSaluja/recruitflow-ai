@@ -184,6 +184,20 @@ application no longer deadlocks with a delete of either. None of these is
 reported as the database being unavailable, which is kept for real outages
 (**503**).
 
+Deleting a job or candidate takes its applications, their stage events and
+its cached scores with it. If one of those applications is edited while the
+delete is in flight, the delete is a **409**: it would remove a change the
+caller has not seen. If another request deletes one instead, a delete of the
+other side of it say, that is no conflict, and the delete tries again, up to
+three times in all. Until 2026-09-29 that was a 409 too. The same 120 s mixed
+soak from 12 threads, run against the old code and then the new on one
+throwaway database, gave 14 such 409s in 4,405 requests before and none in
+4,592 after, and the server's 110 warnings about deleting rows another delete
+had already removed went to none. Stage events now go by their foreign key's
+`ON DELETE CASCADE`; scores are still deleted before their job or candidate,
+since letting the cascade remove them locks the job or candidate first, and a
+replayed delete then deadlocked with a writer holding a score.
+
 A 503 with `code: "db_unavailable"` means the database could not be reached or
 could not serve the request: a refused or dropped connection, a deadlock, a
 cancelled statement, or no pooled connection free. Any other database error is
