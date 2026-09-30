@@ -1078,6 +1078,62 @@ def test_a_delete_that_keeps_losing_applications_gives_up_after_its_attempts(
         assert conn.scalars(select(Application.id)).all() == applications[DELETE_ATTEMPTS:]
 
 
+@pytest.mark.parametrize("deleter", ["application", "job", "candidate"])
+@pytest.mark.parametrize("writer", ["stage-move", "reopen"])
+def test_a_delete_arriving_while_a_stage_event_is_written_waits_and_is_refused(
+    client: TestClient,
+    clean_db: Engine,
+    make_job: Factory,
+    make_candidate: Factory,
+    make_application: Factory,
+    writer: str,
+    deleter: str,
+) -> None:
+    """Replayed on 2026-09-30, once stage events went by their foreign key's cascade.
+
+    A DELETE now locks the application before its cascade reaches the stage
+    events, where it used to delete the events first. A write that has just
+    added a stage event already holds the application, so the DELETE waits
+    for it rather than deadlocking, then finds the application changed: a
+    409, and the application and its whole trail are still there.
+    """
+    ids = {"job": make_job()["id"], "candidate": make_candidate()["id"]}
+    application = make_application(job_id=ids["job"], candidate_id=ids["candidate"])["id"]
+    ids["application"] = application
+    if writer == "reopen":
+        client.patch(f"/applications/{application}", json={"status": "rejected"})
+        write = lambda: client.post(f"/applications/{application}/reopen")  # noqa: E731
+    else:
+        write = lambda: client.patch(  # noqa: E731
+            f"/applications/{application}", json={"status": "screening"}
+        )
+    events_before = len(client.get(f"/applications/{application}/stage-events").json())
+    model = {"application": Application, "job": Job, "candidate": Candidate}[deleter]
+    deleting: dict[str, Any] = {}
+
+    def delete_now() -> None:
+        deleting["response"] = pool.submit(lambda: client.delete(f"/{deleter}s/{ids[deleter]}"))
+        _until(lambda: deleting["response"].done() or _waiting_for_a_lock(clean_db))
+        deleting["waited"] = _waiting_for_a_lock(clean_db)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        with _after_first_score_write(
+            delete_now, prefixes=("INSERT INTO application_stage_events",)
+        ) as seen:
+            written = write()
+        deleted = deleting["response"].result(timeout=30)
+
+    assert seen, "the write never added its stage event"
+    assert deleting["waited"], "the delete went ahead while the stage event was being written"
+    assert written.status_code == 200, written.text
+    assert deleted.status_code == 409, deleted.text
+    assert deleted.json()["detail"].startswith(
+        f"{model.__name__} {ids[deleter]} was changed by someone else"
+    )
+    events = client.get(f"/applications/{application}/stage-events").json()
+    assert len(events) == events_before + 1
+
+
 def test_a_refresh_that_fails_for_another_reason_is_not_reported_as_a_lost_race(
     clean_db: Engine, make_job: Factory
 ) -> None:
