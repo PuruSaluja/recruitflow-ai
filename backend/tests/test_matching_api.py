@@ -609,11 +609,12 @@ Action = Callable[[int, Job, list[Candidate], str], None]
 
 
 class _Interference:
-    """Stands in for ``score_pool``: scores for real, then lets another "request" commit.
+    """Stands in for ``score_pool``: scores for real, but lets another "request" commit first.
 
-    ``actions`` maps a call number to what that other request does, after
-    scoring and before the endpoint commits -- the window in which a
-    concurrent request can change the rows.
+    ``actions`` maps a call number to what that other request does just
+    before the run's first write, once it has scored and locked the job --
+    the window in which a concurrent request can still change the rows.
+    After the write it would wait on the run's row locks instead.
     """
 
     def __init__(self, actions: dict[int, Action]):
@@ -622,10 +623,20 @@ class _Interference:
 
     def __call__(self, db, job, candidates, matcher, model_version):
         self.calls += 1
-        ranked = score_pool(db, job, candidates, matcher, model_version)
-        if self.calls in self.actions:
-            self.actions[self.calls](self.calls, job, candidates, model_version)
-        return ranked
+        call, action = self.calls, self.actions.get(self.calls)
+        fired: list[str] = []
+
+        def before_write(conn, cursor, statement, parameters, context, executemany) -> None:
+            if action is None or fired or not statement.startswith("INSERT INTO match_scores"):
+                return
+            fired.append(statement)
+            action(call, job, candidates, model_version)
+
+        event.listen(Engine, "before_cursor_execute", before_write)
+        try:
+            return score_pool(db, job, candidates, matcher, model_version)
+        finally:
+            event.remove(Engine, "before_cursor_execute", before_write)
 
 
 def _commit_a_score(engine: Engine, job_id: int, candidate_id: int, version: str) -> None:
@@ -651,6 +662,16 @@ def _insert_a_score_first(engine: Engine) -> Action:
     return action
 
 
+def _delete_a_candidate_first(engine: Engine) -> Action:
+    """Deletes a candidate this run is about to write, a different one each call."""
+
+    def action(call: int, job: Job, candidates: list[Candidate], version: str) -> None:
+        with engine.begin() as conn:
+            conn.execute(delete(Candidate).where(Candidate.id == candidates[call - 1].id))
+
+    return action
+
+
 def _insert_a_score_for(engine: Engine, candidate_id: int) -> Action:
     """Commits the row this run is about to insert for one candidate not yet scored."""
 
@@ -668,7 +689,7 @@ def _delete(engine: Engine, model: type, row_id: int) -> Callable[..., None]:
     return action
 
 
-def test_a_run_that_loses_an_insert_race_is_scored_again_and_succeeds(
+def test_a_score_someone_else_inserted_first_is_updated_without_a_second_attempt(
     client: TestClient,
     trained: Path,
     pool: Pool,
@@ -682,7 +703,7 @@ def test_a_run_that_loses_an_insert_race_is_scored_again_and_succeeds(
     response = client.post(f"/jobs/{job['id']}/score")
 
     assert response.status_code == 200, response.text
-    assert interference.calls == 2
+    assert interference.calls == 1
     assert response.json()["scored_count"] == len(candidates)
     cached = _cached(clean_db, job["id"])
     assert len(cached) == len(candidates)
@@ -690,7 +711,7 @@ def test_a_run_that_loses_an_insert_race_is_scored_again_and_succeeds(
     assert all(set(row.features) == set(FEATURE_NAMES) for row in cached)
 
 
-def test_a_delete_then_a_lost_insert_race_succeeds_on_the_third_attempt(
+def test_a_delete_then_a_score_inserted_first_succeeds_on_the_second_attempt(
     client: TestClient,
     trained: Path,
     pool: Pool,
@@ -698,7 +719,8 @@ def test_a_delete_then_a_lost_insert_race_succeeds_on_the_third_attempt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """What the live delete race showed: a delete knocks back every run in flight at once,
-    so their first retries race each other, and the loser needs one more attempt."""
+    and their retries then meet each other's rows. Once took a third attempt; the
+    retry now updates the row it meets."""
     job, candidates = pool
     client.post(
         f"/jobs/{job['id']}/score", json={"candidate_ids": [c["id"] for c in candidates[:3]]}
@@ -712,7 +734,7 @@ def test_a_delete_then_a_lost_insert_race_succeeds_on_the_third_attempt(
     response = client.post(f"/jobs/{job['id']}/score")
 
     assert response.status_code == 200, response.text
-    assert interference.calls == 3
+    assert interference.calls == 2
     assert response.json()["scored_count"] == len(candidates) - 1
 
 
@@ -726,7 +748,7 @@ def test_a_run_that_loses_every_attempt_is_a_409_and_writes_nothing(
     job, _ = pool
     attempts = matches.SCORING_ATTEMPTS
     interference = _Interference(
-        {call: _insert_a_score_first(clean_db) for call in range(1, attempts + 1)}
+        {call: _delete_a_candidate_first(clean_db) for call in range(1, attempts + 1)}
     )
     monkeypatch.setattr(matches, "score_pool", interference)
 
@@ -735,7 +757,7 @@ def test_a_run_that_loses_every_attempt_is_a_409_and_writes_nothing(
     assert response.status_code == 409
     assert "Retry" in response.json()["detail"]
     assert interference.calls == attempts
-    assert [row.score for row in _cached(clean_db, job["id"])] == [0.5] * attempts
+    assert _cached(clean_db, job["id"]) == []
 
 
 def test_a_candidate_deleted_mid_run_drops_out_and_the_rest_are_scored(

@@ -9,7 +9,6 @@ from fastapi import status as http_status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy.orm.exc import StaleDataError
 
 from app.api.deps import Pagination, pagination
 from app.db.session import get_db
@@ -20,13 +19,13 @@ from app.models.match import MatchScore
 from app.schemas.candidate import CandidateSummary
 from app.schemas.common import MAX_ID
 from app.schemas.match import MatchPage, RankedCandidate, ScoreJobRequest, ScoreJobResponse
-from app.services.matching import JobGone, score_pool
+from app.services.matching import CachedScore, JobGone, score_pool
 
 router = APIRouter(prefix="/jobs", tags=["matching"])
 
 #: How many times a scoring run is tried before a lost race is reported as a
-#: 409: one retry for a lost insert race, one more for a delete that knocks
-#: back every concurrent run at once. See :func:`score_job`.
+#: 409. An attempt is lost to a candidate deleted before the run wrote its
+#: score. See :func:`score_job`.
 SCORING_ATTEMPTS = 3
 
 
@@ -63,7 +62,7 @@ def _resolve_pool(db: Session, candidate_ids: list[int] | None) -> list[Candidat
     return found
 
 
-def _ranked(row: MatchScore, candidate: Candidate, rank: int) -> RankedCandidate:
+def _ranked(row: MatchScore | CachedScore, candidate: Candidate, rank: int) -> RankedCandidate:
     return RankedCandidate(
         rank=rank,
         score=row.score,
@@ -94,11 +93,11 @@ def score_job(
     loaded. A missing or unreadable matcher is a 503 naming the command that
     regenerates it (see ``app.main``).
 
-    A candidate deleted mid-run fails the commit. The run is then rolled back,
-    re-read and scored again, and the candidate has dropped out of the pool
-    (or is now a 404, if it was asked for by id). A row someone else inserted
-    first fails it the same way, and the retry then updates that row. Up to
-    three attempts are made, and only a third failure is answered with a 409.
+    A candidate deleted mid-run, before the run wrote its score, fails the
+    write. The run is then rolled back, re-read and scored again, and the
+    candidate has dropped out of the pool (or is now a 404, if it was asked for
+    by id). A row someone else inserted first is updated in place. Up to three
+    attempts are made, and only a third failure is answered with a 409.
 
     Other runs of the same job, an edit of the job and a delete of it take
     turns with this run's write (see :func:`score_pool`). A run that waited on
@@ -114,13 +113,12 @@ def score_job(
     for attempt in range(1, SCORING_ATTEMPTS + 1):
         try:
             ranked = score_pool(db, job, candidates, matcher, version)
+            db.commit()
+            break
         except JobGone as exc:
             db.rollback()
             raise _job_not_found(job_id) from exc
-        try:
-            db.commit()
-            break
-        except (IntegrityError, StaleDataError) as exc:
+        except IntegrityError as exc:
             db.rollback()
             if attempt == SCORING_ATTEMPTS:
                 raise HTTPException(

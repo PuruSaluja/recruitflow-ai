@@ -1334,12 +1334,16 @@ def test_a_job_delete_during_a_scoring_insert_of_several_batches_does_not_deadlo
 ) -> None:
     """Found 2026-09-26: the two deadlocked, and the delete answered 503.
 
-    SQLAlchemy inserts new scores 1,000 rows to a statement, and each
-    statement's foreign key checks take FOR KEY SHARE on the job, so a run
-    holds that lock from its first batch on. Here another run commits the
-    score this one is about to insert in its second batch, and a delete of
-    the job removes that row and then waits on the lock to remove the job,
-    while this run's second batch waits to learn whether the row is gone.
+    Scores are written 1,000 rows to a statement, and each statement's
+    foreign key checks took FOR KEY SHARE on the job, so a run held that lock
+    from its first batch on. Here another run commits the score this one is
+    about to insert in its second batch, and a delete of the job removed that
+    row and then waited on the lock to remove the job, while this run's
+    second batch waited to learn whether the row was gone.
+
+    The delete now waits for the run's write, which updates the row the
+    other run committed. Until 2026-09-29 that row failed the run's insert,
+    and the delete then went first, so the run answered 404.
     """
     job_id, first = make_job()["id"], make_candidate()["id"]
     with clean_db.begin() as setup:
@@ -1387,8 +1391,10 @@ def test_a_job_delete_during_a_scoring_insert_of_several_batches_does_not_deadlo
 
     assert len(batches) >= 2, "the pool fitted in one insert, so the race never ran"
     assert deleted.status_code == 204, deleted.text
-    assert scored.status_code == 404, scored.text
-    assert scored.json()["detail"] == f"Job {job_id} not found"
+    assert scored.status_code == 200, scored.text
+    assert scored.json()["scored_count"] == 1001
+    with clean_db.connect() as conn:
+        assert conn.scalar(select(func.count()).select_from(MatchScore)) == 0
 
 
 # Found in the 2026-09-26 recheck: deferring that check left a job delete and a
@@ -1470,7 +1476,8 @@ def test_a_scoring_run_holds_its_job_while_it_writes(
         response = client.post(f"/jobs/{job_id}/score")
 
     assert response.status_code == 200, response.text
-    assert seen and seen[0].startswith("UPDATE match_scores"), seen
+    assert seen and seen[0].startswith("INSERT INTO match_scores"), seen
+    assert "ON CONFLICT" in seen[0]
     assert answers == [granted]
 
 
@@ -1504,23 +1511,21 @@ def test_a_job_delete_arriving_while_a_scoring_run_writes_waits_for_it(
         assert conn.scalar(select(func.count()).select_from(MatchScore)) == 0
 
 
-@pytest.mark.parametrize(
-    "after", ["UPDATE match_scores", "INSERT INTO match_scores"], ids=["rescore", "insert"]
-)
 def test_a_job_delete_whose_cascade_meets_a_rescored_row_does_not_deadlock(
     client: TestClient,
     clean_db: Engine,
     make_job: Factory,
     make_candidate: Factory,
     monkeypatch: pytest.MonkeyPatch,
-    after: str,
 ) -> None:
     """Another run saves a score just after the delete has loaded the job's scores.
 
     So only the delete's cascade removes it, while this run finds it and
     rescores it. The delete then removes the job, as the route does, once this
-    run has rescored the row, or once it has also inserted its new score.
-    Before, both orders deadlocked, and the delete was the one refused.
+    run has rescored the row and inserted its new score. Before, that
+    deadlocked, and the delete was the one refused. Until 2026-09-29 the
+    rescore and the insert were separate statements, and each was a case of
+    its own; both deadlocked.
     """
     job_id = make_job()["id"]
     rescored, _ = make_candidate()["id"], make_candidate()["id"]
@@ -1557,7 +1562,7 @@ def test_a_job_delete_whose_cascade_meets_a_rescored_row_does_not_deadlock(
                     job_id=job_id, candidate_id=rescored, model_version="v1", score=0.5, features={}
                 )
             )
-        with _after_first_score_write(hold, prefixes=(after,)):
+        with _after_first_score_write(hold):
             response = pool.submit(lambda: client.post(f"/jobs/{job_id}/score"))
             _until(lambda: reached.is_set() or _waiting_for_a_lock(clean_db))
             go.set()
@@ -1599,10 +1604,11 @@ def test_two_scoring_runs_of_one_job_that_rank_it_differently_take_turns(
 ) -> None:
     """Found in the 2026-09-26 recheck: holding the job FOR SHARE let them write at once.
 
-    Each run inserts its new scores in rank order, 1,000 to a statement, so
-    here they insert the same 2,000 rows in opposite orders. Each would wait on
-    a row the other had inserted. Now the second waits for the first's write,
-    then finds its rows and updates them, without a second attempt.
+    Each run inserted its new scores in rank order, 1,000 to a statement, so
+    here they inserted the same 2,000 rows in opposite orders. Each would wait
+    on a row the other had inserted. Now the second waits for the first's
+    write, then updates its rows, without a second attempt. Since 2026-09-29
+    every run also writes in candidate id order, whatever its ranking.
     """
     job_id, first = make_job()["id"], make_candidate()["id"]
     with clean_db.begin() as setup:
