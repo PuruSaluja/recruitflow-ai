@@ -114,7 +114,8 @@ def score_pool(
     deleted before its row is written fails that statement's foreign key
     check, so the ``IntegrityError`` is raised here, not at the caller's
     commit; the caller rolls back and scores again. The job's foreign key is
-    checked only at commit (``match_scores_job_id_fkey`` is deferred).
+    checked by the same statements, but it cannot fail that way: the job's
+    row is held from before the first write (below).
 
     The job's row is locked FOR NO KEY UPDATE, the lock an edit or a delete of
     the job takes first, from before the scores are written until the caller
