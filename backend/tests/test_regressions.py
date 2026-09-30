@@ -658,20 +658,18 @@ GONE = "{} {{{}}} not found"
 CHANGED = "{} {{{}}} was changed by someone else while this request was in flight"
 GONE_AFTER = "{} {{{}}} not found: another request deleted it just after this change was saved"
 
-#: When the other request deletes the application first, its stage events go
-#: with it (their foreign key cascades), so the endpoint's own DELETE of them
-#: matches no row. SQLAlchemy warns about that before the versioned application
-#: row raises the StaleDataError these cases are about: the warning is the race.
-EVENTS_ALREADY_GONE = pytest.mark.filterwarnings(
-    "ignore:DELETE statement on table 'application_stage_events' expected to delete"
-    ":sqlalchemy.exc.SAWarning"
-)
+#: Turns any SAWarning into an error. Until 2026-09-29 a DELETE loaded the
+#: stage events it would take with it, so when the other request had deleted
+#: the application first, the endpoint's own DELETE of them matched no row and
+#: SQLAlchemy warned; the foreign key's cascade removes them now, and a
+#: warning here fails the test.
+NO_SAWARNING = pytest.mark.filterwarnings("error::sqlalchemy.exc.SAWarning")
 
 # fmt: off
 LOST_RACES = [
     pytest.param("delete", "/applications/{application}", None, BEFORE, _delete_application,
                  404, GONE.format("Application", "application"), id="delete-application-deleted",
-                 marks=EVENTS_ALREADY_GONE),
+                 marks=NO_SAWARNING),
     pytest.param("delete", "/applications/{application}", None, BEFORE, _edit_application,
                  409, CHANGED.format("Application", "application"), id="delete-application-edited"),
     pytest.param("patch", "/applications/{application}", {"notes": "n"}, BEFORE,
@@ -700,7 +698,7 @@ LOST_RACES = [
                  id="patch-candidate-deleted-after"),
     pytest.param("delete", "/candidates/{candidate}", None, BEFORE, _delete_application,
                  409, CHANGED.format("Candidate", "candidate"),
-                 id="delete-candidate-application-gone", marks=EVENTS_ALREADY_GONE),
+                 id="delete-candidate-application-gone", marks=NO_SAWARNING),
 ]
 # fmt: on
 
@@ -801,6 +799,156 @@ def test_a_delete_refused_because_the_row_changed_leaves_it_whole(
 
     assert client.get(f"/applications/{application['id']}").status_code == 200
     assert len(client.get(f"/applications/{application['id']}/stage-events").json()) == 1
+
+
+# --- 11. a delete's cascade meeting another delete (found 2026-09-29) ------
+#
+# Was: a DELETE loaded the stage events and scores it would take with it, and
+# when another request had already removed some, SQLAlchemy warned that its
+# DELETE matched fewer rows than it had loaded: the server logged 104 such
+# warnings over the two 2026-09-29 soaks. Now stage events go by their foreign
+# key's ON DELETE CASCADE instead of being loaded, and a score already gone is
+# not counted. Scores are still deleted by the ORM, before their job or candidate:
+# left to the cascade, the parent's FOR UPDATE came first and a job delete
+# deadlocked (test_a_job_delete_and_a_scoring_run_on_it_do_not_deadlock).
+# NO_SAWARNING is defined with section 7.
+
+
+def _pair_with_history(
+    engine: Engine, make_job: Factory, make_candidate: Factory, make_application: Factory
+) -> dict[str, int]:
+    """A job and a candidate joined by an application, its opening stage event and a score."""
+    ids = {"job": make_job()["id"], "candidate": make_candidate()["id"]}
+    ids["application"] = make_application(job_id=ids["job"], candidate_id=ids["candidate"])["id"]
+    with engine.begin() as setup:
+        setup.execute(
+            insert(MatchScore).values(
+                job_id=ids["job"],
+                candidate_id=ids["candidate"],
+                model_version="v1",
+                score=0.5,
+                features={},
+            )
+        )
+    return ids
+
+
+def _left(engine: Engine, ids: dict[str, int]) -> dict[str, int]:
+    """How many of the pair's rows are still stored, by table."""
+    counts = {
+        "jobs": select(func.count()).select_from(Job).where(Job.id == ids["job"]),
+        "candidates": select(func.count())
+        .select_from(Candidate)
+        .where(Candidate.id == ids["candidate"]),
+        "applications": select(func.count())
+        .select_from(Application)
+        .where(Application.id == ids["application"]),
+        "stage_events": select(func.count())
+        .select_from(ApplicationStageEvent)
+        .where(ApplicationStageEvent.application_id == ids["application"]),
+        "match_scores": select(func.count())
+        .select_from(MatchScore)
+        .where(MatchScore.job_id == ids["job"], MatchScore.candidate_id == ids["candidate"]),
+    }
+    with engine.connect() as conn:
+        return {table: conn.scalar(count) for table, count in counts.items()}
+
+
+def _statements_of(request: Callable[[], Any]) -> tuple[Any, list[str]]:
+    """Send ``request`` and return its response with every SQL statement it ran."""
+    statements: list[str] = []
+
+    def record(conn, cursor, statement, parameters, context, executemany) -> None:
+        statements.append(statement)
+
+    event.listen(Engine, "before_cursor_execute", record)
+    try:
+        response = request()
+    finally:
+        event.remove(Engine, "before_cursor_execute", record)
+    return response, statements
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/jobs/{job}", "/candidates/{candidate}", "/applications/{application}"],
+    ids=["job", "candidate", "application"],
+)
+def test_a_delete_leaves_stage_events_to_the_database_cascade(
+    client: TestClient,
+    clean_db: Engine,
+    make_job: Factory,
+    make_candidate: Factory,
+    make_application: Factory,
+    path: str,
+) -> None:
+    """The ORM no longer reads or deletes them; their foreign key's ON DELETE CASCADE does."""
+    ids = _pair_with_history(clean_db, make_job, make_candidate, make_application)
+
+    response, statements = _statements_of(lambda: client.delete(path.format(**ids)))
+
+    assert response.status_code == 204, response.text
+    assert [s for s in statements if "application_stage_events" in s] == []
+    assert _left(clean_db, ids)["stage_events"] == 0
+
+
+@pytest.mark.parametrize("parent", ["job", "candidate"])
+def test_a_delete_removes_its_scores_before_the_row_itself(
+    client: TestClient,
+    clean_db: Engine,
+    make_job: Factory,
+    make_candidate: Factory,
+    make_application: Factory,
+    parent: str,
+) -> None:
+    """Children first, so the parent's FOR UPDATE comes last (see the section's notes)."""
+    ids = _pair_with_history(clean_db, make_job, make_candidate, make_application)
+    table = f"{parent}s"
+
+    response, statements = _statements_of(lambda: client.delete(f"/{table}/{ids[parent]}"))
+
+    assert response.status_code == 204, response.text
+    deletes = [s.split()[2] for s in statements if s.startswith("DELETE FROM")]
+    assert "match_scores" in deletes
+    assert deletes.index("match_scores") < deletes.index(table)
+    assert deletes[-1] == table
+    assert _left(clean_db, ids)["match_scores"] == 0
+
+
+@NO_SAWARNING
+@pytest.mark.parametrize("parent", ["job", "candidate"])
+def test_a_delete_whose_score_another_delete_removed_first_does_not_warn(
+    client: TestClient,
+    clean_db: Engine,
+    make_job: Factory,
+    make_candidate: Factory,
+    parent: str,
+) -> None:
+    """A score and no application: most of the soak's warnings came from pairs like this.
+
+    With an application, its version check fails the flush before the score's
+    DELETE runs.
+    """
+    ids = {"job": make_job()["id"], "candidate": make_candidate()["id"]}
+    with clean_db.begin() as setup:
+        setup.execute(
+            insert(MatchScore).values(
+                job_id=ids["job"],
+                candidate_id=ids["candidate"],
+                model_version="v1",
+                score=0.5,
+                features={},
+            )
+        )
+    other = _delete_candidate if parent == "job" else _delete_job
+
+    with _interloper(clean_db, BEFORE, other(ids)) as fired:
+        response = client.delete(f"/{parent}s/{ids[parent]}")
+
+    assert fired == ["ran"], f"the race was not replayed: {fired}"
+    assert response.status_code == 204, response.text
+    with clean_db.connect() as conn:
+        assert conn.scalar(select(func.count()).select_from(MatchScore)) == 0
 
 
 def test_a_refresh_that_fails_for_another_reason_is_not_reported_as_a_lost_race(

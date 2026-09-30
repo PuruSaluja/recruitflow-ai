@@ -45,6 +45,11 @@ class MatchScore(Base):
         # covering index is ordered descending by score.
         Index("ix_match_job_score_desc", "job_id", text("score DESC")),
     )
+    # A job's delete and a candidate's both take the pair's score with them,
+    # and whichever comes second finds it gone. That is the outcome both
+    # wanted, so the row count of a DELETE here is not checked; SQLAlchemy
+    # otherwise warns. Scores carry no version: nothing else is lost.
+    __mapper_args__ = {"confirm_deleted_rows": False}
 
     id: Mapped[int] = mapped_column(primary_key=True)
     job_id: Mapped[int] = mapped_column(

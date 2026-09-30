@@ -71,10 +71,14 @@ class Application(Base, TimestampMixin):
 
     job: Mapped[Job] = relationship(back_populates="applications")
     candidate: Mapped[Candidate] = relationship(back_populates="applications")
+    # Deleted with the application by the foreign key's ON DELETE CASCADE, not
+    # loaded first: when another request had deleted the application, the
+    # ORM's own DELETE of its events matched no row and SQLAlchemy warned.
     stage_events: Mapped[list[ApplicationStageEvent]] = relationship(
         back_populates="application",
         cascade="all, delete-orphan",
         order_by="ApplicationStageEvent.occurred_at",
+        passive_deletes=True,
     )
 
     def __repr__(self) -> str:  # pragma: no cover - debugging helper

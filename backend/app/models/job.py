@@ -95,6 +95,13 @@ class Job(Base, TimestampMixin):
     salary_min: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     salary_max: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
 
+    # Both are loaded and deleted by the ORM before the job itself. For
+    # applications that checks each one's version, so an edit made meanwhile
+    # is a 409. For scores it keeps the order the delete's locks rely on:
+    # children first, the job's FOR UPDATE only at the last statement. Left to
+    # the foreign key's ON DELETE CASCADE, the job row was locked first and a
+    # delete deadlocked with a writer holding a score and waiting on the job
+    # (test_a_job_delete_and_a_scoring_run_on_it_do_not_deadlock, 2026-09-29).
     applications: Mapped[list[Application]] = relationship(
         back_populates="job", cascade="all, delete-orphan"
     )

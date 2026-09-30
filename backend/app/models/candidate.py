@@ -60,6 +60,9 @@ class Candidate(Base, TimestampMixin):
         JSONB(none_as_null=True), nullable=False, default=list
     )
 
+    # As on Job: both are deleted by the ORM before the candidate, so
+    # applications' versions are checked and the candidate's FOR UPDATE comes
+    # last.
     applications: Mapped[list[Application]] = relationship(
         back_populates="candidate", cascade="all, delete-orphan"
     )
