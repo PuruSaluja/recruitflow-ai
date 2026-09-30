@@ -8,12 +8,15 @@ on it are covered in ``test_matching_api.py``.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from typing import Any
 
 import numpy as np
 import pytest
-from sqlalchemy import Engine, func, select, text
+from psycopg.errors import ForeignKeyViolation
+from sqlalchemy import Engine, delete, event, func, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.ml import features as features_module
@@ -22,6 +25,7 @@ from app.ml.corpus import CorpusConfig, SyntheticCandidate, SyntheticJob, genera
 from app.ml.features import FEATURE_NAMES, feature_dict
 from app.ml.train import train_matcher, training_data
 from app.models import Candidate, Job, MatchScore
+from app.services import matching
 from app.services.matching import score_pool
 
 Factory = Callable[..., dict[str, Any]]
@@ -229,6 +233,117 @@ def test_a_pool_past_psycopgs_parameter_limit_is_written_over_its_cached_rows(po
     stored = db.scalar(select(func.count()).select_from(MatchScore))
     assert stored == len(everyone)
     db.rollback()
+
+
+# --- how the rows are written ------------------------------------------------
+
+
+@contextmanager
+def _score_writes(on_write: Callable[[int], None] | None = None) -> Iterator[list[list[int]]]:
+    """Collect each score write's candidate ids; ``on_write(n)`` runs after the n-th."""
+    writes: list[list[int]] = []
+
+    def record(conn, cursor, statement, parameters, context, executemany) -> None:
+        if statement.startswith("INSERT INTO match_scores"):
+            writes.append(list(parameters["candidate_ids"]))
+            if on_write is not None:
+                on_write(len(writes))
+
+    event.listen(Engine, "after_cursor_execute", record)
+    try:
+        yield writes
+    finally:
+        event.remove(Engine, "after_cursor_execute", record)
+
+
+def test_rows_are_written_in_candidate_id_order_a_batch_at_a_time(
+    pool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The pool is shuffled so that the order given, the ranking and id order all differ."""
+    db, job, candidates = pool
+    monkeypatch.setattr(matching, "WRITE_BATCH", 2)
+    by_id = sorted(candidates, key=lambda candidate: candidate.id)
+    ids = [candidate.id for candidate in by_id]
+    given = [by_id[i] for i in (2, 0, 4, 1, 3)]
+    # _SpreadMatcher scores rise along the order given, so the last is ranked first.
+    ranked = [candidate.id for candidate in given[::-1]]
+    assert len({tuple(ids), tuple(c.id for c in given), tuple(ranked)}) == 3
+
+    with _score_writes() as writes:
+        rows = score_pool(db, job, given, _SpreadMatcher(), "v1")
+    db.commit()
+
+    assert writes == [ids[0:2], ids[2:4], ids[4:5]]
+    assert [row.candidate_id for row in rows] == ranked
+    assert {row.candidate_id: row.rank for row in _stored(db, job)} == {
+        candidate_id: rank for rank, candidate_id in enumerate(ranked, start=1)
+    }
+
+
+def test_a_rescore_updates_each_row_in_place_whatever_its_batch(
+    pool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db, job, candidates = pool
+    first = score_pool(db, job, candidates, _SpreadMatcher(), "v1")
+    db.commit()
+    monkeypatch.setattr(matching, "WRITE_BATCH", 2)
+
+    again = score_pool(db, job, candidates[::-1], _SpreadMatcher(), "v1")
+    db.commit()
+
+    first_ids = {row.candidate_id: row.id for row in first}
+    assert {row.candidate_id: row.id for row in again} == first_ids
+    stored = {row.candidate_id: row for row in _stored(db, job)}
+    assert len(stored) == len(candidates)
+    for row in again:
+        assert (stored[row.candidate_id].score, stored[row.candidate_id].rank) == (
+            row.score,
+            row.rank,
+        )
+
+
+def test_a_rescore_that_changes_nothing_else_still_stores_its_scored_at(pool) -> None:
+    """Checked in the table, not only on the returned rows, which carry the run's own time."""
+    db, job, candidates = pool
+    score_pool(db, job, candidates, _SpreadMatcher(), "v1")
+    db.commit()
+    before = {row.candidate_id: (row.score, row.rank, row.scored_at) for row in _stored(db, job)}
+
+    again = score_pool(db, job, candidates, _SpreadMatcher(), "v1")
+    db.commit()
+
+    stored = {row.candidate_id: (row.score, row.rank, row.scored_at) for row in _stored(db, job)}
+    for row in again:
+        score, rank, scored_at = stored[row.candidate_id]
+        assert (score, rank) == before[row.candidate_id][:2]
+        assert scored_at == row.scored_at > before[row.candidate_id][2]
+
+
+def test_a_candidate_deleted_between_two_batches_fails_the_write_and_nothing_lands(
+    pool, clean_db: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The foreign key check fails at the later batch's statement, not at the commit.
+
+    The delete gives up after 5 s rather than hanging if the run has already
+    written that candidate's row, which a wrong write order would do.
+    """
+    db, job, candidates = pool
+    monkeypatch.setattr(matching, "WRITE_BATCH", 2)
+    last = max(candidate.id for candidate in candidates)
+
+    def delete_last(written: int) -> None:
+        if written == 1:
+            with clean_db.begin() as other:
+                other.execute(text("SET LOCAL lock_timeout = '5s'"))
+                other.execute(delete(Candidate).where(Candidate.id == last))
+
+    with _score_writes(delete_last) as writes, pytest.raises(IntegrityError) as caught:
+        score_pool(db, job, candidates, _SpreadMatcher(), "v1")
+    db.rollback()
+
+    assert len(writes) == 2
+    assert isinstance(caught.value.orig, ForeignKeyViolation)
+    assert _stored(db, job) == []
 
 
 # --- a duplicate in the pool --------------------------------------------------

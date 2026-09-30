@@ -1369,6 +1369,9 @@ def test_a_job_delete_during_a_scoring_insert_of_several_batches_does_not_deadlo
         if len(batches) > 1:
             return
         with clean_db.begin() as other_run:
+            # Gives up rather than hanging if the run's first batch already
+            # holds that row, as it would if the pool fitted in one batch.
+            other_run.execute(text("SET LOCAL lock_timeout = '5s'"))
             other_run.execute(
                 insert(MatchScore).values(
                     job_id=job_id, candidate_id=last, model_version="v1", score=0.5, features={}

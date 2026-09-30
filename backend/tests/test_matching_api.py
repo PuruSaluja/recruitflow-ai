@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, delete, event, insert, select
+from sqlalchemy import Engine, delete, event, insert, select, text
 from sqlalchemy.orm import Session
 
 from app.api.v1 import matches
@@ -29,6 +29,7 @@ from app.ml.train import train_matcher, training_data
 from app.models import Candidate, Job, MatchScore
 from app.schemas.common import MAX_OFFSET
 from app.schemas.match import MAX_CANDIDATE_IDS
+from app.services import matching as matching_service
 from app.services.matching import score_pool
 
 Factory = Callable[..., dict[str, Any]]
@@ -780,6 +781,46 @@ def test_a_candidate_deleted_mid_run_drops_out_and_the_rest_are_scored(
     assert interference.calls == 2
     assert response.json()["scored_count"] == len(candidates) - 1
     assert gone not in _ids(response.json()["results"])
+
+
+def test_a_candidate_deleted_between_two_batches_drops_out_and_the_rest_are_scored(
+    client: TestClient,
+    trained: Path,
+    pool: Pool,
+    clean_db: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The first batch is written when the delete lands; the failed write is rolled back whole.
+
+    The delete gives up after 5 s rather than hanging if the run has already
+    written that candidate's row.
+    """
+    job, candidates = pool
+    monkeypatch.setattr(matching_service, "WRITE_BATCH", 2)
+    gone = max(c["id"] for c in candidates)
+    writes: list[str] = []
+
+    def after_write(conn, cursor, statement, parameters, context, executemany) -> None:
+        if statement.startswith("INSERT INTO match_scores"):
+            writes.append(statement)
+            if len(writes) == 1:
+                with clean_db.begin() as other:
+                    other.execute(text("SET LOCAL lock_timeout = '5s'"))
+                    other.execute(delete(Candidate).where(Candidate.id == gone))
+
+    event.listen(Engine, "after_cursor_execute", after_write)
+    try:
+        response = client.post(f"/jobs/{job['id']}/score")
+    finally:
+        event.remove(Engine, "after_cursor_execute", after_write)
+
+    assert response.status_code == 200, response.text
+    # Two batches written and the third refused (a refused statement is not
+    # recorded), then the retry's three.
+    assert len(writes) == 5
+    assert response.json()["scored_count"] == len(candidates) - 1
+    assert gone not in _ids(response.json()["results"])
+    assert len(_cached(clean_db, job["id"])) == len(candidates) - 1
 
 
 def test_a_candidate_asked_for_and_deleted_mid_run_is_a_404(
