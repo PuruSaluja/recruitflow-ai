@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
@@ -278,6 +279,34 @@ def test_rows_are_written_in_candidate_id_order_a_batch_at_a_time(
     assert {row.candidate_id: row.rank for row in _stored(db, job)} == {
         candidate_id: rank for rank, candidate_id in enumerate(ranked, start=1)
     }
+
+
+def test_the_write_statement_itself_puts_rows_in_by_candidate_id(pool) -> None:
+    """Arrays sent out of order still go in by candidate id: the statement orders them.
+
+    score_pool sorts its batches before sending them, so only a direct call
+    can show what the statement does on its own.
+    """
+    db, job, candidates = pool
+    ids = sorted(candidate.id for candidate in candidates)
+    shuffled = [ids[i] for i in (2, 0, 4, 1, 3)]
+
+    written = db.execute(
+        matching._UPSERT,
+        {
+            "job_id": job.id,
+            "model_version": "v1",
+            "scored_at": datetime.now(UTC),
+            "candidate_ids": shuffled,
+            "scores": [0.5] * len(ids),
+            "ranks": list(range(1, len(ids) + 1)),
+            "features": ["{}"] * len(ids),
+        },
+    ).all()
+    db.rollback()
+
+    assert [candidate_id for _, candidate_id in written] == ids
+    assert [row_id for row_id, _ in written] == sorted(row_id for row_id, _ in written)
 
 
 def test_a_rescore_updates_each_row_in_place_whatever_its_batch(
