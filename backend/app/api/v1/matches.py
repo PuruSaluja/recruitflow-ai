@@ -120,16 +120,18 @@ def score_job(
             raise _job_not_found(job_id) from exc
         except IntegrityError as exc:
             db.rollback()
-            if attempt == SCORING_ATTEMPTS:
-                raise HTTPException(
-                    status_code=http_status.HTTP_409_CONFLICT,
-                    detail=(
-                        f"Scoring job {job_id} collided with concurrent changes to the same "
-                        f"scores {SCORING_ATTEMPTS} times in a row. Retry the request."
-                    ),
-                ) from exc
-            job = _get_job_or_404(db, job_id)
-            candidates = _resolve_pool(db, request.candidate_ids)
+            collided = exc
+            if attempt < SCORING_ATTEMPTS:
+                job = _get_job_or_404(db, job_id)
+                candidates = _resolve_pool(db, request.candidate_ids)
+    else:
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail=(
+                f"Scoring job {job_id} collided with concurrent changes to the same "
+                f"scores {SCORING_ATTEMPTS} times in a row. Retry the request."
+            ),
+        ) from collided
     elapsed_ms = (time.perf_counter() - started) * 1000
 
     by_id = {candidate.id: candidate for candidate in candidates}
