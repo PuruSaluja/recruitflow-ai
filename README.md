@@ -194,9 +194,15 @@ soak from 12 threads, run against the old code and then the new on one
 throwaway database, gave 14 such 409s in 4,405 requests before and none in
 4,592 after, and the server's 110 warnings about deleting rows another delete
 had already removed went to none. Stage events now go by their foreign key's
-`ON DELETE CASCADE`; scores are still deleted before their job or candidate,
-since letting the cascade remove them locks the job or candidate first, and a
-replayed delete then deadlocked with a writer holding a score.
+`ON DELETE CASCADE`. Scores do not: letting the cascade remove them locks the
+job or candidate first, and a replayed delete then deadlocked with a writer
+holding a score. They go first instead, in one statement, under the job's or
+candidate's lock. So a delete of the other side of a pair waits for the pair's
+score rather than finding it gone, and a job's delete no longer loads every
+score to delete it by id: with 11,964 scores, six deletes each on the old and
+the new code, alternating on one throwaway database, a job delete took a
+median 719 ms before (700–746) and 62 ms after (54–80), the job staying
+locked for most of that time.
 
 A 503 with `code: "db_unavailable"` means the database could not be reached or
 could not serve the request: a refused or dropped connection, a deadlock, a
