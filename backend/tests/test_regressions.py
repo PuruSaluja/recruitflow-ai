@@ -47,7 +47,7 @@ from sqlalchemy.orm.exc import StaleDataError
 
 import app.models  # noqa: F401  (registers every table on Base.metadata)
 from app.api.body_limit import MAX_DRAIN_BYTES, MAX_REQUEST_BYTES, BodySizeLimit, ClientLeft
-from app.api.deps import WRITE_LOCK, refresh_row
+from app.api.deps import DELETE_ATTEMPTS, WRITE_LOCK, refresh_row
 from app.api.v1 import applications as applications_api
 from app.api.v1 import matches as matches_api
 from app.config import get_settings
@@ -696,9 +696,11 @@ LOST_RACES = [
     pytest.param("patch", "/candidates/{candidate}", {"location": "Atlanta, GA"}, AFTER,
                  _delete_candidate, 404, GONE_AFTER.format("Candidate", "candidate"),
                  id="patch-candidate-deleted-after"),
-    pytest.param("delete", "/candidates/{candidate}", None, BEFORE, _delete_application,
+    pytest.param("delete", "/candidates/{candidate}", None, BEFORE, _edit_application,
                  409, CHANGED.format("Candidate", "candidate"),
-                 id="delete-candidate-application-gone", marks=NO_SAWARNING),
+                 id="delete-candidate-application-edited"),
+    # A job or candidate DELETE whose application was deleted, not edited,
+    # still deletes (409 until 2026-09-29): see section 11.
 ]
 # fmt: on
 
@@ -803,12 +805,15 @@ def test_a_delete_refused_because_the_row_changed_leaves_it_whole(
 
 # --- 11. a delete's cascade meeting another delete (found 2026-09-29) ------
 #
-# Was: a DELETE loaded the stage events and scores it would take with it, and
-# when another request had already removed some, SQLAlchemy warned that its
-# DELETE matched fewer rows than it had loaded: the server logged 104 such
-# warnings over the two 2026-09-29 soaks. Now stage events go by their foreign
-# key's ON DELETE CASCADE instead of being loaded, and a score already gone is
-# not counted. Scores are still deleted by the ORM, before their job or candidate:
+# Was: when a job delete and a candidate delete met on the same application,
+# the one that lost answered 409 "changed by someone else", though nothing had
+# changed but a deletion, and SQLAlchemy warned that its DELETE of the stage
+# events or scores it had loaded matched fewer rows. Seen in the 2026-09-29
+# soaks: 5 candidate and 4 job deletes answered 409 in 1,533 requests, and the
+# server logged 104 such warnings over two soaks. Now a DELETE that lost only
+# deleted applications tries again, stage events go by their foreign key's
+# ON DELETE CASCADE instead of being loaded, and a score already gone is not
+# counted. Scores are still deleted by the ORM, before their job or candidate:
 # left to the cascade, the parent's FOR UPDATE came first and a job delete
 # deadlocked (test_a_job_delete_and_a_scoring_run_on_it_do_not_deadlock).
 # NO_SAWARNING is defined with section 7.
@@ -915,6 +920,45 @@ def test_a_delete_removes_its_scores_before_the_row_itself(
     assert _left(clean_db, ids)["match_scores"] == 0
 
 
+# fmt: off
+ALREADY_DELETED = [
+    pytest.param("job", _delete_application, id="job-application-deleted"),
+    pytest.param("candidate", _delete_application, id="candidate-application-deleted"),
+    pytest.param("job", _delete_candidate, id="job-candidate-deleted"),
+    pytest.param("candidate", _delete_job, id="candidate-job-deleted"),
+]
+# fmt: on
+
+
+@NO_SAWARNING
+@pytest.mark.parametrize(("parent", "interloper"), ALREADY_DELETED)
+def test_a_delete_whose_application_another_delete_removed_first_still_deletes(
+    client: TestClient,
+    clean_db: Engine,
+    make_job: Factory,
+    make_candidate: Factory,
+    make_application: Factory,
+    parent: str,
+    interloper: Callable[[dict[str, int]], Any],
+) -> None:
+    """Was a 409 "changed by someone else", and warnings about rows already gone.
+
+    The other request deletes the application, or the other side of the pair
+    and with it the application, its stage event and the score, after this
+    DELETE has loaded the application and before it commits.
+    """
+    ids = _pair_with_history(clean_db, make_job, make_candidate, make_application)
+
+    with _interloper(clean_db, BEFORE, interloper(ids)) as fired:
+        response = client.delete(f"/{parent}s/{ids[parent]}")
+
+    assert fired == ["ran"], f"the race was not replayed: {fired}"
+    assert response.status_code == 204, response.text
+    left = _left(clean_db, ids)
+    assert left[f"{parent}s"] == 0
+    assert (left["applications"], left["stage_events"], left["match_scores"]) == (0, 0, 0)
+
+
 @NO_SAWARNING
 @pytest.mark.parametrize("parent", ["job", "candidate"])
 def test_a_delete_whose_score_another_delete_removed_first_does_not_warn(
@@ -927,7 +971,7 @@ def test_a_delete_whose_score_another_delete_removed_first_does_not_warn(
     """A score and no application: most of the soak's warnings came from pairs like this.
 
     With an application, its version check fails the flush before the score's
-    DELETE runs.
+    DELETE runs, and the retry reads the scores afresh.
     """
     ids = {"job": make_job()["id"], "candidate": make_candidate()["id"]}
     with clean_db.begin() as setup:
@@ -949,6 +993,43 @@ def test_a_delete_whose_score_another_delete_removed_first_does_not_warn(
     assert response.status_code == 204, response.text
     with clean_db.connect() as conn:
         assert conn.scalar(select(func.count()).select_from(MatchScore)) == 0
+
+
+@NO_SAWARNING
+def test_a_delete_that_keeps_losing_applications_gives_up_after_its_attempts(
+    client: TestClient,
+    clean_db: Engine,
+    make_job: Factory,
+    make_candidate: Factory,
+    make_application: Factory,
+) -> None:
+    """Each attempt loses one more application to another delete; the last one answers 409."""
+    candidate = make_candidate()["id"]
+    applications = [
+        make_application(job_id=make_job()["id"], candidate_id=candidate)["id"]
+        for _ in range(DELETE_ATTEMPTS + 1)
+    ]
+    attempts: list[int] = []
+
+    def lose_one(session: Session) -> None:
+        with clean_db.begin() as other:
+            other.execute(delete(Application).where(Application.id == applications[len(attempts)]))
+        attempts.append(len(attempts) + 1)
+
+    event.listen(Session, "before_commit", lose_one)
+    try:
+        response = client.delete(f"/candidates/{candidate}")
+    finally:
+        event.remove(Session, "before_commit", lose_one)
+
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"].startswith(
+        f"Candidate {candidate} was changed by someone else while this request was in flight"
+    )
+    assert attempts == list(range(1, DELETE_ATTEMPTS + 1))
+    assert client.get(f"/candidates/{candidate}").status_code == 200
+    with clean_db.connect() as conn:
+        assert conn.scalars(select(Application.id)).all() == applications[DELETE_ATTEMPTS:]
 
 
 def test_a_refresh_that_fails_for_another_reason_is_not_reported_as_a_lost_race(

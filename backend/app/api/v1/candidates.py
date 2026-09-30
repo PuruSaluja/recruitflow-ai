@@ -8,7 +8,14 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import WRITE_LOCK, Pagination, commit_row, pagination, refresh_row
+from app.api.deps import (
+    WRITE_LOCK,
+    Pagination,
+    commit_row,
+    delete_with_applications,
+    pagination,
+    refresh_row,
+)
 from app.db.session import get_db
 from app.models.candidate import Candidate
 from app.models.enums import EducationLevel, SeniorityLevel
@@ -203,10 +210,14 @@ def update_candidate(
 def delete_candidate(
     candidate_id: int = Path(gt=0, le=MAX_ID), db: Session = Depends(get_db)
 ) -> None:
-    """Hard-delete a candidate; applications and cached match scores cascade."""
-    candidate = _get_or_404(db, candidate_id, lock=WRITE_LOCK)
-    db.delete(candidate)
-    commit_row(db, Candidate, candidate_id)
+    """Hard-delete a candidate; applications and cached match scores cascade.
+
+    See :func:`app.api.deps.delete_with_applications` for what a race with
+    another write to one of its applications answers.
+    """
+    delete_with_applications(
+        db, Candidate, candidate_id, lambda: _get_or_404(db, candidate_id, lock=WRITE_LOCK)
+    )
 
 
 @router.get(

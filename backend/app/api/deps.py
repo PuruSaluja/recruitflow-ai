@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
 from fastapi import HTTPException, Query
 from fastapi import status as http_status
-from sqlalchemy import select
+from sqlalchemy import Integer, any_, bindparam, select
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
 
+from app.models.application import Application
 from app.schemas.common import MAX_OFFSET
 
 #: Row locks, as ``Session.get``'s ``with_for_update``. ``WRITE_LOCK`` is for
@@ -85,18 +88,71 @@ def commit_row(db: Session, model: Any, row_id: int) -> None:
         db.commit()
     except StaleDataError as exc:
         db.rollback()
-        name = model.__name__
-        if not row_exists(db, model, row_id):
-            raise HTTPException(
-                status_code=http_status.HTTP_404_NOT_FOUND, detail=f"{name} {row_id} not found"
-            ) from exc
-        raise HTTPException(
-            status_code=http_status.HTTP_409_CONFLICT,
-            detail=(
-                f"{name} {row_id} was changed by someone else while this request was in "
-                "flight. Re-read it and retry."
-            ),
-        ) from exc
+        raise _lost_race(db, model, row_id) from exc
+
+
+def _lost_race(db: Session, model: Any, row_id: int) -> HTTPException:
+    """The answer to a write that lost a race: 404 if its row is gone, else 409."""
+    name = model.__name__
+    if not row_exists(db, model, row_id):
+        return HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND, detail=f"{name} {row_id} not found"
+        )
+    return HTTPException(
+        status_code=http_status.HTTP_409_CONFLICT,
+        detail=(
+            f"{name} {row_id} was changed by someone else while this request was in "
+            "flight. Re-read it and retry."
+        ),
+    )
+
+
+#: How many times a job or candidate DELETE is tried when all it lost was
+#: applications another request deleted first. See :func:`delete_with_applications`.
+DELETE_ATTEMPTS = 3
+
+
+def delete_with_applications(db: Session, model: Any, row_id: int, load: Callable[[], Any]) -> None:
+    """Delete a job or candidate, and the applications it takes with it.
+
+    ``load`` reads the row under ``WRITE_LOCK``, answering 404 if it is gone.
+    The applications are deleted by the ORM, which checks each one's version,
+    so an application edited meanwhile still makes this a 409, as
+    :func:`commit_row` answers. One that another request deleted instead, a
+    delete of the other side of it say, is no conflict: this DELETE would have
+    removed it anyway. Until 2026-09-29 that was a 409 too. Now the DELETE is
+    rolled back and tried again, up to ``DELETE_ATTEMPTS`` times, and the
+    applications it read are checked first: any still there under a newer
+    version makes it a 409 at once. The row itself cannot go meanwhile, since
+    ``load`` holds it until the commit; if it had, the next ``load`` is a 404.
+
+    Cached scores are deleted by the ORM before the row, so the row's FOR
+    UPDATE is the last lock taken (see ``Job.match_scores``); stage events go
+    by their foreign key's ON DELETE CASCADE and are not read.
+    """
+    for _ in range(DELETE_ATTEMPTS):
+        row = load()
+        read = {application.id: application.version for application in row.applications}
+        db.delete(row)
+        try:
+            db.commit()
+            return
+        except StaleDataError as exc:
+            db.rollback()
+            lost = exc
+            now = dict(
+                db.execute(
+                    select(Application.id, Application.version).where(
+                        # One array parameter, not ``in_``'s one per id (see
+                        # app.services.matching for psycopg's 65,535 limit).
+                        Application.id == any_(bindparam("ids", list(read), type_=ARRAY(Integer)))
+                    )
+                ).all()
+            )
+            edited = any(version != read[application_id] for application_id, version in now.items())
+            if edited:
+                raise _lost_race(db, model, row_id) from exc
+    raise _lost_race(db, model, row_id) from lost
 
 
 def refresh_row(db: Session, instance: Any, model: Any, row_id: int) -> None:
