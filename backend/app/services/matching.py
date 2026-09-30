@@ -33,7 +33,9 @@ WRITE_BATCH = 1000
 # Inserts each row, or updates the one already cached under the same (job,
 # candidate, model_version), in one statement per batch instead of one ORM
 # insert or update per row: the job stays locked for as long as the write
-# takes (see score_pool).
+# takes (see score_pool). ORDER BY makes the rows go in by candidate id
+# whatever order the arrays arrive in; without it the order would rest on
+# the plan feeding the function scan straight to the insert.
 _UPSERT = text(
     "INSERT INTO match_scores "
     "(job_id, candidate_id, model_version, score, rank, features, scored_at) "
@@ -43,6 +45,7 @@ _UPSERT = text(
     "CAST(:candidate_ids AS integer[]), CAST(:scores AS double precision[]), "
     "CAST(:ranks AS integer[]), CAST(:features AS text[])"
     ") AS pool(candidate_id, score, rank, features) "
+    "ORDER BY pool.candidate_id "
     "ON CONFLICT ON CONSTRAINT uq_match_job_cand_version DO UPDATE SET "
     "score = excluded.score, rank = excluded.rank, features = excluded.features, "
     "scored_at = excluded.scored_at "
