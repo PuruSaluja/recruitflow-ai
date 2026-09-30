@@ -601,12 +601,12 @@ path and the underlying error go to the server log, not the response.
 
 **Concurrency.** A run's write takes turns with every other write to the
 job. Once its scores and breakdowns are computed, the run locks the job, as
-an edit or a delete of it does, and holds the lock while it reads the cached
-scores, writes its own and commits. Another run of the same job waits for
-that, then finds the first run's rows and updates them instead of racing it
-to insert them. A delete already under way finishes first, and the run is
-then a 404; one that arrives during the write waits for it, and so does an
-edit. New applications to the job do not wait.
+an edit or a delete of it does, and holds the lock while it writes its
+scores and commits. Another run of the same job waits for that, then updates
+the first run's rows instead of racing it to insert them. A delete already
+under way finishes first, and the run is then a 404; one that arrives during
+the write waits for it, and so does an edit. New applications to the job do
+not wait.
 
 The wait lasts as long as the write. On 2026-09-26, with 4,000 candidates on
 file, the lock was held for a median 2,031 ms by a first scoring and 1,416 ms
@@ -616,10 +616,34 @@ was slow that day: the whole requests took a median 6.8 and 6.0 s, against
 3.1 and 2.5 s measured below, so the hold is better read as a share, 30% of
 a first scoring and 24% of a rescore.
 
-A candidate deleted mid-run fails the commit. The run is then rolled back,
-re-read and scored again, and the candidate has dropped out of the pool (or
-is a 404, if it was asked for by id). Up to three attempts are made, and only
-a third failure is answered with a 409 asking the client to retry.
+So the write was shortened on 2026-09-29. The scores now go in with one
+`INSERT ... ON CONFLICT DO UPDATE` per 1,000 rows, each column sent as one
+array, instead of one ORM insert or update per row, and the statement's
+parameters are built before the lock is taken. Rows are written in candidate
+id order, whatever the ranking, so every run takes its row locks in the same
+order. Timed in-process on a throwaway database with the default corpus's
+4,000 candidates, the old and the new code alternating over 6 jobs:
+
+| | Before | After |
+| --- | --- | --- |
+| Lock held, first scoring | 814 ms median (801–888) | 240 ms median (225–319) |
+| Lock held, rescore | 598 ms median (568–640) | 224 ms median (206–253) |
+| Share of the call held, first scoring | 36% | 14% |
+| Share of the call held, rescore | 29% | 13% |
+| Whole call (scoring and commit), first scoring | 2,278 ms median | 1,709 ms median |
+| Whole call, rescore | 2,068 ms median | 1,711 ms median |
+
+An earlier round of 6 jobs, during which the machine slowed about threefold
+for the last two, gave the same shares (35% against 15%, 29% against 14%).
+Over both rounds, 12 jobs, the old and the new code returned the same
+ranking and stored the same score, rank and features in all 48,000 rows.
+
+A candidate deleted mid-run, before the run has written its score, fails the
+write. The run is then rolled back, re-read and scored again, and the
+candidate has dropped out of the pool (or is a 404, if it was asked for by
+id). A score someone else saved first is updated in place, which no longer
+costs an attempt. Up to three attempts are made, and only a third failure is
+answered with a 409 asking the client to retry.
 
 Before the lock, some interleavings deadlocked, and one of the two requests
 answered 503. A delete of the job could remove a score a run was about to
@@ -700,7 +724,9 @@ more than 65,535. Over HTTP on a throwaway database, the old code scored
 65,533 candidates but answered 503 "Database unavailable" for 65,534, after
 43 s of scoring. The rows are now looked up with one array parameter: the
 same 65,534 scored in 54 s and rescored in 44 s, and looking up 1,000 of
-them uses the unique index (2 ms).
+them uses the unique index (2 ms). Since 2026-09-29 there is no separate
+lookup: the write sends each column as one array, and a test scores and
+writes 65,541 candidates in one run.
 
 ## License
 
