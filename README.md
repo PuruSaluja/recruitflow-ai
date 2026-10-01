@@ -578,9 +578,29 @@ corpus, `--test-share 0.25 --split-seed 0`, both scikit-learn's defaults):
 
 `relevance`'s ROC-AUC is higher because it is the easier, unbiased target the
 generator itself defines; the matcher is not trained on it. These numbers are
-for reference — the evaluation milestone reports NDCG@10 and P@5 on the
-ranking task these are a proxy for, and the fairness audit is where the
-planted bias in `advanced` gets measured properly rather than assumed.
+for reference; the ranking task they stand in for is measured below, and the
+fairness audit is where the planted bias in `advanced` gets measured properly
+rather than assumed.
+
+### Ranking quality on held-out jobs
+
+`scripts/evaluate_matcher.py` scores the persisted matcher's own held-out
+jobs (after checking it recomputes the ROC-AUC its manifest recorded) and
+grades each slate against `relevance`, which the matcher never saw. From one
+run on the default matcher, written to
+[`docs/model_evaluation.json`](docs/model_evaluation.json):
+
+| 50 held-out jobs, 2,500 pairs | NDCG@10 | P@5 |
+| --- | --- | --- |
+| Matcher | 0.8024 (95% CI 0.7668–0.8353) | 0.7760 (0.7160–0.8280) |
+| Random ranking (exact expectation) | 0.1638 | 0.1744 |
+| `required_skill_coverage` alone | 0.6533 | 0.6419 |
+| Same pipeline fitted on `relevance` (reference; no real system has it) | 0.8382 | 0.8360 |
+
+Retrained on ten splits of the same corpus, NDCG@10 is 0.8063 ± 0.0231 and P@5
+0.8012 ± 0.0227 (mean ± std). The metric definitions, the tie handling and
+what these numbers cannot show are in
+[`docs/model_evaluation.md`](docs/model_evaluation.md).
 
 ## Scoring candidates
 
