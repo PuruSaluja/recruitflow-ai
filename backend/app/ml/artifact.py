@@ -97,11 +97,7 @@ def load_versioned_matcher(path: Path | None = None) -> tuple[CalibratedClassifi
     and chained.
     """
     matcher_path = path if path is not None else default_matcher_path()
-    if not matcher_path.exists():
-        raise MatcherUnavailable(
-            f"No trained matcher at {matcher_path}. Regenerate it with: {REGENERATE_COMMAND}"
-        )
-    data = matcher_path.read_bytes()
+    data = _read_matcher(matcher_path)
     try:
         matcher = joblib.load(io.BytesIO(data))
     except Exception as exc:
@@ -142,11 +138,27 @@ def matcher_version(path: Path | None = None) -> str:
     needs a usable matcher goes through :func:`load_versioned_matcher`.
     """
     matcher_path = path if path is not None else default_matcher_path()
+    return _version_of(_read_matcher(matcher_path))
+
+
+def _read_matcher(matcher_path: Path) -> bytes:
+    """The matcher file's bytes, or :class:`MatcherUnavailable` naming the fix.
+
+    A path that exists but cannot be read -- a directory, or a file this
+    process may not open -- is unavailable too, rather than an ``OSError``
+    surfacing as a 500.
+    """
     if not matcher_path.exists():
         raise MatcherUnavailable(
             f"No trained matcher at {matcher_path}. Regenerate it with: {REGENERATE_COMMAND}"
         )
-    return _version_of(matcher_path.read_bytes())
+    try:
+        return matcher_path.read_bytes()
+    except OSError as exc:
+        raise MatcherUnavailable(
+            f"The matcher at {matcher_path} could not be read ({exc!r}). "
+            f"Regenerate it with: {REGENERATE_COMMAND}"
+        ) from exc
 
 
 def _version_of(data: bytes) -> str:

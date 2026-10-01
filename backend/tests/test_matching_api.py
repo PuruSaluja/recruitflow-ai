@@ -396,6 +396,29 @@ def test_an_unreadable_matcher_is_a_503_too(
     assert response.json()["code"] == "matcher_unavailable"
 
 
+@pytest.mark.parametrize("method", ["score", "list"])
+def test_a_matcher_path_that_cannot_be_read_is_a_503_too(
+    client: TestClient,
+    use_model: Callable[[Path], None],
+    tmp_path: Path,
+    pool: Pool,
+    method: str,
+) -> None:
+    """A model path that exists but is a directory used to escape as an OSError, a 500."""
+    directory = tmp_path / "matcher.joblib"
+    directory.mkdir()
+    use_model(directory)
+    job, _ = pool
+
+    if method == "score":
+        response = client.post(f"/jobs/{job['id']}/score")
+    else:
+        response = client.get(f"/jobs/{job['id']}/matches")
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "matcher_unavailable"
+
+
 def test_the_503_log_names_the_file_and_the_underlying_error(
     client: TestClient,
     use_model: Callable[[Path], None],

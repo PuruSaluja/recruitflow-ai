@@ -343,6 +343,26 @@ def test_a_file_holding_something_other_than_a_matcher_is_unavailable(tmp_path: 
     assert "scripts/train_matcher.py" in str(excinfo.value)
 
 
+_LOADERS: dict[str, Callable[[Path], object]] = {
+    "load_matcher": load_matcher,
+    "load_versioned_matcher": load_versioned_matcher,
+    "matcher_version": matcher_version,
+}
+
+
+@pytest.mark.parametrize("loader", list(_LOADERS))
+def test_a_matcher_path_that_cannot_be_read_is_unavailable(tmp_path: Path, loader: str) -> None:
+    """A directory exists but cannot be read as a file; that used to escape as an OSError."""
+    path = tmp_path / "matcher.joblib"
+    path.mkdir()
+
+    with pytest.raises(MatcherUnavailable, match="could not be read") as excinfo:
+        _LOADERS[loader](path)
+    assert str(path) in str(excinfo.value)
+    assert "scripts/train_matcher.py" in str(excinfo.value)
+    assert isinstance(excinfo.value.__cause__, OSError)
+
+
 def test_load_matcher_turns_an_unreadable_file_into_unavailable_as_well(tmp_path: Path) -> None:
     path = tmp_path / "matcher.joblib"
     path.write_bytes(b"not a pickle at all\n")
