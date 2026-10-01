@@ -213,6 +213,18 @@ def test_the_bootstrap_interval_brackets_the_mean_and_repeats_for_a_seed() -> No
     assert bootstrap_interval(values, seed=1) == (low, high)
 
 
+def test_the_interval_has_the_width_its_level_asks_for() -> None:
+    # For the mean of 400 normal draws, a 95% interval spans about 2 * 1.96
+    # standard errors and a 50% one about 2 * 0.674; a 90% interval (1.645)
+    # would miss the first by 16%.
+    values = np.random.default_rng(11).normal(size=400)
+    standard_error = values.std() / np.sqrt(len(values))
+
+    for level, z in ((0.95, 1.959964), (0.5, 0.674490)):
+        low, high = bootstrap_interval(values, resamples=20000, level=level)
+        assert (high - low) / (2 * z * standard_error) == pytest.approx(1.0, abs=0.05)
+
+
 def test_a_constant_sample_has_a_zero_width_interval() -> None:
     assert bootstrap_interval([0.5] * 10) == pytest.approx((0.5, 0.5))
 

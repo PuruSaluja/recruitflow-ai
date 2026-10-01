@@ -16,7 +16,13 @@ from app.config import REPO_ROOT
 from app.ml.artifact import load_manifest, load_matcher, manifest_path_for, matcher_version
 from app.ml.corpus import CorpusConfig, generate_corpus
 from app.ml.evaluate import bootstrap_interval, evaluate_scores
-from app.ml.train import TrainingData, split_by_job, train_matcher, training_data
+from app.ml.train import (
+    TrainingData,
+    make_matcher,
+    split_by_job,
+    train_matcher,
+    training_data,
+)
 
 SCRIPT = REPO_ROOT / "scripts" / "evaluate_matcher.py"
 TRAIN_SCRIPT = REPO_ROOT / "scripts" / "train_matcher.py"
@@ -135,6 +141,18 @@ def test_an_extra_split_is_retrained_on_its_own_jobs(results: dict) -> None:
     scores = train_matcher(train_set).predict_proba(test_set.pairs)[:, 1]
 
     assert results["splits"][1]["ndcg_at_10"] == evaluate_scores(test_set, scores).ndcg_at_10
+
+
+def test_the_reference_scorer_is_fitted_on_relevance_not_on_advanced(results: dict) -> None:
+    corpus = generate_corpus(CorpusConfig(seed=5, n_jobs=40, n_candidates=1200))
+    train_set, test_set = split_by_job(training_data(corpus), seed=SPLIT_SEED)
+    fitted = make_matcher().fit(train_set.pairs, train_set.relevance >= 1)
+    expected = evaluate_scores(test_set, fitted.predict_proba(test_set.pairs)[:, 1])
+
+    reference = results["scorers"]["fitted_on_relevance"]
+    assert reference["ndcg_at_10"] == expected.ndcg_at_10
+    assert reference["roc_auc_relevant"] == expected.roc_auc_relevant
+    assert reference["ndcg_at_10"] != results["scorers"]["matcher"]["ndcg_at_10"]
 
 
 def test_two_runs_write_the_same_file(model: Path, tmp_path: Path) -> None:
