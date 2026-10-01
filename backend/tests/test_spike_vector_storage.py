@@ -176,7 +176,34 @@ def test_it_refuses_sizes_below_one(args: list[str], capsys: pytest.CaptureFixtu
 def test_an_unreachable_database_is_reported_not_raised(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    unreachable = "postgresql+psycopg://postgres:postgres@127.0.0.1:1/recruitflow_test"
+    unreachable = "postgresql+psycopg://postgres:pw-not-for-stderr@127.0.0.1:1/recruitflow_test"
 
     assert script.main([*SMALL, "--url", unreachable]) == 2
-    assert "cannot reach the database" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "cannot reach the database" in err
+    assert "pw-not-for-stderr" not in err
+
+
+def test_an_unparseable_url_is_refused_not_raised(capsys: pytest.CaptureFixture[str]) -> None:
+    assert script.main([*SMALL, "--url", "not-a-url"]) == 2
+    assert "cannot parse --url" in capsys.readouterr().err
+
+
+def test_a_url_naming_another_kind_of_database_is_refused(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Without the check it would be rewritten into a PostgreSQL URL and tried.
+    assert script.main([*SMALL, "--url", "sqlite:///spike.db"]) == 2
+    assert "must name a PostgreSQL database, not 'sqlite'" in capsys.readouterr().err
+
+
+def test_any_other_database_error_is_reported_not_raised(
+    url: str, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def refused(conn: psycopg.Connection, vectors: np.ndarray) -> None:
+        raise psycopg.errors.InsufficientPrivilege("permission denied to create temporary tables")
+
+    monkeypatch.setattr(script, "load", refused)
+
+    assert script.main([*SMALL, "--url", url]) == 2
+    assert "permission denied to create temporary tables" in capsys.readouterr().err

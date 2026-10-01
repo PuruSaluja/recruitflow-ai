@@ -40,6 +40,7 @@ import numpy as np
 import psycopg
 from psycopg import sql
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
 
 from app.config import get_settings
 
@@ -56,6 +57,10 @@ READ_FORMS = ("real_array_text", "real_array_binary", "bytea")
 
 class SpikeFailed(Exception):
     """A read did not return what was stored; no timing is reported."""
+
+
+class SpikeRefused(Exception):
+    """The arguments name nothing the spike can run against."""
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -84,8 +89,18 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _libpq_url(url: str) -> str:
-    """SQLAlchemy's ``postgresql+psycopg://`` URL, as one psycopg itself accepts."""
-    return make_url(url).set(drivername="postgresql").render_as_string(hide_password=False)
+    """SQLAlchemy's ``postgresql+psycopg://`` URL, as one psycopg itself accepts.
+
+    The messages never repeat the URL, which may carry a password.
+    """
+    try:
+        parsed = make_url(url)
+    except ArgumentError:
+        raise SpikeRefused("cannot parse --url as a database URL") from None
+    backend = parsed.get_backend_name()
+    if backend != "postgresql":
+        raise SpikeRefused(f"--url must name a PostgreSQL database, not {backend!r}")
+    return parsed.set(drivername="postgresql").render_as_string(hide_password=False)
 
 
 def vector_extension(conn: psycopg.Connection) -> dict[str, Any]:
@@ -262,8 +277,14 @@ def main(argv: list[str] | None = None) -> int:
         results = run(
             url, args.sizes, args.dim, rounds=args.rounds, top_k=args.top_k, seed=args.seed
         )
+    except SpikeRefused as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
     except psycopg.OperationalError as error:
         print(f"error: cannot reach the database: {error}", file=sys.stderr)
+        return 2
+    except psycopg.Error as error:
+        print(f"error: the database refused the spike: {error}", file=sys.stderr)
         return 2
     except SpikeFailed as error:
         print(f"error: {error}", file=sys.stderr)
