@@ -5,6 +5,8 @@ from __future__ import annotations
 import importlib.util
 import json
 import shutil
+import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
@@ -300,3 +302,35 @@ def test_a_missing_matcher_names_the_command_that_makes_one(
 def test_zero_resamples_is_refused(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert script.main(["--out", str(tmp_path / "e.json"), "--resamples", "0"]) == 2
     assert "--resamples must be at least 1" in capsys.readouterr().err
+
+
+# --- as a command ------------------------------------------------------
+
+
+def test_it_runs_as_a_command(model: Path, tmp_path: Path) -> None:
+    """Imported and invoked are different things; this is the documented way to run it."""
+    out = tmp_path / "evaluation.json"
+    command = [sys.executable, str(SCRIPT), "--model", str(model), "--out", str(out)]
+    result = subprocess.run(
+        [*command, "--split-seeds", "--resamples", "50"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert "NDCG@10" in result.stdout
+    assert json.loads(out.read_text(encoding="utf-8"))["held_out"]["jobs"] == 10
+
+
+def test_a_refusal_as_a_command_exits_2(tmp_path: Path) -> None:
+    missing = tmp_path / "nowhere.joblib"
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--model", str(missing), "--out", str(tmp_path / "e.json")],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
+    assert "Traceback" not in result.stderr
