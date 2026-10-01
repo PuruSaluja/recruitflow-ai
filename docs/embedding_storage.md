@@ -28,9 +28,11 @@ Not on the local server as it stands:
 - The README names two other routes. Docker: Docker Desktop is installed but
   its engine was not running, and a container would be a second PostgreSQL
   server rather than this one, for development and tests alike.
-  conda-forge (`conda install -c conda-forge pgvector`): built against
-  conda-forge's own PostgreSQL; whether its library loads into this
-  separately built server is untested, and nothing was downloaded.
+  conda-forge (`conda install -c conda-forge pgvector`): it does publish a
+  Windows build (0.8.6 for win-64), made against conda-forge's own
+  PostgreSQL, pinned below 17 on Windows, so the same major version as this
+  server. Whether its library loads into this separately built server is
+  untested, and nothing was downloaded.
 
 Whichever server runs the tests needs the extension too, so CI's service
 container would have to change with it.
@@ -51,6 +53,13 @@ numpy 2.4.6, psycopg 3.3.5, Windows 11.
 
 Every read returned the stored float32 values bit for bit, in all three
 forms; the script refuses to report timings otherwise.
+
+The times vary from run to run. Two reruns the same evening, not committed
+(one as above, one at 4,000 only with another seed and 9 rounds), read the
+vectors back 15-36% faster than the run above, with the search within 10%
+of it; for 4,000 vectors, text `real[]` took about 15 times as long as
+`bytea` rather than 12. The order of the three forms, and so the decision,
+was the same in all three runs; the exact figures were not.
 
 What this shows:
 

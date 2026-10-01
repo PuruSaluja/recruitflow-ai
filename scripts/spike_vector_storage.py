@@ -3,9 +3,11 @@
 The planned dense-retrieval upgrade needs one embedding per candidate and per
 job, and a cosine search over a job's candidate pool. pgvector would keep them
 in a ``vector`` column and search in SQL, but the local PostgreSQL is a
-binaries-only Windows build, and pgvector ships no Windows binaries: it has to
-be compiled against the server with Visual C++. The fallback is to store the
-embeddings as plain PostgreSQL values and search in numpy.
+binaries-only Windows build without it. pgvector's own Windows instructions
+are a build from source with Visual C++, which this machine lacks, and the
+conda-forge package is built against conda-forge's PostgreSQL, so it is
+untested here (see ``docs/embedding_storage.md``). The fallback is to store
+the embeddings as plain PostgreSQL values and search in numpy.
 
 This script answers both halves against a real database:
 
