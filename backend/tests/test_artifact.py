@@ -157,6 +157,39 @@ def test_loading_a_missing_manifest_names_the_path_and_the_fix(tmp_path: Path) -
     assert str(manifest_path_for(path)) in str(excinfo.value)
 
 
+_MANIFEST_DAMAGE: dict[str, Callable[[Path], None]] = {
+    "not JSON": lambda path: path.write_text("{not json", encoding="utf-8"),
+    "cut off": lambda path: path.write_text('{"metrics": {', encoding="utf-8"),
+    "not UTF-8": lambda path: path.write_bytes(b'{"x": "\xff"}'),
+    "a directory": lambda path: path.mkdir(),
+}
+
+
+@pytest.mark.parametrize("damage", list(_MANIFEST_DAMAGE))
+def test_a_manifest_that_cannot_be_read_is_unavailable(tmp_path: Path, damage: str) -> None:
+    path = tmp_path / "matcher.joblib"
+    _MANIFEST_DAMAGE[damage](manifest_path_for(path))
+
+    with pytest.raises(MatcherUnavailable, match="could not be read") as excinfo:
+        load_manifest(path)
+    assert str(manifest_path_for(path)) in str(excinfo.value)
+    assert "scripts/train_matcher.py" in str(excinfo.value)
+    assert excinfo.value.__cause__ is not None
+
+
+@pytest.mark.parametrize(
+    ("content", "kind"), [("[]", "list"), ('"x"', "str"), ("null", "NoneType")]
+)
+def test_a_manifest_that_is_not_a_json_object_is_unavailable(
+    tmp_path: Path, content: str, kind: str
+) -> None:
+    path = tmp_path / "matcher.joblib"
+    manifest_path_for(path).write_text(content, encoding="utf-8")
+
+    with pytest.raises(MatcherUnavailable, match=f"holds a JSON {kind}, not a matcher manifest"):
+        load_manifest(path)
+
+
 def test_a_matcher_without_its_manifest_still_loads(fitted_and_scores, tmp_path: Path) -> None:
     """The two files are independent: a stray matcher without a manifest is still usable."""
     matcher, _, _ = fitted_and_scores

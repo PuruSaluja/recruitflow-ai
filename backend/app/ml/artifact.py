@@ -114,14 +114,31 @@ def load_versioned_matcher(path: Path | None = None) -> tuple[CalibratedClassifi
 
 
 def load_manifest(path: Path | None = None) -> dict[str, Any]:
-    """Load the manifest written beside a persisted matcher."""
+    """Load the manifest written beside a persisted matcher.
+
+    Missing, unreadable, not JSON, or JSON that is not an object: each raises
+    :class:`MatcherUnavailable` naming the regeneration command.
+    """
     matcher_path = path if path is not None else default_matcher_path()
     manifest_path = manifest_path_for(matcher_path)
     if not manifest_path.exists():
         raise MatcherUnavailable(
             f"No matcher manifest at {manifest_path}. Regenerate it with: {REGENERATE_COMMAND}"
         )
-    return json.loads(manifest_path.read_text(encoding="utf-8"))
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        # ValueError covers both invalid JSON and bytes that are not UTF-8.
+        raise MatcherUnavailable(
+            f"The matcher manifest at {manifest_path} could not be read ({exc!r}). "
+            f"Regenerate it with: {REGENERATE_COMMAND}"
+        ) from exc
+    if not isinstance(manifest, dict):
+        raise MatcherUnavailable(
+            f"The file at {manifest_path} holds a JSON {type(manifest).__name__}, not a "
+            f"matcher manifest. Regenerate it with: {REGENERATE_COMMAND}"
+        )
+    return manifest
 
 
 def matcher_version(path: Path | None = None) -> str:
