@@ -602,6 +602,15 @@ NDCG@10 is 0.8063 ± 0.0231 and P@5 0.8012 ± 0.0227 (mean ± std). The metric
 definitions, the tie handling and what these numbers cannot show are in
 [`docs/model_evaluation.md`](docs/model_evaluation.md).
 
+### Where embeddings will live
+
+Dense retrieval is next, and its embeddings will be stored as float32 `bytea`
+and searched exactly in numpy rather than with pgvector, which the local
+PostgreSQL cannot load. Measured on 4,000 random 384-dimension vectors, an
+exact top-10 took 3.1 ms, and reading the vectors back 89 ms as `bytea`
+against 1,063 ms as `real[]`. The reasoning and the full measurements are in
+[`docs/embedding_storage.md`](docs/embedding_storage.md).
+
 ## Scoring candidates
 
 `POST /api/v1/jobs/{id}/score` runs a pool of candidates through the trained
