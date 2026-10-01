@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import shutil
+from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
 
@@ -178,6 +179,95 @@ def test_a_manifest_naming_another_label_is_refused(
 
     assert script.main(["--model", str(copied), "--out", str(tmp_path / "e.json"), *FAST]) == 2
     assert "fitted on 'relevance'" in capsys.readouterr().err
+
+
+def _edited(model: Path, directory: Path, edit: Callable[[dict], None]) -> Path:
+    copied = _copy(model, directory)
+    manifest = json.loads(manifest_path_for(copied).read_text(encoding="utf-8"))
+    edit(manifest)
+    manifest_path_for(copied).write_text(json.dumps(manifest), encoding="utf-8")
+    return copied
+
+
+def _drop(key: str) -> Callable[[dict], None]:
+    return lambda manifest: manifest.pop(key)
+
+
+def _set(key: str, value: object) -> Callable[[dict], None]:
+    return lambda manifest: manifest.__setitem__(key, value)
+
+
+def _set_corpus(key: str, value: object) -> Callable[[dict], None]:
+    return lambda manifest: manifest["corpus_config"].__setitem__(key, value)
+
+
+_UNUSABLE_MANIFESTS: dict[str, tuple[Callable[[dict], None], str]] = {
+    "no corpus_config": (_drop("corpus_config"), "has no corpus_config object"),
+    "corpus_config a list": (_set("corpus_config", []), "has no corpus_config object"),
+    "unknown corpus key": (_set_corpus("colour", 1), "corpus_config this code cannot use"),
+    "invalid corpus value": (_set_corpus("n_jobs", -3), "corpus_config this code cannot use"),
+    "no test_share": (_drop("test_share"), "has no numeric test_share"),
+    "test_share a string": (_set("test_share", "0.25"), "has no numeric test_share"),
+    "no split_seed": (_drop("split_seed"), "has no integer split_seed"),
+    "split_seed a float": (_set("split_seed", 2.0), "has no integer split_seed"),
+    "split_seed a bool": (_set("split_seed", True), "has no integer split_seed"),
+    "no metrics": (_drop("metrics"), "records no held-out ROC-AUC"),
+    "recorded AUC null": (
+        lambda manifest: manifest["metrics"].__setitem__("roc_auc_advanced", None),
+        "records no held-out ROC-AUC",
+    ),
+    "recorded AUC a string": (
+        lambda manifest: manifest["metrics"].__setitem__("roc_auc_advanced", "0.7"),
+        "records no held-out ROC-AUC",
+    ),
+    "a split that holds out no job": (_set("test_share", 0.001), "cannot be built"),
+}
+
+
+@pytest.mark.parametrize("case", list(_UNUSABLE_MANIFESTS))
+def test_a_manifest_it_cannot_use_is_refused_by_name(
+    model: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], case: str
+) -> None:
+    edit, message = _UNUSABLE_MANIFESTS[case]
+    copied = _edited(model, tmp_path, edit)
+    out = tmp_path / "evaluation.json"
+
+    assert script.main(["--model", str(copied), "--out", str(out), *FAST]) == 2
+    assert message in capsys.readouterr().err
+    assert not out.exists()
+
+
+def test_a_damaged_manifest_is_refused_naming_the_fix(
+    model: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    copied = _copy(model, tmp_path)
+    manifest_path_for(copied).write_text("{not json", encoding="utf-8")
+
+    assert script.main(["--model", str(copied), "--out", str(tmp_path / "e.json"), *FAST]) == 2
+    assert "python scripts/train_matcher.py" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "seeds", [[str(SPLIT_SEED)], ["1", "1"], ["1", str(SPLIT_SEED)]], ids=["own", "twice", "both"]
+)
+def test_split_seeds_that_would_count_one_split_twice_are_refused(
+    model: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], seeds: list[str]
+) -> None:
+    out = tmp_path / "evaluation.json"
+
+    assert script.main(["--model", str(model), "--out", str(out), "--split-seeds", *seeds]) == 2
+    assert "--split-seeds must be distinct" in capsys.readouterr().err
+    assert not out.exists()
+
+
+def test_an_out_path_it_cannot_write_is_refused(
+    model: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = tmp_path / "evaluation.json"
+    out.mkdir()
+
+    assert script.main(["--model", str(model), "--out", str(out), *FAST]) == 2
+    assert f"cannot write {out}" in capsys.readouterr().err
 
 
 def test_a_missing_matcher_names_the_command_that_makes_one(

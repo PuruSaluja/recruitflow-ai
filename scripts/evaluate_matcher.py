@@ -135,25 +135,73 @@ def _spread(values: Sequence[float]) -> dict[str, float]:
     }
 
 
-def evaluate(model: Path, *, split_seeds: Sequence[int], resamples: int) -> dict[str, Any]:
-    """Everything the JSON holds. Raises :class:`EvaluationRefused` or ``MatcherUnavailable``."""
-    matcher, version = load_versioned_matcher(model)
-    manifest = load_manifest(model)
+def _is_number(value: object) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool)
+
+
+def _manifest_fields(manifest: dict[str, Any]) -> tuple[CorpusConfig, float, int, float]:
+    """The corpus config, test share, split seed and recorded ROC-AUC, each checked.
+
+    A manifest edited by hand or written by other code can lack any of them or
+    hold the wrong type; each case is refused by name rather than surfacing as
+    a ``KeyError`` or ``TypeError`` from deep inside the run.
+    """
+
+    def refuse(problem: str) -> EvaluationRefused:
+        return EvaluationRefused(
+            f"the manifest {problem}. Retrain the matcher with: python scripts/train_matcher.py"
+        )
+
     if manifest.get("training_label") != TRAINING_LABEL:
         raise EvaluationRefused(
             f"the manifest says the matcher was fitted on {manifest.get('training_label')!r}, "
             f"but this code trains on {TRAINING_LABEL!r}; retrain it"
         )
+    corpus_config = manifest.get("corpus_config")
+    if not isinstance(corpus_config, dict):
+        raise refuse("has no corpus_config object")
+    try:
+        config = CorpusConfig(**corpus_config)
+    except (TypeError, ValueError) as error:
+        raise refuse(f"holds a corpus_config this code cannot use ({error})") from error
+    test_share, split_seed = manifest.get("test_share"), manifest.get("split_seed")
+    if not _is_number(test_share):
+        raise refuse(f"has no numeric test_share (found {test_share!r})")
+    if not isinstance(split_seed, int) or isinstance(split_seed, bool):
+        raise refuse(f"has no integer split_seed (found {split_seed!r})")
+    metrics = manifest.get("metrics")
+    recorded = metrics.get("roc_auc_advanced") if isinstance(metrics, dict) else None
+    if not _is_number(recorded):
+        raise refuse(
+            f"records no held-out ROC-AUC vs {TRAINING_LABEL} to check the matcher against "
+            f"(found {recorded!r})"
+        )
+    return config, float(test_share), split_seed, float(recorded)
 
-    config = CorpusConfig(**manifest["corpus_config"])
-    test_share, split_seed = manifest["test_share"], manifest["split_seed"]
-    data = training_data(generate_corpus(config))
-    train_set, test_set = split_by_job(data, test_share=test_share, seed=split_seed)
+
+def evaluate(model: Path, *, split_seeds: Sequence[int], resamples: int) -> dict[str, Any]:
+    """Everything the JSON holds. Raises :class:`EvaluationRefused` or ``MatcherUnavailable``."""
+    matcher, version = load_versioned_matcher(model)
+    manifest = load_manifest(model)
+    config, test_share, split_seed, recorded = _manifest_fields(manifest)
+    # A repeated seed, or the matcher's own, would count one split twice in the spread.
+    if len(set(split_seeds)) != len(split_seeds) or split_seed in split_seeds:
+        raise EvaluationRefused(
+            f"--split-seeds must be distinct and must not repeat the matcher's own split "
+            f"({split_seed}); got {list(split_seeds)}"
+        )
+
+    try:
+        data = training_data(generate_corpus(config))
+        train_set, test_set = split_by_job(data, test_share=test_share, seed=split_seed)
+    except ValueError as error:
+        raise EvaluationRefused(
+            f"the manifest's corpus or split cannot be built: {error}"
+        ) from error
 
     scores = matcher.predict_proba(test_set.pairs)[:, 1]
     measured = evaluate_scores(test_set, scores)
-    recorded = manifest["metrics"]["roc_auc_advanced"]
-    if recorded is None or not math.isclose(
+    if not math.isclose(
         measured.roc_auc_advanced or math.nan, recorded, rel_tol=0.0, abs_tol=MANIFEST_TOLERANCE
     ):
         raise EvaluationRefused(
@@ -246,10 +294,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {error}", file=sys.stderr)
         return 2
 
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(
-        json.dumps(results, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n"
-    )
+    try:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(
+            json.dumps(results, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+    except OSError as error:
+        print(f"error: cannot write {args.out}: {error}", file=sys.stderr)
+        return 2
 
     held_out = results["held_out"]
     print(f"Wrote {args.out}")
