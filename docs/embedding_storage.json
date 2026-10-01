@@ -1,0 +1,46 @@
+{
+  "server_version": "16.10",
+  "vector_extension": {
+    "available": false,
+    "default_version": null,
+    "installed_version": null
+  },
+  "dim": 384,
+  "rounds": 5,
+  "top_k": 10,
+  "seed": 0,
+  "sizes": [
+    {
+      "vectors": 4000,
+      "load_ms": 5585.8,
+      "stored_bytes": {
+        "real_array": 6224000,
+        "bytea": 6160000
+      },
+      "read_ms_median": {
+        "real_array_text": 1063.2,
+        "real_array_binary": 449.74,
+        "bytea": 88.79
+      },
+      "search_ms_median": 3.11
+    },
+    {
+      "vectors": 20000,
+      "load_ms": 29487.81,
+      "stored_bytes": {
+        "real_array": 31120000,
+        "bytea": 30800000
+      },
+      "read_ms_median": {
+        "real_array_text": 5667.1,
+        "real_array_binary": 2669.54,
+        "bytea": 655.51
+      },
+      "search_ms_median": 16.41
+    }
+  ],
+  "python": "3.14.6",
+  "numpy": "2.4.6",
+  "psycopg": "3.3.5",
+  "platform": "Windows-11"
+}
