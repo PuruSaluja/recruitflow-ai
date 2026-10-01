@@ -175,7 +175,11 @@ def main(argv: list[str] | None = None) -> int:
         },
         "metrics": metrics,
     }
-    written = save_matcher(matcher, manifest, path=args.out)
+    try:
+        written = save_matcher(matcher, manifest, path=args.out)
+    except OSError as error:
+        print(f"error: cannot write {args.out}: {error}", file=sys.stderr)
+        return 2
 
     rows = manifest["rows"]
     print(f"Wrote {written}")

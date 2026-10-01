@@ -238,6 +238,17 @@ def test_a_test_share_too_extreme_for_the_job_count_is_refused_with_the_splits_o
     assert "at least one job on each side" in capsys.readouterr().err
 
 
+def test_an_out_path_it_cannot_write_is_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A directory where the matcher should go used to end in a PermissionError traceback."""
+    out = tmp_path / "matcher.joblib"
+    out.mkdir()
+
+    assert script.main([*BASE, "--out", str(out)]) == 2
+    assert f"cannot write {out}" in capsys.readouterr().err
+
+
 def test_it_runs_as_a_command(tmp_path: Path) -> None:
     """Imported and invoked are different things; this is the documented way to run it."""
     out = tmp_path / "matcher.joblib"
