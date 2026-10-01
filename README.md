@@ -606,9 +606,10 @@ definitions, the tie handling and what these numbers cannot show are in
 
 Dense retrieval is next, and its embeddings will be stored as float32 `bytea`
 and searched exactly in numpy rather than with pgvector, which the local
-PostgreSQL cannot load. Measured on 4,000 random 384-dimension vectors, an
-exact top-10 took 3.1 ms, and reading the vectors back 89 ms as `bytea`
-against 1,063 ms as `real[]`. The reasoning and the full measurements are in
+PostgreSQL does not offer. Measured in one run on 4,000 random 384-dimension
+vectors, an exact top-10 took 3.1 ms, and reading the vectors back 89 ms as
+`bytea` against 450 ms (binary transfer) to 1,063 ms (text) as `real[]`. The
+reasoning, the full measurements and how much they vary are in
 [`docs/embedding_storage.md`](docs/embedding_storage.md).
 
 ## Scoring candidates
