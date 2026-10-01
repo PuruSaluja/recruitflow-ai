@@ -25,8 +25,9 @@ orders: each position the group spans gets the group's mean gain. That is
 exact, and it is what scikit-learn's ``ndcg_score`` does by default. It matters
 for baselines built from one coarse feature, where whole groups of candidates
 tie, and it makes "every score equal" the exact expected value of a random
-ranking rather than one lucky or unlucky draw. The calibrated matcher itself
-is strictly monotone, so its scores do not tie.
+ranking rather than one lucky or unlucky draw. Sigmoid calibration is
+strictly monotone, so it adds no ties of its own; on the default corpus the
+matcher's 2,500 held-out scores are all distinct.
 """
 
 from __future__ import annotations

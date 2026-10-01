@@ -595,11 +595,11 @@ run on the default matcher, written to
 | Matcher | 0.8024 (95% CI 0.7668–0.8353) | 0.7760 (0.7160–0.8280) |
 | Random ranking (exact expectation) | 0.1638 | 0.1744 |
 | `required_skill_coverage` alone | 0.6533 | 0.6419 |
-| Same pipeline fitted on `relevance` (reference; no real system has it) | 0.8382 | 0.8360 |
+| Same pipeline fitted on `relevance >= 1` (reference; no real system has it) | 0.8382 | 0.8360 |
 
-Retrained on ten splits of the same corpus, NDCG@10 is 0.8063 ± 0.0231 and P@5
-0.8012 ± 0.0227 (mean ± std). The metric definitions, the tie handling and
-what these numbers cannot show are in
+Over ten splits of the same corpus (the matcher's own and nine retrained),
+NDCG@10 is 0.8063 ± 0.0231 and P@5 0.8012 ± 0.0227 (mean ± std). The metric
+definitions, the tie handling and what these numbers cannot show are in
 [`docs/model_evaluation.md`](docs/model_evaluation.md).
 
 ## Scoring candidates

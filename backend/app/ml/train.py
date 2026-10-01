@@ -24,9 +24,9 @@ pairs, while the strict split would throw away 25% of the training pairs.
 The classifier is logistic regression: the matrix is sparse and mostly TF-IDF
 columns, its coefficients name the term they weigh (which is what the fairness
 audit needs to point at), and it emits the probabilities calibration expects.
-Nothing here is tuned -- the estimators keep scikit-learn's defaults -- and
-comparing model families belongs to the evaluation milestone, on its own
-held-out numbers.
+Nothing here is tuned -- the estimators keep scikit-learn's defaults.
+``scripts/evaluate_matcher.py`` measures this matcher against baselines on its
+held-out jobs; no other model family has been compared.
 """
 
 from __future__ import annotations

@@ -33,6 +33,13 @@ The script regenerates the corpus from the matcher's manifest, holds out the
 same jobs, and first recomputes the held-out ROC-AUC the training run recorded
 in that manifest (0.7829). It refuses to report anything if the two differ.
 
+The version is a hash of the file, so it names exactly what was measured, but
+a retrain from the same config can hash differently: scikit-learn's TF-IDF
+vectoriser pickles `_stop_words_id`, the memory address of its stop-word
+list. Retraining this config gave different bytes in exactly those places
+(one per calibration fold) and bit-identical predictions on all 10,000 pairs,
+so a retrained matcher reproduces every number here under a new version.
+
 **The metrics grade against `relevance`, which the matcher never saw.** It is
 fitted on `advanced`; `relevance` is the generator's ground-truth grade of a
 pair (2 strong, 1 partial, 0 not a fit), and ranking the people who truly fit
@@ -66,9 +73,13 @@ Read plainly:
 - **The matcher ranks far above chance.** About 3.9 of its top five
   candidates per job are relevant on average (P@5 0.7760), against 0.87 for a
   random order on the same slates.
-- **The model adds a good deal over its strongest single feature.** Ranking
-  by required-skill coverage alone gets NDCG@10 0.6533; the trained matcher
-  gets 0.8024, and the two intervals do not overlap.
+- **The model adds a good deal over required-skill coverage alone.**
+  Ranking by that one feature gets NDCG@10 0.6533; the trained matcher gets
+  0.8024, and the two intervals do not overlap. It was chosen up front as the
+  obvious recruiter heuristic and is the only single feature in the JSON. A
+  one-off check during review, which the script does not repeat, ranked these
+  jobs by each of the nine named features alone: this one scored highest on
+  NDCG@10 and P@5, with skill Jaccard close behind.
 - **Learning from past decisions costs something, on this corpus.** The same
   pipeline fitted on the ground truth instead scores 0.8382 NDCG@10 and 0.8360
   P@5, 0.036 and 0.060 above the matcher. Its intervals overlap the matcher's,
@@ -104,8 +115,9 @@ matcher's, since it is the one the API serves.
 - **Fairness.** A ranking can score well here and still treat groups
   differently: `relevance` never sees demographics, so these metrics are blind
   to the planted bias by construction. That is the fairness audit's job.
-- **Tuning.** Nothing was tuned on these numbers. The estimators keep
-  scikit-learn's defaults; model families and hybrid retrieval are compared in
-  later milestones on these same metrics.
+- **Tuning or model choice.** Nothing was tuned on these numbers. The
+  estimators keep scikit-learn's defaults, and no other model family was
+  tried. Dense embeddings, hybrid retrieval and a cross-encoder re-rank are
+  planned, to be measured on these same metrics and held-out jobs.
 - **Generalisation across corpora.** One corpus seed. Splits vary which jobs
   are held out, not which candidates or jobs were generated.
