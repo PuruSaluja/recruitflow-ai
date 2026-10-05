@@ -15,9 +15,17 @@ does not apply NFKC: measured on this model, full-width ``Python`` has cosine
 0.21 with ``Python`` as typed, and ``certified`` with an ``fi`` ligature 0.90;
 folded, both are 1.0.
 
-The model reads at most 256 word-pieces and ignores the rest. Every document
-in the default synthetic corpus fits (the longest is 130), but a real resume
-can run past it, and then only its opening reaches the embedding.
+**Long documents are encoded in chunks.** The model reads at most 256
+word-pieces, two of them its own markers, and would silently ignore the rest,
+so a real resume longer than that would be embedded from its opening only. A
+document that fits is encoded as it is. A longer one is cut at word
+boundaries into pieces of at most 254 word-pieces, each piece is encoded, and
+the document's vector is the mean of theirs weighted by their word-piece
+counts, rescaled to unit length like the model's own outputs. The method is
+part of the encoder's name (``+chunks254``), so vectors made before it, which
+truncated, show up as another encoder's. Every document in the default
+synthetic corpus fits in one piece (the longest is 130 word-pieces), so its
+vectors are exactly what the model gives for the whole text.
 
 ``sentence-transformers`` (and with it torch) is an optional dependency, the
 ``embeddings`` extra: nothing else in the app needs it, and the CPU build of
@@ -106,15 +114,64 @@ class SentenceTransformerEncoder:
         dimensions = self._model.get_embedding_dimension()
         if dimensions is None:  # the method is typed int | None
             raise EncoderUnavailable(f"{model}@{revision} does not report its embedding size")
-        self.name = f"{model}@{revision}"
+        self._tokenizer = self._model.tokenizer
+        #: Word-pieces of a document per piece the model reads in full.
+        self.chunk_tokens = int(self._model.max_seq_length) - int(
+            self._tokenizer.num_special_tokens_to_add()
+        )
+        self.name = f"{model}@{revision}+chunks{self.chunk_tokens}"
         self.dimensions = int(dimensions)
         self.batch_size = batch_size
+
+    def chunks(self, text: str) -> list[tuple[str, int]]:
+        """``text`` as the pieces it is encoded in, each with its word-piece count.
+
+        One piece, the text itself, when it fits. Otherwise each piece is cut
+        from the original text at the start of a word, so that it tokenizes
+        back to exactly the word-pieces counted for it; only a single word
+        longer than a whole piece is cut inside the word.
+        """
+        encoding = self._tokenizer(
+            text, add_special_tokens=False, return_offsets_mapping=True, verbose=False
+        )
+        offsets = encoding["offset_mapping"]
+        if len(offsets) <= self.chunk_tokens:
+            return [(text, len(offsets))]
+        words = encoding.word_ids()
+        pieces = []
+        start = 0
+        while start < len(offsets):
+            end = min(start + self.chunk_tokens, len(offsets))
+            if end < len(offsets) and words[end] == words[end - 1]:
+                first = end
+                while first > start and words[first - 1] == words[end]:
+                    first -= 1
+                if first > start:
+                    end = first
+            pieces.append((text[offsets[start][0] : offsets[end - 1][1]], end - start))
+            start = end
+        return pieces
 
     def encode(self, texts: Sequence[str]) -> np.ndarray:
         texts = list(texts)
         if not texts:
             return np.empty((0, self.dimensions), dtype=np.float32)
-        vectors = self._model.encode(
-            texts, batch_size=self.batch_size, convert_to_numpy=True, show_progress_bar=False
+        split = [self.chunks(text) for text in texts]
+        pieces = [piece for parts in split for piece, _ in parts]
+        vectors = np.asarray(
+            self._model.encode(
+                pieces, batch_size=self.batch_size, convert_to_numpy=True, show_progress_bar=False
+            ),
+            dtype=np.float32,
         )
-        return np.asarray(vectors, dtype=np.float32)
+        out = np.empty((len(texts), self.dimensions), dtype=np.float32)
+        row = 0
+        for index, parts in enumerate(split):
+            if len(parts) == 1:
+                out[index] = vectors[row]
+            else:
+                weights = np.array([count for _, count in parts], dtype=np.float64)
+                mean = weights @ vectors[row : row + len(parts)].astype(np.float64)
+                out[index] = mean / np.linalg.norm(mean)
+            row += len(parts)
+        return out

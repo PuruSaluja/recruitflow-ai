@@ -36,7 +36,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base
 
 #: Room for a Hub model id such as ``sentence-transformers/all-MiniLM-L6-v2``,
-#: an ``@`` and a 40-character revision hash (that one is 79 characters).
+#: an ``@``, a 40-character revision hash and the chunking tag (the default
+#: encoder's name is 89 characters).
 ENCODER_MAX_LENGTH = 200
 
 
