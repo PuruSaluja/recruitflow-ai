@@ -614,14 +614,24 @@ The vectors are not yet used for ranking.
 
 - **Encoder** (`app/ml/encoder.py`): all-MiniLM-L6-v2, 384 dimensions,
   pinned to one revision on the Hugging Face Hub. Its name, model id plus
-  revision, is stored beside every vector, so a change of weights makes old
-  vectors visibly another encoder's. It encodes the same document the TF-IDF
-  features read, folded the same way. That matters for this model: its
-  tokenizer lowercases but does not apply NFKC, and measured on it, full-width
-  `Python` has cosine 0.21 with `Python` as typed, and 1.0 once folded. The
-  model reads 256 word-pieces at most. Every document in the default corpus
-  fits (the longest has 130), but a long real resume would be embedded from
-  its opening only.
+  revision plus chunking, is stored beside every vector, so a change of
+  weights makes old vectors visibly another encoder's. It encodes the same
+  document the TF-IDF features read, folded the same way. That matters for
+  this model: its tokenizer lowercases but does not apply NFKC, and measured
+  on it, full-width `Python` has cosine 0.21 with `Python` as typed, and 1.0
+  once folded. The model reads 256 word-pieces at most and would ignore the
+  rest, so a longer document is cut at word boundaries into pieces of up to
+  254 word-pieces (the model adds two markers), and its vector is the mean
+  of theirs, weighted by word-piece count and rescaled to unit length. The
+  name records this as `+chunks254`. Every document in the default corpus
+  fits in one piece (the longest has 130), so its vector is exactly the
+  model's; cutting costs 1.18 s over the 4,000 candidates, 1.4% of the 83 s
+  that encoding them took in the same session (the machine was slower than
+  in the runs measured below). Against "registered nurse, ICU experience", a
+  680-word-piece test resume that is half data engineering and half nursing
+  scores cosine 0.133 truncated and 0.411 chunked; one whose only nursing
+  sentence comes after 625 word-pieces of data engineering, 0.129 and 0.171.
+  The tail now counts in proportion to its length.
 - **Storage** (`candidate_embeddings`, `job_embeddings`): float32 `bytea`,
   little-endian, searched exactly in numpy rather than with pgvector, which
   the local PostgreSQL does not offer. The reasoning and measurements are in
