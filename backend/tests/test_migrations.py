@@ -103,7 +103,9 @@ def test_upgrade_downgrade_upgrade_on_one_database(scratch_database: Engine) -> 
     config = _alembic_config()
 
     command.upgrade(config, "head")
-    assert "applications" in _table_names(scratch_database)
+    assert {"applications", "candidate_embeddings", "job_embeddings"} <= _table_names(
+        scratch_database
+    )
     assert _enum_type_count(scratch_database) == 5
 
     command.downgrade(config, "base")

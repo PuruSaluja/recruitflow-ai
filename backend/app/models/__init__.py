@@ -6,6 +6,7 @@ what Alembic's autogenerate and the test fixtures rely on.
 
 from app.models.application import Application
 from app.models.candidate import Candidate
+from app.models.embedding import CandidateEmbedding, JobEmbedding
 from app.models.enums import (
     ApplicationStatus,
     EducationLevel,
@@ -22,9 +23,11 @@ __all__ = [
     "ApplicationStageEvent",
     "ApplicationStatus",
     "Candidate",
+    "CandidateEmbedding",
     "EducationLevel",
     "EmploymentType",
     "Job",
+    "JobEmbedding",
     "JobStatus",
     "MatchScore",
     "SeniorityLevel",
