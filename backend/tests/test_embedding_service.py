@@ -29,6 +29,7 @@ from app.ml.encoder import candidate_document, job_document
 from app.models.candidate import Candidate
 from app.models.embedding import CandidateEmbedding
 from app.models.job import Job
+from app.schemas.common import MAX_ID
 from app.services import embeddings
 from app.services.embeddings import (
     CANDIDATES,
@@ -216,6 +217,37 @@ def test_a_refresh_can_be_limited_to_some_owners(clean_db: Engine, candidates: l
             encoded=0, current=1, vanished=0, not_found=0
         )
         assert refresh_embeddings(db, CANDIDATES, encoder, []) == RefreshReport(0, 0, 0, 0)
+
+
+@pytest.mark.parametrize("impossible", [2**31, 2**63, 0, -1])
+def test_an_id_no_row_can_have_is_not_found_rather_than_an_error(
+    clean_db: Engine, candidates: list[int], impossible: int
+) -> None:
+    """2**31 used to fail the whole statement with a DataError (integer out of range)."""
+    encoder = FakeEncoder()
+    with Session(clean_db) as db:
+        report = refresh_embeddings(db, CANDIDATES, encoder, [impossible, candidates[0]])
+        ids, _ = load_embeddings(db, CANDIDATES, encoder, [impossible, candidates[0]])
+    assert report == RefreshReport(encoded=1, current=0, vanished=0, not_found=1)
+    assert ids == [candidates[0]]
+
+
+def test_the_largest_id_a_row_can_have_is_still_refreshed(clean_db: Engine) -> None:
+    """Guards against over-correcting: the bound must admit every id a row can have."""
+    with clean_db.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO candidates (id, full_name, email, resume_text, skills, "
+                "years_experience, seniority, education_level) VALUES (:id, 'Max Id', "
+                "'max@example.com', 'Built reporting pipelines in SQL.', '[]', 3, 'mid', "
+                "'bachelor')"
+            ),
+            {"id": MAX_ID},
+        )
+    encoder = FakeEncoder()
+    with Session(clean_db) as db:
+        assert refresh_embeddings(db, CANDIDATES, encoder, [MAX_ID]).encoded == 1
+        assert load_embeddings(db, CANDIDATES, encoder, [MAX_ID])[0] == [MAX_ID]
 
 
 def test_jobs_are_embedded_from_the_job_document(clean_db: Engine, make_job: Factory) -> None:

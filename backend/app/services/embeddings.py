@@ -53,6 +53,7 @@ from app.ml.encoder import Encoder, candidate_document, job_document
 from app.models.candidate import Candidate
 from app.models.embedding import ENCODER_MAX_LENGTH, CandidateEmbedding, JobEmbedding
 from app.models.job import Job
+from app.schemas.common import MAX_ID
 
 #: Owners encoded and written per batch: one ``encode`` call, one transaction.
 DEFAULT_BATCH_SIZE = 256
@@ -100,6 +101,16 @@ def _ids_param(name: str, ids: Sequence[int]) -> Any:
     return bindparam(name, list(ids), type_=ARRAY(Integer))
 
 
+def _possible(ids: Sequence[int]) -> list[int]:
+    """The ids a row can have; any other is simply not found.
+
+    Sent as an ``integer[]``, an id past PostgreSQL's integer range would fail
+    the whole statement with a ``DataError``, the way an API path id past it is
+    a 422 rather than a 500 (``app.schemas.common.MAX_ID``).
+    """
+    return [owner_id for owner_id in ids if 1 <= owner_id <= MAX_ID]
+
+
 def _upsert(kind: EmbeddingKind) -> Any:
     owner = kind.owner_column
     return text(
@@ -134,9 +145,10 @@ def _pending(
         kind.embedding.encoder == encoder.name
     )
     if owner_ids is not None:
-        owners = owners.where(owner_id == any_(_ids_param("owner_ids", owner_ids)))
+        wanted = _possible(owner_ids)
+        owners = owners.where(owner_id == any_(_ids_param("owner_ids", wanted)))
         stored = stored.where(
-            getattr(kind.embedding, kind.owner_column) == any_(_ids_param("stored_ids", owner_ids))
+            getattr(kind.embedding, kind.owner_column) == any_(_ids_param("stored_ids", wanted))
         )
     found = list(db.scalars(owners))
     hashes = dict(db.execute(stored).all())
@@ -164,8 +176,9 @@ def refresh_embeddings(
 ) -> RefreshReport:
     """Encode and store every owner of ``kind`` whose vector is missing or stale.
 
-    ``owner_ids`` limits the refresh to those owners (repeats are ignored);
-    by default it covers every candidate or job. Owners are encoded in id
+    ``owner_ids`` limits the refresh to those owners (repeats are ignored,
+    and an id no row can have is counted as not found); by default it covers
+    every candidate or job. Owners are encoded in id
     order, ``batch_size`` at a time, and each batch is committed before the
     next is encoded (see the module docstring for how the writes take turns
     with edits, deletes and other refreshes).
@@ -243,7 +256,7 @@ def load_embeddings(
     rows = db.execute(
         select(owner, kind.embedding.dimensions, kind.embedding.vector)
         .where(kind.embedding.encoder == encoder.name)
-        .where(owner == any_(_ids_param("owner_ids", sorted(set(owner_ids)))))
+        .where(owner == any_(_ids_param("owner_ids", sorted(set(_possible(owner_ids))))))
         .order_by(owner)
     ).all()
     wrong = [row[0] for row in rows if row[1] != encoder.dimensions]
