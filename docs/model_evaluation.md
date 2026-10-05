@@ -12,6 +12,10 @@ python scripts/train_matcher.py      # if no matcher is on disk yet
 python scripts/evaluate_matcher.py
 ```
 
+The dense and hybrid scorers need the `embeddings` extra and the model's
+files; `--no-dense` measures everything else without them. The run that wrote
+the JSON took 3 min 33 s on CPU, nine retrains included.
+
 **All of this is measured on synthetic data.** The corpus, its ground truth
 and both of its planted biases come from `app.ml.corpus` (see the README's
 *Synthetic corpus* section). These numbers say how well the matcher recovers
@@ -108,6 +112,69 @@ below the mean for P@5 (0.7760 against 0.8012); it also has the lowest ROC-AUC
 against `relevance` of the ten. The headline figures above are that one
 matcher's, since it is the one the API serves.
 
+## Retrieval without training: lexical, dense and hybrid
+
+Three more scorers rank the same slates without fitting anything to a label
+([`backend/app/ml/retrieval.py`](../backend/app/ml/retrieval.py)):
+
+- **BM25**: the job's document (title, description, both skill lists) is the
+  query, searched against every candidate's document (current title, resume,
+  listed skills) over the corpus's pool of 4,000. Words are folded and
+  tokenised as the TF-IDF features do. `k1 = 1.2`, `b = 0.75`, the textbook
+  defaults, not tuned.
+- **Dense**: cosine between the two documents' embeddings from
+  all-MiniLM-L6-v2, pinned to revision `1110a243`.
+- **Hybrid**: reciprocal rank fusion of the two, `sum(1 / (60 + rank))`,
+  ranked within each job's slate, both sides weighted equally. `k = 60` is the
+  value from the paper that introduced it, not tuned.
+
+None of them is trained, so every job is unseen to them, and besides the 50
+held-out jobs they are measured on all 200, four times the sample.
+
+| Scorer | 50 held-out jobs: NDCG@10 | P@5 | All 200 jobs: NDCG@10 | P@5 |
+| --- | --- | --- | --- | --- |
+| BM25 | 0.5081 (0.4635–0.5533) | 0.5000 (0.4320–0.5680) | 0.5333 (0.5097–0.5574) | 0.5330 (0.5010–0.5650) |
+| Dense | 0.6637 (0.6170–0.7096) | 0.6760 (0.6120–0.7360) | 0.6566 (0.6313–0.6828) | 0.6660 (0.6310–0.7010) |
+| **Hybrid (RRF)** | **0.6259** (0.5790–0.6689) | **0.6200** (0.5560–0.6760) | **0.6392** (0.6156–0.6637) | **0.6415** (0.6100–0.6735) |
+
+**Does fusion beat either side alone?** Compared job by job on the same
+slates, with a 95% bootstrap interval over jobs for the mean paired
+difference:
+
+| Hybrid minus | Jobs | NDCG@10 | P@5 | Hybrid better / tied / worse (NDCG@10) |
+| --- | --- | --- | --- | --- |
+| BM25 | 50 held out | +0.1178 (+0.0834 to +0.1549) | +0.1200 (+0.0680 to +0.1720) | 43 / 0 / 7 |
+| BM25 | all 200 | +0.1059 (+0.0886 to +0.1231) | +0.1085 (+0.0850 to +0.1320) | 158 / 2 / 40 |
+| Dense | 50 held out | −0.0378 (−0.0655 to −0.0096) | −0.0560 (−0.1001 to −0.0120) | 17 / 1 / 32 |
+| Dense | all 200 | −0.0174 (−0.0344 to +0.0002) | −0.0245 (−0.0475 to −0.0005) | 87 / 2 / 111 |
+
+Read plainly:
+
+- **No: the hybrid does not beat dense retrieval on this corpus.** It beats
+  BM25 clearly, on both metrics and in about four jobs of five, but it ranks
+  slightly *worse* than dense alone: lower on both metrics and on both sets of
+  jobs, worse on more jobs than it is better. Three of the four intervals
+  against dense exclude zero; the fourth, NDCG@10 over all 200 jobs, reaches
+  +0.0002. Here fusion costs dense about 0.02 to 0.04 NDCG@10 and gains
+  nothing.
+- **A likely reason is the gap between the two sides.** BM25 is far weaker
+  than dense on these documents (0.53 against 0.66 NDCG@10 over all jobs), and
+  equal-weight fusion gives its ranking as much say as the better one's.
+  Fusion tends to help when the two sides are comparably good and wrong about
+  different candidates. Weighting the sides, or another `k`, might change
+  that, but choosing either on these same jobs would be tuning on the test
+  set, so neither was tried.
+- **All three sit well below the trained matcher** (0.8024 on the held-out
+  jobs). Untrained retrieval reads only the text, while the matcher also has
+  engineered features over the structured fields (skill coverage, experience,
+  seniority, education) and learns their weights. Dense alone is about level
+  with `required_skill_coverage` alone (0.6637 against 0.6533, intervals
+  overlapping).
+- Pooled ROC-AUC is in the JSON for all three, but it pools scores across
+  jobs, and the hybrid's scores are fused ranks within each job's slate, so
+  its pooled AUC is not comparable with the others'. The per-job NDCG and P@5
+  above are the comparison that holds.
+
 ## What this does not show
 
 - **Real-world accuracy.** The ground truth is a formula over a synthetic
@@ -117,7 +184,7 @@ matcher's, since it is the one the API serves.
   to the planted bias by construction. That is the fairness audit's job.
 - **Tuning or model choice.** Nothing was tuned on these numbers. The
   estimators keep scikit-learn's defaults, and no other model family was
-  tried. Dense embeddings, hybrid retrieval and a cross-encoder re-rank are
-  planned, to be measured on these same metrics and held-out jobs.
+  tried. The retrieval scorers keep their textbook settings. A cross-encoder
+  re-rank is planned, to be measured on these same metrics and held-out jobs.
 - **Generalisation across corpora.** One corpus seed. Splits vary which jobs
   are held out, not which candidates or jobs were generated.
