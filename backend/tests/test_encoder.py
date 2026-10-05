@@ -27,13 +27,13 @@ from app.ml.encoder import (
 
 def test_documents_are_the_text_features_documents_folded() -> None:
     candidate = SimpleNamespace(
-        current_title="Ｄata Analyst",
-        resume_text="Certiﬁed in Py​thon.",
+        current_title="\uff24ata Analyst",
+        resume_text="Certi\ufb01ed in Py\u200bthon.",
         skills=["SQL", "Python"],
     )
     job = SimpleNamespace(
         title="Data Analyst",
-        description="Ｗeekly metrics.",
+        description="\uff37eekly metrics.",
         required_skills=["SQL"],
         preferred_skills=["Tableau", "dbt"],
     )
@@ -102,6 +102,23 @@ def test_the_model_is_asked_for_by_its_pinned_revision(monkeypatch: pytest.Monke
     assert encoder.batch_size == 5
     assert SentenceTransformerEncoder().name == f"{DEFAULT_MODEL}@{DEFAULT_REVISION}"
     assert calls[-1] == (DEFAULT_MODEL, {"revision": DEFAULT_REVISION, "device": "cpu"})
+
+
+def test_a_model_that_reports_no_embedding_size_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Sizeless:
+        def __init__(self, model: str, **kwargs: object) -> None:
+            pass
+
+        def get_embedding_dimension(self) -> None:
+            return None
+
+    monkeypatch.setitem(
+        sys.modules, "sentence_transformers", SimpleNamespace(SentenceTransformer=Sizeless)
+    )
+    with pytest.raises(EncoderUnavailable, match="does not report its embedding size"):
+        SentenceTransformerEncoder()
 
 
 @pytest.mark.parametrize(

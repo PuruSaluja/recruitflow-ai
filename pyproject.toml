@@ -28,8 +28,9 @@ dependencies = [
 [project.optional-dependencies]
 # The dense encoder (app.ml.encoder). Optional because nothing else needs it
 # and it brings torch; install torch's CPU-only build first to keep it small.
+# 6.1 is the version this was tested with (it names get_embedding_dimension).
 embeddings = [
-    "sentence-transformers>=5.0",
+    "sentence-transformers>=6.1",
 ]
 dev = [
     "pytest>=8.3",

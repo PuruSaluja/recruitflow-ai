@@ -38,8 +38,9 @@ from app.ml.text import CandidateText, JobText, candidate_text, fold_text, job_t
 DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 #: The model repository's commit on the Hugging Face Hub, as of 2026-10-04.
 DEFAULT_REVISION = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
-#: Texts per forward pass. Batch composition moves a vector by at most about
-#: 1e-7 per value (measured), so it does not matter which batch a text was in.
+#: Texts per forward pass. Which batch a text is encoded in moves its vector by
+#: up to 1.6e-7 per value (measured over 64 corpus documents, alone against in
+#: batches of 64 and 512), far below anything a ranking could notice.
 DEFAULT_BATCH_SIZE = 64
 
 INSTALL_HINT = (
@@ -102,8 +103,11 @@ class SentenceTransformerEncoder:
         # repository does not have was measured to raise ValueError instead.
         except (OSError, ValueError) as exc:
             raise EncoderUnavailable(f"cannot load {model}@{revision}: {exc}") from exc
+        dimensions = self._model.get_embedding_dimension()
+        if dimensions is None:  # the method is typed int | None
+            raise EncoderUnavailable(f"{model}@{revision} does not report its embedding size")
         self.name = f"{model}@{revision}"
-        self.dimensions = int(self._model.get_embedding_dimension())
+        self.dimensions = int(dimensions)
         self.batch_size = batch_size
 
     def encode(self, texts: Sequence[str]) -> np.ndarray:
