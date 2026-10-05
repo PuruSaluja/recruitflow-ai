@@ -18,7 +18,20 @@ Every scorer is measured on the same held-out pairs with :mod:`app.ml.evaluate`:
 * ``fitted_on_relevance`` -- the same pipeline fitted on ``relevance >= 1``
   instead of ``advanced``. **A reference, not a candidate**: no real system has
   ground-truth labels. It shows how much ranking quality learning from the past
-  recruiter's biased decisions costs on this corpus.
+  recruiter's biased decisions costs on this corpus;
+* ``bm25`` -- lexical retrieval, the job's document searched against the
+  candidates' (:class:`app.ml.retrieval.BM25Index`, over every candidate in
+  the corpus);
+* ``dense`` -- cosine between sentence embeddings of the same documents
+  (:mod:`app.ml.encoder`);
+* ``hybrid_rrf`` -- the two fused by reciprocal rank fusion within each slate.
+
+The three retrieval scorers fit nothing to a label, so every job is unseen to
+them: besides the held-out jobs they are measured on **all** the corpus's jobs,
+four times the sample. Whether fusion beats either side alone is reported as
+a paired difference, per job, with its own bootstrap interval, and as the
+number of jobs it wins, ties and loses on NDCG@10. ``--no-dense`` skips the
+two scorers that need the encoder (the ``embeddings`` extra).
 
 NDCG@10 and P@5 carry a 95% bootstrap interval over held-out jobs. Then the
 whole training is repeated on ``--split-seeds`` other splits of the same
@@ -51,7 +64,14 @@ from app.ml.artifact import (
     load_manifest,
     load_versioned_matcher,
 )
-from app.ml.corpus import CorpusConfig, generate_corpus
+from app.ml.corpus import Corpus, CorpusConfig, generate_corpus
+from app.ml.encoder import (
+    Encoder,
+    EncoderUnavailable,
+    SentenceTransformerEncoder,
+    candidate_document,
+    job_document,
+)
 from app.ml.evaluate import (
     NDCG_K,
     PRECISION_K,
@@ -61,6 +81,14 @@ from app.ml.evaluate import (
     evaluate_scores,
 )
 from app.ml.features import feature_dict
+from app.ml.retrieval import (
+    BM25_B,
+    BM25_K1,
+    RRF_K,
+    BM25Index,
+    cosine_scores,
+    fuse_per_group,
+)
 from app.ml.train import TRAINING_LABEL, TrainingData, make_matcher, split_by_job, training_data
 
 DEFAULT_OUT = REPO_ROOT / "docs" / "model_evaluation.json"
@@ -102,13 +130,100 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--resamples", type=int, default=2000, help="bootstrap resamples (default: %(default)s)"
     )
+    parser.add_argument(
+        "--no-dense",
+        action="store_true",
+        help="skip the dense and hybrid scorers, which need the embeddings extra",
+    )
     return parser
+
+
+def load_encoder() -> Encoder:
+    """The pinned sentence-transformer. Raises ``EncoderUnavailable``."""
+    return SentenceTransformerEncoder()
 
 
 def _baseline_coverage(data: TrainingData) -> np.ndarray:
     return np.array(
         [feature_dict(job, candidate)["required_skill_coverage"] for job, candidate in data.pairs]
     )
+
+
+def _bm25_scores(corpus: Corpus, data: TrainingData) -> np.ndarray:
+    """BM25 of each pair's candidate for its job, over every candidate in the corpus."""
+    index = BM25Index([candidate_document(candidate) for candidate in corpus.candidates])
+    row = {candidate.ref: i for i, candidate in enumerate(corpus.candidates)}
+    by_job = {job.ref: index.scores(job_document(job)) for job in corpus.jobs}
+    return np.array([by_job[job.ref][row[candidate.ref]] for job, candidate in data.pairs])
+
+
+def _dense_scores(encoder: Encoder, data: TrainingData) -> np.ndarray:
+    """Cosine between each pair's job and candidate embeddings."""
+    jobs = {job.ref: job for job, _ in data.pairs}
+    candidates = {candidate.ref: candidate for _, candidate in data.pairs}
+    job_vectors = encoder.encode([job_document(job) for job in jobs.values()])
+    candidate_vectors = encoder.encode(
+        [candidate_document(candidate) for candidate in candidates.values()]
+    )
+    job_row = {ref: i for i, ref in enumerate(jobs)}
+    candidate_row = {ref: i for i, ref in enumerate(candidates)}
+    scores = np.empty(len(data))
+    for ref, job_index in job_row.items():
+        mask = [i for i, (job, _) in enumerate(data.pairs) if job.ref == ref]
+        rows = [candidate_row[data.pairs[i][1].ref] for i in mask]
+        scores[mask] = cosine_scores(candidate_vectors[rows], job_vectors[job_index])
+    return scores
+
+
+def _on(data: TrainingData, subset: TrainingData, scores: np.ndarray) -> np.ndarray:
+    """``scores``, given for every pair of ``data``, for the pairs of ``subset``."""
+    position = {(job.ref, candidate.ref): i for i, (job, candidate) in enumerate(data.pairs)}
+    return scores[[position[(job.ref, candidate.ref)] for job, candidate in subset.pairs]]
+
+
+def _retrieval_scores(
+    corpus: Corpus, data: TrainingData, encoder: Encoder | None
+) -> dict[str, np.ndarray]:
+    scores = {"bm25": _bm25_scores(corpus, data)}
+    if encoder is not None:
+        scores["dense"] = _dense_scores(encoder, data)
+        scores["hybrid_rrf"] = fuse_per_group(data.job_refs, scores["bm25"], scores["dense"])
+    return scores
+
+
+def _paired(first: Evaluation, second: Evaluation, *, resamples: int) -> dict[str, Any]:
+    """Per-job differences ``first - second`` in NDCG@10 and P@5, with their intervals."""
+    ndcg = [
+        a.ndcg - b.ndcg
+        for a, b in zip(first.slates, second.slates, strict=True)
+        if a.ndcg is not None and b.ndcg is not None
+    ]
+    precision = [
+        a.precision - b.precision for a, b in zip(first.slates, second.slates, strict=True)
+    ]
+    return {
+        f"ndcg_at_{NDCG_K}_difference": float(np.mean(ndcg)),
+        f"ndcg_at_{NDCG_K}_difference_95ci": bootstrap_interval(ndcg, resamples=resamples),
+        f"precision_at_{PRECISION_K}_difference": float(np.mean(precision)),
+        f"precision_at_{PRECISION_K}_difference_95ci": bootstrap_interval(
+            precision, resamples=resamples
+        ),
+        f"ndcg_at_{NDCG_K}_jobs_better": sum(d > 0 for d in ndcg),
+        f"ndcg_at_{NDCG_K}_jobs_tied": sum(d == 0 for d in ndcg),
+        f"ndcg_at_{NDCG_K}_jobs_worse": sum(d < 0 for d in ndcg),
+    }
+
+
+def _comparisons(results: dict[str, Evaluation], *, resamples: int) -> dict[str, Any]:
+    """Fusion against each side alone, when there is a fusion to compare."""
+    if "hybrid_rrf" not in results:
+        return {}
+    return {
+        f"hybrid_rrf_minus_{other}": _paired(
+            results["hybrid_rrf"], results[other], resamples=resamples
+        )
+        for other in ("bm25", "dense")
+    }
 
 
 def _summary(evaluation: Evaluation, *, resamples: int) -> dict[str, Any]:
@@ -179,8 +294,14 @@ def _manifest_fields(manifest: dict[str, Any]) -> tuple[CorpusConfig, float, int
     return config, float(test_share), split_seed, float(recorded)
 
 
-def evaluate(model: Path, *, split_seeds: Sequence[int], resamples: int) -> dict[str, Any]:
-    """Everything the JSON holds. Raises :class:`EvaluationRefused` or ``MatcherUnavailable``."""
+def evaluate(
+    model: Path, *, split_seeds: Sequence[int], resamples: int, dense: bool = True
+) -> dict[str, Any]:
+    """Everything the JSON holds.
+
+    Raises :class:`EvaluationRefused`, ``MatcherUnavailable``, or, when
+    ``dense`` is set and the encoder cannot be loaded, ``EncoderUnavailable``.
+    """
     matcher, version = load_versioned_matcher(model)
     manifest = load_manifest(model)
     config, test_share, split_seed, recorded = _manifest_fields(manifest)
@@ -192,7 +313,8 @@ def evaluate(model: Path, *, split_seeds: Sequence[int], resamples: int) -> dict
         )
 
     try:
-        data = training_data(generate_corpus(config))
+        corpus = generate_corpus(config)
+        data = training_data(corpus)
         train_set, test_set = split_by_job(data, test_share=test_share, seed=split_seed)
     except ValueError as error:
         raise EvaluationRefused(
@@ -220,6 +342,12 @@ def evaluate(model: Path, *, split_seeds: Sequence[int], resamples: int) -> dict
             test_set, reference.predict_proba(test_set.pairs)[:, 1]
         ),
     }
+
+    encoder = load_encoder() if dense else None
+    retrieval = _retrieval_scores(corpus, data, encoder)
+    for name, all_scores in retrieval.items():
+        scorers[name] = evaluate_scores(test_set, _on(data, test_set, all_scores))
+    every_job = {name: evaluate_scores(data, all_scores) for name, all_scores in retrieval.items()}
 
     per_split = []
     for seed in split_seeds:
@@ -270,6 +398,22 @@ def evaluate(model: Path, *, split_seeds: Sequence[int], resamples: int) -> dict
         "scorers": {
             name: _summary(result, resamples=resamples) for name, result in scorers.items()
         },
+        "comparisons": _comparisons(scorers, resamples=resamples),
+        "retrieval": {
+            "bm25": {"k1": BM25_K1, "b": BM25_B, "pool": len(corpus.candidates)},
+            "encoder": None if encoder is None else encoder.name,
+            "rrf_k": RRF_K,
+            "fused_within": "each job's slate",
+        },
+        "all_jobs": {
+            "pairs": len(data),
+            "jobs": len(set(data.job_refs)),
+            "jobs_without_relevant": every_job["bm25"].jobs_without_relevant,
+            "scorers": {
+                name: _summary(result, resamples=resamples) for name, result in every_job.items()
+            },
+            "comparisons": _comparisons(every_job, resamples=resamples),
+        },
         "splits": every_split,
         "split_spread": {
             name: _spread([split[name] for split in every_split]) for name in metric_names
@@ -283,15 +427,40 @@ def _fmt(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.4f}"
 
 
+def _print_table(scorers: dict[str, Any], comparisons: dict[str, Any]) -> None:
+    print(f"  {'scorer':<26} {'NDCG@10':>8} {'P@5':>8} {'AUC adv':>8} {'AUC rel':>8}")
+    for name, summary in scorers.items():
+        print(
+            f"  {name:<26} {_fmt(summary['ndcg_at_10']):>8} {_fmt(summary['precision_at_5']):>8} "
+            f"{_fmt(summary['roc_auc_advanced']):>8} {_fmt(summary['roc_auc_relevant']):>8}"
+        )
+    for name, paired in comparisons.items():
+        low, high = paired["ndcg_at_10_difference_95ci"]
+        print(
+            f"    {name}: NDCG@10 {paired['ndcg_at_10_difference']:+.4f} "
+            f"({low:+.4f} to {high:+.4f}); better/tied/worse on "
+            f"{paired['ndcg_at_10_jobs_better']}/{paired['ndcg_at_10_jobs_tied']}/"
+            f"{paired['ndcg_at_10_jobs_worse']} jobs"
+        )
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.resamples < 1:
         print(f"error: --resamples must be at least 1, got {args.resamples}", file=sys.stderr)
         return 2
     try:
-        results = evaluate(args.model, split_seeds=args.split_seeds, resamples=args.resamples)
+        results = evaluate(
+            args.model,
+            split_seeds=args.split_seeds,
+            resamples=args.resamples,
+            dense=not args.no_dense,
+        )
     except (MatcherUnavailable, EvaluationRefused) as error:
         print(f"error: {error}", file=sys.stderr)
+        return 2
+    except EncoderUnavailable as error:
+        print(f"error: {error}; or pass --no-dense to skip the dense scorers", file=sys.stderr)
         return 2
 
     try:
@@ -311,12 +480,10 @@ def main(argv: list[str] | None = None) -> int:
         f"  matcher {results['matcher_version']}, held out: {held_out['pairs']} pairs across "
         f"{held_out['jobs']} jobs"
     )
-    print(f"  {'scorer':<26} {'NDCG@10':>8} {'P@5':>8} {'AUC adv':>8} {'AUC rel':>8}")
-    for name, summary in results["scorers"].items():
-        print(
-            f"  {name:<26} {_fmt(summary['ndcg_at_10']):>8} {_fmt(summary['precision_at_5']):>8} "
-            f"{_fmt(summary['roc_auc_advanced']):>8} {_fmt(summary['roc_auc_relevant']):>8}"
-        )
+    _print_table(results["scorers"], results["comparisons"])
+    every = results["all_jobs"]
+    print(f"  retrieval scorers on all {every['jobs']} jobs ({every['pairs']} pairs):")
+    _print_table(every["scorers"], every["comparisons"])
     spread = results["split_spread"]
     print(f"  over {len(results['splits'])} splits (mean, std):")
     for name, values in spread.items():

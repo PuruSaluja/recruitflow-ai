@@ -13,11 +13,14 @@ from types import ModuleType
 
 import numpy as np
 import pytest
+from fake_encoder import FakeEncoder
 
 from app.config import REPO_ROOT
 from app.ml.artifact import load_manifest, load_matcher, manifest_path_for, matcher_version
-from app.ml.corpus import CorpusConfig, generate_corpus
-from app.ml.evaluate import bootstrap_interval, evaluate_scores
+from app.ml.corpus import Corpus, CorpusConfig, generate_corpus
+from app.ml.encoder import EncoderUnavailable, candidate_document, job_document
+from app.ml.evaluate import Evaluation, bootstrap_interval, evaluate_scores
+from app.ml.retrieval import BM25Index, fuse_per_group
 from app.ml.train import (
     TrainingData,
     make_matcher,
@@ -47,6 +50,12 @@ def _load(path: Path, name: str) -> ModuleType:
 script = _load(SCRIPT, "evaluate_matcher")
 
 
+@pytest.fixture(autouse=True)
+def fake_encoder(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The stand-in encoder, so no test needs the real model."""
+    monkeypatch.setattr(script, "load_encoder", FakeEncoder)
+
+
 @pytest.fixture(scope="module")
 def model(tmp_path_factory: pytest.TempPathFactory) -> Path:
     out = tmp_path_factory.mktemp("matcher") / "matcher.joblib"
@@ -58,7 +67,9 @@ def model(tmp_path_factory: pytest.TempPathFactory) -> Path:
 @pytest.fixture(scope="module")
 def results(model: Path, tmp_path_factory: pytest.TempPathFactory) -> dict:
     out = tmp_path_factory.mktemp("evaluation") / "evaluation.json"
-    assert script.main(["--model", str(model), "--out", str(out), *FAST]) == 0
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(script, "load_encoder", FakeEncoder)
+        assert script.main(["--model", str(model), "--out", str(out), *FAST]) == 0
     return json.loads(out.read_text(encoding="utf-8"))
 
 
@@ -78,6 +89,9 @@ def test_it_measures_every_scorer_on_the_held_out_jobs(results: dict) -> None:
         "random",
         "required_skill_coverage",
         "fitted_on_relevance",
+        "bm25",
+        "dense",
+        "hybrid_rrf",
     }
     assert results["held_out"]["jobs"] == 10
     assert results["held_out"]["pairs"] == 500
@@ -170,6 +184,136 @@ def test_no_extra_splits_leaves_one_split_and_no_spread(model: Path, tmp_path: P
     written = json.loads(out.read_text(encoding="utf-8"))
     assert len(written["splits"]) == 1
     assert written["split_spread"]["ndcg_at_10"]["std"] == 0.0
+
+
+# --- retrieval scorers -------------------------------------------------
+
+
+def _bm25(corpus: Corpus, data: TrainingData) -> np.ndarray:
+    index = BM25Index([candidate_document(c) for c in corpus.candidates])
+    refs = [c.ref for c in corpus.candidates]
+    return np.array(
+        [index.scores(job_document(job))[refs.index(cand.ref)] for job, cand in data.pairs]
+    )
+
+
+def _fake_cosine(data: TrainingData) -> np.ndarray:
+    encoder = FakeEncoder()
+    out = []
+    for job, candidate in data.pairs:
+        j = encoder.encode([job_document(job)])[0].astype(float)
+        c = encoder.encode([candidate_document(candidate)])[0].astype(float)
+        out.append(j @ c / np.linalg.norm(j) / np.linalg.norm(c))
+    return np.array(out)
+
+
+def _measured(corpus: Corpus, data: TrainingData) -> dict[str, Evaluation]:
+    scores = {"bm25": _bm25(corpus, data), "dense": _fake_cosine(data)}
+    scores["hybrid_rrf"] = fuse_per_group(data.job_refs, scores["bm25"], scores["dense"])
+    return {name: evaluate_scores(data, s) for name, s in scores.items()}
+
+
+@pytest.fixture(scope="module")
+def recomputed() -> dict[str, dict[str, Evaluation]]:
+    """Every retrieval score recomputed pair by pair, independently of the script."""
+    corpus = generate_corpus(CorpusConfig(seed=5, n_jobs=40, n_candidates=1200))
+    data = training_data(corpus)
+    return {
+        "all": _measured(corpus, data),
+        "held_out": _measured(corpus, split_by_job(data, seed=SPLIT_SEED)[1]),
+    }
+
+
+@pytest.mark.parametrize("name", ["bm25", "dense", "hybrid_rrf"])
+def test_each_retrieval_scorer_is_measured_on_the_held_out_jobs(
+    results: dict, recomputed: dict, name: str
+) -> None:
+    expected = recomputed["held_out"][name]
+    measured = results["scorers"][name]
+    assert measured["ndcg_at_10"] == pytest.approx(expected.ndcg_at_10, abs=1e-12)
+    assert measured["precision_at_5"] == pytest.approx(expected.precision_at_5, abs=1e-12)
+    assert measured["roc_auc_relevant"] == pytest.approx(expected.roc_auc_relevant, abs=1e-12)
+
+
+@pytest.mark.parametrize("name", ["bm25", "dense", "hybrid_rrf"])
+def test_each_retrieval_scorer_is_measured_on_every_job_too(
+    results: dict, recomputed: dict, name: str
+) -> None:
+    every = results["all_jobs"]
+    assert (every["jobs"], every["pairs"]) == (40, 2000)
+    expected = recomputed["all"][name]
+    assert every["scorers"][name]["ndcg_at_10"] == pytest.approx(expected.ndcg_at_10, abs=1e-12)
+    assert every["jobs_without_relevant"] == expected.jobs_without_relevant
+
+
+def test_the_three_retrieval_scorers_rank_differently(results: dict) -> None:
+    ndcgs = {results["scorers"][n]["ndcg_at_10"] for n in ("bm25", "dense", "hybrid_rrf")}
+    assert len(ndcgs) == 3
+
+
+@pytest.mark.parametrize("scope", ["held_out", "all"])
+@pytest.mark.parametrize("other", ["bm25", "dense"])
+def test_fusion_is_compared_with_each_side_job_by_job(
+    results: dict, recomputed: dict, scope: str, other: str
+) -> None:
+    where = results if scope == "held_out" else results["all_jobs"]
+    paired = where["comparisons"][f"hybrid_rrf_minus_{other}"]
+    fused, alone = recomputed[scope]["hybrid_rrf"], recomputed[scope][other]
+    pairs = list(zip(fused.slates, alone.slates, strict=True))
+    ndcg = [a.ndcg - b.ndcg for a, b in pairs if a.ndcg is not None]
+    precision = [a.precision - b.precision for a, b in pairs]
+
+    assert paired["ndcg_at_10_difference"] == pytest.approx(np.mean(ndcg), abs=1e-12)
+    assert paired["precision_at_5_difference"] == pytest.approx(np.mean(precision), abs=1e-12)
+    assert paired["ndcg_at_10_difference_95ci"] == pytest.approx(
+        bootstrap_interval(ndcg, resamples=200), abs=1e-12
+    )
+    assert paired["precision_at_5_difference_95ci"] == pytest.approx(
+        bootstrap_interval(precision, resamples=200), abs=1e-12
+    )
+    assert paired["ndcg_at_10_jobs_better"] == sum(d > 0 for d in ndcg)
+    assert paired["ndcg_at_10_jobs_tied"] == sum(d == 0 for d in ndcg)
+    assert paired["ndcg_at_10_jobs_worse"] == sum(d < 0 for d in ndcg)
+
+
+def test_it_records_how_retrieval_was_configured(results: dict) -> None:
+    assert results["retrieval"] == {
+        "bm25": {"k1": 1.2, "b": 0.75, "pool": 1200},
+        "encoder": "fake-encoder@1",
+        "rrf_k": 60,
+        "fused_within": "each job's slate",
+    }
+
+
+def test_no_dense_skips_the_encoder_and_what_needs_it(
+    model: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refuse() -> None:
+        raise AssertionError("the encoder was loaded")
+
+    monkeypatch.setattr(script, "load_encoder", refuse)
+    out = tmp_path / "evaluation.json"
+    assert script.main(["--model", str(model), "--out", str(out), *FAST, "--no-dense"]) == 0
+    written = json.loads(out.read_text(encoding="utf-8"))
+    assert set(written["scorers"]) >= {"matcher", "bm25"}
+    assert not {"dense", "hybrid_rrf"} & set(written["scorers"])
+    assert set(written["all_jobs"]["scorers"]) == {"bm25"}
+    assert written["comparisons"] == {} == written["all_jobs"]["comparisons"]
+    assert written["retrieval"]["encoder"] is None
+
+
+def test_an_encoder_it_cannot_load_is_refused_naming_no_dense(
+    model: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def unavailable() -> None:
+        raise EncoderUnavailable("sentence-transformers is not installed")
+
+    monkeypatch.setattr(script, "load_encoder", unavailable)
+    out = tmp_path / "evaluation.json"
+    assert script.main(["--model", str(model), "--out", str(out), *FAST]) == 2
+    err = capsys.readouterr().err
+    assert "sentence-transformers is not installed" in err and "--no-dense" in err
+    assert not out.exists()
 
 
 # --- refusals ----------------------------------------------------------
@@ -312,7 +456,7 @@ def test_it_runs_as_a_command(model: Path, tmp_path: Path) -> None:
     out = tmp_path / "evaluation.json"
     command = [sys.executable, str(SCRIPT), "--model", str(model), "--out", str(out)]
     result = subprocess.run(
-        [*command, "--split-seeds", "--resamples", "50"],
+        [*command, "--split-seeds", "--resamples", "50", "--no-dense"],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
