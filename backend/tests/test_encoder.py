@@ -1,13 +1,16 @@
 """Tests for app.ml.encoder.
 
 The tests that run the real model are skipped where ``sentence-transformers``
-is not installed or its pinned model is not cached, which includes CI: the
-``embeddings`` extra is not part of the dev install.
+is not installed or its pinned model cannot be loaded, as in CI's main job,
+whose dev install leaves the ``embeddings`` extra out. CI's ``embeddings`` job
+installs it and sets ``RECRUITFLOW_REQUIRE_ENCODER``, which turns that skip
+into a failure, so a model that failed to download cannot pass as a skip.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from types import SimpleNamespace
 
@@ -147,10 +150,11 @@ def test_the_default_revision_is_a_full_commit_hash() -> None:
 
 @pytest.fixture(scope="module")
 def encoder() -> SentenceTransformerEncoder:
-    pytest.importorskip("sentence_transformers")
     try:
         return SentenceTransformerEncoder()
     except EncoderUnavailable as exc:  # pragma: no cover - depends on the machine
+        if os.environ.get("RECRUITFLOW_REQUIRE_ENCODER"):
+            raise
         pytest.skip(str(exc))
 
 

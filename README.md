@@ -661,9 +661,10 @@ python scripts/embed.py --out embed_report.json
 ```
 
 The model's files (88 MB) are downloaded into the Hugging Face cache on first
-use. CI does not install the extra, so the tests that run the real model are
-skipped there; the cache and the script are tested with a deterministic
-stand-in encoder.
+use. CI's main job leaves the extra out, so the tests that load the real
+model skip there; a separate `embeddings` job installs it and runs them,
+failing rather than skipping if the model cannot be loaded. The cache and the
+script are tested with a deterministic stand-in encoder.
 
 ### Measured on the default corpus
 
