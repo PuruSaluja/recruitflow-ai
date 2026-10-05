@@ -8,9 +8,10 @@ descriptions.
 > application APIs are in place, including resume file ingestion and the
 > pipeline stage-history trail, as is the matching layer: the skills taxonomy,
 > the synthetic corpus the matcher trains on, its features, the calibrated
-> classifier, and endpoints that score a job's candidate pool and cache the
-> ranking. Evaluation, the fairness audit, PDF reporting and the frontend are
-> landing incrementally.
+> classifier, endpoints that score a job's candidate pool and cache the
+> ranking, a held-out evaluation, and sentence-transformer embeddings of every
+> candidate and job, cached in PostgreSQL. Hybrid retrieval, the fairness
+> audit, PDF reporting and the frontend are landing incrementally.
 
 ## Tech stack
 
@@ -18,14 +19,14 @@ descriptions.
 | -------- | ------ |
 | API      | FastAPI, Pydantic v2, Uvicorn |
 | Database | PostgreSQL 16, SQLAlchemy 2.0, Alembic |
-| ML       | scikit-learn (TF-IDF + engineered features) |
+| ML       | scikit-learn (TF-IDF + engineered features); sentence-transformers (embeddings, optional) |
 | Reports  | ReportLab |
 | Frontend | React 18, Vite, TypeScript |
 | Tests    | pytest, httpx2 |
 
 ## Data model
 
-Five tables, with native PostgreSQL enums and JSONB skill lists:
+Seven tables, with native PostgreSQL enums and JSONB skill lists:
 
 - **`jobs`** — requisitions: title, seniority, required/preferred skills, salary band, status.
 - **`candidates`** — talent pool: resume text, skills, years of experience, education.
@@ -34,6 +35,9 @@ Five tables, with native PostgreSQL enums and JSONB skill lists:
   move: from-status, to-status, when, and an optional free-text `changed_by`.
 - **`match_scores`** — cached model output per (job, candidate, model version),
   including the per-feature breakdown used to explain a ranking.
+- **`candidate_embeddings`**, **`job_embeddings`** — one float32 vector per
+  (owner, encoder), with the hash of the text it was made from; see
+  [Embeddings](#embeddings).
 
 ## Local development
 
@@ -602,15 +606,77 @@ NDCG@10 is 0.8063 ± 0.0231 and P@5 0.8012 ± 0.0227 (mean ± std). The metric
 definitions, the tie handling and what these numbers cannot show are in
 [`docs/model_evaluation.md`](docs/model_evaluation.md).
 
-### Where embeddings will live
+## Embeddings
 
-Dense retrieval is next, and its embeddings will be stored as float32 `bytea`
-and searched exactly in numpy rather than with pgvector, which the local
-PostgreSQL does not offer. Measured in one run on 4,000 random 384-dimension
-vectors, an exact top-10 took 3.1 ms, and reading the vectors back 89 ms as
-`bytea` against 450 ms (binary transfer) to 1,063 ms (text) as `real[]`. The
-reasoning, the full measurements and how much they vary are in
-[`docs/embedding_storage.md`](docs/embedding_storage.md).
+Every candidate and job can also be embedded by a pretrained
+sentence-transformer, the dense half of the hybrid retrieval that comes next.
+The vectors are not yet used for ranking.
+
+- **Encoder** (`app/ml/encoder.py`): all-MiniLM-L6-v2, 384 dimensions,
+  pinned to one revision on the Hugging Face Hub. Its name, model id plus
+  revision, is stored beside every vector, so a change of weights makes old
+  vectors visibly another encoder's. It encodes the same document the TF-IDF
+  features read, folded the same way. That matters for this model: its
+  tokenizer lowercases but does not apply NFKC, and measured on it, full-width
+  `Python` has cosine 0.21 with `Python` as typed, and 1.0 once folded. The
+  model reads 256 word-pieces at most. Every document in the default corpus
+  fits (the longest has 130), but a long real resume would be embedded from
+  its opening only.
+- **Storage** (`candidate_embeddings`, `job_embeddings`): float32 `bytea`,
+  little-endian, searched exactly in numpy rather than with pgvector, which
+  the local PostgreSQL does not offer. The reasoning and measurements are in
+  [`docs/embedding_storage.md`](docs/embedding_storage.md). The database checks
+  each vector's byte length, and a vector with NaN, infinity or all zeros is
+  refused before it is written.
+- **Cache** (`app/services/embeddings.py`): each row keeps the SHA-256 of the
+  text it was made from, so a refresh encodes only owners that are new or
+  whose text has changed. Owners go in batches, each encoded with no
+  transaction open and then written and committed on its own. A batch locks
+  its owners `FOR KEY SHARE`, so an edit of a candidate or job never waits for
+  it. A vector written for text that an edit has since replaced keeps the old
+  text's hash and is re-encoded next time. A delete waits only for the
+  batches holding its owner at that moment, one per refresh. Two refreshes of the same owners finish without deadlocking, since
+  both write in id order.
+
+The encoder is an optional extra, since it brings torch:
+
+```bash
+pip install torch --index-url https://download.pytorch.org/whl/cpu   # CPU build, ~550 MB
+pip install -e ".[embeddings]"
+python scripts/embed.py --out embed_report.json
+```
+
+The model's files (88 MB) are downloaded into the Hugging Face cache on first
+use. CI does not install the extra, so the tests that run the real model are
+skipped there; the cache and the script are tested with a deterministic
+stand-in encoder.
+
+### Measured on the default corpus
+
+One run of `scripts/embed.py` on a scratch database holding the default corpus
+(200 jobs, 4,000 candidates), CPU only, CPython 3.14.6, torch 2.14.1+cpu,
+sentence-transformers 6.1.0, Windows 11:
+
+| | Encoded | Total | In the model |
+| --- | ---: | ---: | ---: |
+| Candidates, first run | 4,000 | 54.57 s | 53.94 s |
+| Jobs, first run | 200 | 3.27 s | 3.22 s |
+| Candidates, rerun | 0 (4,000 current) | 0.11 s | 0 s |
+| Candidates, after 2 resumes were edited | 2 | 0.16 s | 0.04 s |
+
+Loading the model took 6.4 s. Encoding is the cost, at about 74 candidates a
+second. Everything else, reading the candidates, hashing their text and
+writing the vectors, took the remaining 0.6 s. Reading all 4,000
+back with `load_embeddings` took 57.5 ms (median of 5), an exact top-10 over
+them 2.4 ms, and five stored vectors matched a fresh encoding of the same
+text exactly.
+
+A soak on the same database: two refreshes at once (batches of 64 and of
+100) over all 4,000 candidates, while another connection deleted 50
+candidates and edited 50 resumes. Both exited cleanly, and the slowest
+delete took 14 ms. 3,950 vectors remained for the 3,950 candidates left,
+none for a deleted one. A third run re-encoded exactly the 50 edited
+candidates, and nothing was stale afterwards.
 
 ## Scoring candidates
 

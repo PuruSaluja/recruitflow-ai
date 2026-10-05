@@ -83,6 +83,11 @@ What this shows:
 
 ## What the embeddings item should do
 
+Done on 2026-10-04/05: `app/ml/embeddings.py` (format and search),
+`app/models/embedding.py` (tables), `app/services/embeddings.py` (cache) and
+`scripts/embed.py`; measured in the README's Embeddings section. The plan
+as written before it:
+
 - Store each embedding as `bytea` with an explicit byte order: write
   `vector.astype("<f4").tobytes()` and read with `np.frombuffer(..., "<f4")`,
   so the bytes mean the same on any machine. Check the length in SQL
