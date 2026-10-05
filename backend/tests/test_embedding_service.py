@@ -221,7 +221,7 @@ def test_a_refresh_can_be_limited_to_some_owners(clean_db: Engine, candidates: l
 def test_jobs_are_embedded_from_the_job_document(clean_db: Engine, make_job: Factory) -> None:
     ids = [
         make_job(title="Data Analyst", required_skills=["SQL"])["id"],
-        make_job(title="Ｐlatform Engineer", description="Run the Kubernetes platform.")["id"],
+        make_job(title="\uff30latform Engineer", description="Run the Kubernetes platform.")["id"],
     ]
     encoder = FakeEncoder()
     with Session(clean_db) as db:
@@ -389,6 +389,25 @@ def test_an_owner_deleted_while_its_batch_is_encoded_is_skipped(
     assert sorted(_stored(clean_db)) == [i for i in candidates if i != doomed]
 
 
+def test_a_batch_whose_every_owner_vanished_writes_nothing_and_carries_on(
+    client: TestClient, clean_db: Engine, candidates: list[int]
+) -> None:
+    doomed = candidates[2]
+
+    def delete_during_its_own_batch(call: int) -> None:
+        if call == 3:  # batches of one: the third holds only the doomed candidate
+            assert client.delete(f"/candidates/{doomed}").status_code == 204
+
+    encoder = FakeEncoder(on_encode=delete_during_its_own_batch)
+    with Session(clean_db) as db:
+        report = refresh_embeddings(db, CANDIDATES, encoder, batch_size=1)
+        assert not db.in_transaction()
+
+    assert len(encoder.calls) == 5
+    assert report == RefreshReport(encoded=4, current=0, vanished=1, not_found=0)
+    assert sorted(_stored(clean_db)) == [i for i in candidates if i != doomed]
+
+
 def test_a_batch_waits_for_an_uncommitted_delete_then_skips_its_owner(
     clean_db: Engine, candidates: list[int]
 ) -> None:
@@ -417,7 +436,7 @@ def test_a_batch_waits_for_an_uncommitted_delete_then_skips_its_owner(
     assert sorted(_stored(clean_db)) == candidates[1:]
 
 
-def test_an_edit_does_not_wait_for_a_batch_and_leaves_its_vector_stale(
+def test_a_resume_edit_does_not_wait_for_a_batch_and_leaves_its_vector_stale(
     client: TestClient, clean_db: Engine, candidates: list[int]
 ) -> None:
     edited = candidates[2]
@@ -451,6 +470,95 @@ def test_an_edit_does_not_wait_for_a_batch_and_leaves_its_vector_stale(
         )
     document = _documents(clean_db, [edited])[edited]
     assert _stored(clean_db)[edited][1] == text_sha256(document)
+
+
+def test_an_email_edit_waits_for_the_batch_then_lands(
+    client: TestClient, clean_db: Engine, candidates: list[int]
+) -> None:
+    """The email has a unique index, so PostgreSQL treats it as a key: changing it
+    takes FOR UPDATE, which conflicts with the batch's FOR KEY SHARE."""
+    edited = candidates[1]
+    pool = ThreadPoolExecutor(max_workers=1)
+    pending: dict[str, Any] = {}
+
+    def edit_while_paused() -> None:
+        pending["response"] = pool.submit(
+            client.patch, f"/candidates/{edited}", json={"email": "moved@example.com"}
+        )
+        pending["waited"] = _wait_for_a_lock_wait(clean_db)
+
+    with Session(clean_db) as db:
+        _pause_before_first_commit(db, edit_while_paused)
+        report = refresh_embeddings(db, CANDIDATES, FakeEncoder())
+    response = pending["response"].result(timeout=30)
+    pool.shutdown()
+
+    assert pending["waited"], "the email edit never waited for the batch"
+    assert response.status_code == 200, response.text
+    assert response.json()["email"] == "moved@example.com"
+    assert report.encoded == 5
+    # The email is not part of the encoded document, so nothing went stale.
+    with Session(clean_db) as db:
+        assert refresh_embeddings(db, CANDIDATES, FakeEncoder()).current == 5
+
+
+def test_a_batch_waits_for_an_uncommitted_email_change_then_writes(
+    clean_db: Engine, candidates: list[int]
+) -> None:
+    """The batch then locks the updated row: the candidate is written, not counted
+    as vanished."""
+    edited = candidates[0]
+    updated = threading.Event()
+    seen: dict[str, bool] = {}
+
+    def hold_an_email_change_open() -> None:
+        with clean_db.connect() as other, other.begin():
+            other.execute(
+                text("UPDATE candidates SET email = 'moved@example.com' WHERE id = :id"),
+                {"id": edited},
+            )
+            updated.set()
+            seen["waited"] = _wait_for_a_lock_wait(clean_db)
+
+    holder = threading.Thread(target=hold_an_email_change_open)
+
+    def start_the_change(call: int) -> None:
+        holder.start()
+        assert updated.wait(10)
+
+    with Session(clean_db) as db:
+        report = refresh_embeddings(db, CANDIDATES, FakeEncoder(on_encode=start_the_change))
+    holder.join(30)
+
+    assert seen["waited"], "the batch never waited for the email change"
+    assert report == RefreshReport(encoded=5, current=0, vanished=0, not_found=0)
+    assert sorted(_stored(clean_db)) == candidates
+
+
+def test_a_job_delete_waits_for_an_uncommitted_batch_then_takes_its_vectors(
+    client: TestClient, clean_db: Engine, make_job: Factory
+) -> None:
+    jobs = [make_job(title=f"Data Analyst {n}")["id"] for n in range(3)]
+    doomed = jobs[1]
+    pool = ThreadPoolExecutor(max_workers=1)
+    pending: dict[str, Any] = {}
+
+    def delete_while_paused() -> None:
+        pending["response"] = pool.submit(client.delete, f"/jobs/{doomed}")
+        pending["waited"] = _wait_for_a_lock_wait(clean_db)
+
+    with Session(clean_db) as db:
+        _pause_before_first_commit(db, delete_while_paused)
+        report = refresh_embeddings(db, JOBS, FakeEncoder())
+    response = pending["response"].result(timeout=30)
+    pool.shutdown()
+
+    assert pending["waited"], "the job delete never waited for the refresh's batch"
+    assert response.status_code == 204, response.text
+    assert report.encoded == 3
+    with clean_db.connect() as conn:
+        left = conn.execute(text("SELECT job_id FROM job_embeddings ORDER BY job_id")).scalars()
+        assert list(left) == [jobs[0], jobs[2]]
 
 
 @pytest.mark.parametrize("batch_sizes", [(2, 2), (2, 3), (5, 1)])

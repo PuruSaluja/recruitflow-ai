@@ -18,9 +18,14 @@ locks its owners' rows ``FOR KEY SHARE``, in id order, then upserts their
 vectors in id order:
 
 * An edit of a candidate or job (``FOR NO KEY UPDATE``) does not conflict with
-  that lock, so edits never wait for a refresh, nor a refresh for them. A
+  that lock, so edits do not wait for a refresh, nor a refresh for them. A
   vector written for text that an edit has since replaced carries the old
-  text's hash, so the next refresh sees it as stale.
+  text's hash, so the next refresh sees it as stale. **The exception is a
+  candidate's email**: it has a unique index, so PostgreSQL treats it as a
+  key, and an edit that changes it takes ``FOR UPDATE``. That edit waits for
+  the batch holding the candidate, and a batch reaching a candidate whose
+  email change is uncommitted waits for that, then locks the updated row.
+  Neither waits on the other, so this cannot deadlock. Jobs have no such key.
 * A delete's final ``DELETE`` (``FOR UPDATE``) does conflict: it waits for the
   batch's commit, then takes the new vectors with it by ``ON DELETE CASCADE``.
   An owner deleted before the batch locks it is not returned by the lock, and
