@@ -58,9 +58,14 @@ DEFAULT_TEST_SHARE = 0.25
 CALIBRATION_METHOD = "sigmoid"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class TrainingData:
-    """Pairs with their labels, in one order, ready to fit or to score."""
+    """Pairs with their labels, in one order, ready to fit or to score.
+
+    Compared and hashed by identity. The generated field-by-field ``==``
+    compared the label arrays, which have no single truth value, so two equal
+    instances raised ``ValueError`` and none could be hashed.
+    """
 
     pairs: tuple[Pair, ...]
     #: The training target: whether a past recruiter advanced the candidate.

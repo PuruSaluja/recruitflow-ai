@@ -92,6 +92,16 @@ def test_each_row_carries_its_own_objects_and_its_own_labels(corpus, data) -> No
         assert job_ref == labelled.job_ref
 
 
+def test_training_data_compares_and_hashes_by_identity(corpus, data) -> None:
+    """Field-by-field equality compared the label arrays and raised ValueError."""
+    twin = training_data(corpus)
+    assert twin is not data
+    assert (data == twin) is False
+    assert data == data
+    assert data != twin
+    assert len({data, twin, data}) == 2
+
+
 # --- the split --------------------------------------------------------------
 
 
