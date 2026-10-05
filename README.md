@@ -632,16 +632,20 @@ The vectors are not yet used for ranking.
   text it was made from, so a refresh encodes only owners that are new or
   whose text has changed. Owners go in batches, each encoded with no
   transaction open and then written and committed on its own. A batch locks
-  its owners `FOR KEY SHARE`, so an edit of a candidate or job never waits for
-  it. A vector written for text that an edit has since replaced keeps the old
-  text's hash and is re-encoded next time. A delete waits only for the
-  batches holding its owner at that moment, one per refresh. Two refreshes of the same owners finish without deadlocking, since
-  both write in id order.
+  its owners `FOR KEY SHARE`, so editing a job, or a candidate's resume or
+  any other field but the email, does not wait for it. A candidate's email
+  has a unique index, which makes it a key to PostgreSQL, so an edit that
+  changes it does wait for a batch holding that candidate; it cannot
+  deadlock with one. A vector written for text that an edit has since
+  replaced keeps the old text's hash and is re-encoded next time. A delete
+  waits only for the batches holding its owner at that moment, one per
+  refresh. Two refreshes of the same owners finish without deadlocking,
+  since both write in id order.
 
 The encoder is an optional extra, since it brings torch:
 
 ```bash
-pip install torch --index-url https://download.pytorch.org/whl/cpu   # CPU build, ~550 MB
+pip install torch --index-url https://download.pytorch.org/whl/cpu   # CPU build, about 550 MB installed
 pip install -e ".[embeddings]"
 python scripts/embed.py --out embed_report.json
 ```
@@ -665,18 +669,28 @@ sentence-transformers 6.1.0, Windows 11:
 | Candidates, after 2 resumes were edited | 2 | 0.16 s | 0.04 s |
 
 Loading the model took 6.4 s. Encoding is the cost, at about 74 candidates a
-second. Everything else, reading the candidates, hashing their text and
-writing the vectors, took the remaining 0.6 s. Reading all 4,000
-back with `load_embeddings` took 57.5 ms (median of 5), an exact top-10 over
-them 2.4 ms, and five stored vectors matched a fresh encoding of the same
-text exactly.
+second in the model. Everything else, reading the candidates, hashing their
+text and writing the vectors, took the remaining 0.6 s. The run varies: two
+later runs from scratch on the same database took 59.59 s and 62.18 s for
+the candidates (65 to 68 a second in the model), 3.87 s and 3.74 s for the
+jobs, and 6.98 s and 6.78 s to load the model, and a rerun with nothing to
+do took 0.15 s. Reading all 4,000 back with `load_embeddings` took 57.5 ms
+(median of 5; 57.7 and 58.0 ms in two later sessions), and an exact top-10
+over them 2.4 ms. Five stored vectors matched a fresh encoding of the same
+text exactly, though that is not guaranteed: which batch a text is encoded
+in can move its vector by up to 1.6e-7 per value (measured over 64
+documents).
 
 A soak on the same database: two refreshes at once (batches of 64 and of
 100) over all 4,000 candidates, while another connection deleted 50
 candidates and edited 50 resumes. Both exited cleanly, and the slowest
 delete took 14 ms. 3,950 vectors remained for the 3,950 candidates left,
 none for a deleted one. A third run re-encoded exactly the 50 edited
-candidates, and nothing was stale afterwards.
+candidates, and nothing was stale afterwards. A second soak added 50 email
+changes, the edits that do wait for a batch. It ended the same way: both
+refreshes clean, the slowest delete 10 ms and the slowest email change 2 ms,
+and a third run re-encoded exactly the 50 resume edits (the email is not
+part of the encoded text).
 
 ## Scoring candidates
 

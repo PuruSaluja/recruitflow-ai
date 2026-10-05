@@ -35,8 +35,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 
-#: Longest encoder name, e.g. ``sentence-transformers/all-MiniLM-L6-v2`` plus
-#: an ``@`` and a 40-character revision hash.
+#: Room for a Hub model id such as ``sentence-transformers/all-MiniLM-L6-v2``,
+#: an ``@`` and a 40-character revision hash (that one is 79 characters).
 ENCODER_MAX_LENGTH = 200
 
 

@@ -1,10 +1,11 @@
 """Embedding storage format and exact cosine search.
 
-The 2026-10-01 spike (``docs/embedding_storage.md``) found pgvector cannot be
-installed against the local server, and chose to keep embeddings in
-PostgreSQL as ``bytea`` holding float32 values, searched exactly in numpy over
-a job's pool. This module is that format and that search, with no database
-and no encoder in it, so both can be tested on their own.
+The 2026-10-01 spike (``docs/embedding_storage.md``) found pgvector is not
+available on the local server (adding it needs a Visual Studio build or an
+untested conda-forge package), and chose to keep embeddings in PostgreSQL as
+``bytea`` holding float32 values, searched exactly in numpy over a job's pool.
+This module is that format and that search, with no database and no encoder
+in it, so both can be tested on their own.
 
 **Byte order is part of the format.** Vectors are written as little-endian
 float32 (``<f4``) whatever the machine, so the stored bytes mean the same
@@ -97,7 +98,8 @@ def top_k_cosine(stored: np.ndarray, query: np.ndarray, k: int) -> tuple[np.ndar
         raise ValueError("cosine similarity is undefined for a zero vector")
     similarities = (stored @ query) / (row_norms * query_norm)
     # A full stable sort rather than argpartition, so ties keep their order.
-    # Measured for a top-10: 0.21 ms over 4,000 scores and 1.34 ms over
-    # 20,000, against 0.02 and 0.05 ms for argpartition (best of 5).
+    # Measured for a top-10, best of 5, in two sessions: 0.18-0.21 ms over
+    # 4,000 scores and 1.18-1.34 ms over 20,000, against 0.02 and 0.04-0.05 ms
+    # for argpartition.
     order = np.argsort(-similarities, kind="stable")[:k]
     return order, similarities[order]
