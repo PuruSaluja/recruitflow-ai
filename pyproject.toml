@@ -26,6 +26,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# The dense encoder (app.ml.encoder). Optional because nothing else needs it
+# and it brings torch; install torch's CPU-only build first to keep it small.
+embeddings = [
+    "sentence-transformers>=5.0",
+]
 dev = [
     "pytest>=8.3",
     "pytest-cov>=6.0",
