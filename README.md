@@ -9,8 +9,9 @@ descriptions.
 > pipeline stage-history trail, as is the matching layer: the skills taxonomy,
 > the synthetic corpus the matcher trains on, its features, the calibrated
 > classifier, endpoints that score a job's candidate pool and cache the
-> ranking, a held-out evaluation, and sentence-transformer embeddings of every
-> candidate and job, cached in PostgreSQL. Hybrid retrieval, the fairness
+> ranking, a held-out evaluation, sentence-transformer embeddings of every
+> candidate and job, cached in PostgreSQL, and a measured comparison of
+> lexical, dense and hybrid retrieval. A cross-encoder re-rank, the fairness
 > audit, PDF reporting and the frontend are landing incrementally.
 
 ## Tech stack
@@ -606,11 +607,34 @@ NDCG@10 is 0.8063 ± 0.0231 and P@5 0.8012 ± 0.0227 (mean ± std). The metric
 definitions, the tie handling and what these numbers cannot show are in
 [`docs/model_evaluation.md`](docs/model_evaluation.md).
 
+### Lexical, dense and hybrid retrieval
+
+The same script measures three untrained scorers
+(`app/ml/retrieval.py`): BM25 over the candidates' documents with the job's
+as the query, cosine between the documents' embeddings, and the two fused by
+reciprocal rank fusion (`k = 60`) within each slate. Every setting is the
+textbook default; none was tuned. Being untrained, they are also measured on
+all 200 jobs:
+
+| NDCG@10 | 50 held-out jobs | All 200 jobs |
+| --- | --- | --- |
+| BM25 | 0.5081 | 0.5333 |
+| Dense | 0.6637 | 0.6566 |
+| Hybrid (RRF) | 0.6259 | 0.6392 |
+
+**Fusion does not beat dense retrieval here.** Job by job, the hybrid beats
+BM25 by +0.1059 NDCG@10 over all jobs (95% CI +0.0886 to +0.1231) but trails
+dense by 0.0174 (−0.0344 to +0.0002), and on the held-out jobs by 0.0378
+(−0.0655 to −0.0096). BM25 is much the weaker side on these documents, and
+equal-weight fusion gives it as much say as dense. All three sit well below
+the trained matcher. Details and P@5 are in
+[`docs/model_evaluation.md`](docs/model_evaluation.md).
+
 ## Embeddings
 
 Every candidate and job can also be embedded by a pretrained
-sentence-transformer, the dense half of the hybrid retrieval that comes next.
-The vectors are not yet used for ranking.
+sentence-transformer. The evaluation above measures them as a retrieval
+scorer; the API does not rank with them yet.
 
 - **Encoder** (`app/ml/encoder.py`): all-MiniLM-L6-v2, 384 dimensions,
   pinned to one revision on the Hugging Face Hub. Its name, model id plus
