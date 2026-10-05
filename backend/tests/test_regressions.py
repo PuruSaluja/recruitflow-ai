@@ -1614,7 +1614,7 @@ def test_a_repeat_application_racing_a_delete_of_its_job_or_candidate_is_a_404(
     make_application: Factory,
     parent: Any,
 ) -> None:
-    """Found in the 2026-09-24 recheck: the two deadlocked, and the loser answered 503.
+    """Regression: the two deadlocked, and the loser answered 503.
 
     The delete has removed the first application and is about to remove the row
     itself, the way the delete route does it. The repeat application's insert
@@ -1731,7 +1731,7 @@ def test_a_job_delete_during_a_scoring_insert_of_several_batches_does_not_deadlo
         assert conn.scalar(select(func.count()).select_from(MatchScore)) == 0
 
 
-# Found in the 2026-09-26 recheck: deferring that check left a job delete and a
+# Regression: deferring that check left a job delete and a
 # scoring run able to deadlock in other orders, and made one more. They now
 # take turns: the run holds its job's write lock from before its first write
 # to its commit, the lock a job delete, an edit and another run take first.
@@ -1854,7 +1854,7 @@ def test_a_candidate_delete_arriving_while_a_scoring_run_writes_its_score_waits_
     monkeypatch: pytest.MonkeyPatch,
     cached: bool,
 ) -> None:
-    """Checked in the 2026-09-29 recheck, once scores were written with one upsert.
+    """Pinned once scores were written with one upsert.
 
     The run has just updated the candidate's cached score, or inserted a new
     one, when a delete of the candidate arrives. The delete reaches that row
@@ -1983,7 +1983,7 @@ def test_two_scoring_runs_of_one_job_that_rank_it_differently_take_turns(
     make_candidate: Factory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Found in the 2026-09-26 recheck: holding the job FOR SHARE let them write at once.
+    """Regression: holding the job FOR SHARE let them write at once.
 
     Each run inserted its new scores in rank order, 1,000 to a statement, so
     here they inserted the same 2,000 rows in opposite orders. Each would wait

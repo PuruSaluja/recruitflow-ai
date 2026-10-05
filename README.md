@@ -775,8 +775,8 @@ order. Timed in-process on a throwaway database with the default corpus's
 | Whole call, rescore | 2,068 ms median | 1,711 ms median |
 
 An earlier round measured a first version that still built the statement's
-parameters under the lock (35% against 15%, 29% against 14%). Rechecked the
-same evening from exports of the two commits, on a machine then running
+parameters under the lock (35% against 15%, 29% against 14%). Measured again
+the same evening from exports of the two commits, on a machine then running
 about three times slower, the shares held: 37% against 14% of a first scoring
 (2,290 against 692 ms) and 27% against 12% of a rescore (1,664 against
 631 ms). Over all three rounds, 18 jobs, the old and the new code returned

@@ -177,7 +177,7 @@ def test_any_other_database_error_is_a_500_not_an_outage(error: Exception) -> No
 
 @pytest.mark.parametrize("error", [UNAVAILABLE[0], FAULTS[0]], ids=_name)
 def test_a_browser_client_can_read_either_answer(error: Exception) -> None:
-    """Found in the 2026-09-25 recheck: the narrowed handler first left the 500 to Starlette.
+    """Regression: the narrowed handler first left the 500 to Starlette.
 
     Starlette sends its default 500 from outside the CORS middleware, as plain
     text with no CORS headers, so a browser client saw a network error where

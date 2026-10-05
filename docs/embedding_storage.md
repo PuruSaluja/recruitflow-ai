@@ -81,12 +81,12 @@ What this shows:
   but that is one `COPY` writing both columns in text format, so it says
   little about writing `bytea` alone and played no part in the choice.
 
-## What the embeddings item should do
+## Implementation notes
 
-Done on 2026-10-04/05: `app/ml/embeddings.py` (format and search),
+Implemented in `app/ml/embeddings.py` (format and search),
 `app/models/embedding.py` (tables), `app/services/embeddings.py` (cache) and
-`scripts/embed.py`; measured in the README's Embeddings section. The plan
-as written before it:
+`scripts/embed.py`, and measured in the README's Embeddings section, along
+these lines:
 
 - Store each embedding as `bytea` with an explicit byte order: write
   `vector.astype("<f4").tobytes()` and read with `np.frombuffer(..., "<f4")`,
