@@ -160,6 +160,24 @@
       "ndcg_at_10_jobs_worse": 32
     }
   },
+  "agreement": {
+    "bm25_dense_spearman_per_slate": {
+      "mean": 0.8475513927635474,
+      "std": 0.04750042334864732,
+      "min": 0.7069867947178871,
+      "max": 0.9279711884753901
+    },
+    "slates_without_a_correlation": 0,
+    "hybrid_rrf_pairs_in_ties": 126,
+    "ndcg_at_10_bm25_at_least_dense": {
+      "jobs": 10,
+      "hybrid_better_than_dense": 7
+    },
+    "ndcg_at_10_bm25_below_dense": {
+      "jobs": 40,
+      "hybrid_better_than_dense": 10
+    }
+  },
   "retrieval": {
     "bm25": {
       "k1": 1.2,
@@ -251,6 +269,24 @@
         "ndcg_at_10_jobs_better": 87,
         "ndcg_at_10_jobs_tied": 2,
         "ndcg_at_10_jobs_worse": 111
+      }
+    },
+    "agreement": {
+      "bm25_dense_spearman_per_slate": {
+        "mean": 0.843870404127172,
+        "std": 0.048369016680640885,
+        "min": 0.6516686674669867,
+        "max": 0.9480659802487843
+      },
+      "slates_without_a_correlation": 0,
+      "hybrid_rrf_pairs_in_ties": 458,
+      "ndcg_at_10_bm25_at_least_dense": {
+        "jobs": 53,
+        "hybrid_better_than_dense": 46
+      },
+      "ndcg_at_10_bm25_below_dense": {
+        "jobs": 147,
+        "hybrid_better_than_dense": 41
       }
     }
   },
@@ -353,5 +389,7 @@
     }
   },
   "python": "3.14.6",
-  "scikit_learn": "1.9.0"
+  "scikit_learn": "1.9.0",
+  "sentence_transformers": "6.1.0",
+  "torch": "2.14.1+cpu"
 }

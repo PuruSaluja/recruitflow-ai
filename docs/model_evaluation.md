@@ -13,8 +13,7 @@ python scripts/evaluate_matcher.py
 ```
 
 The dense and hybrid scorers need the `embeddings` extra and the model's
-files; `--no-dense` measures everything else without them. The run that wrote
-the JSON took 3 min 33 s on CPU, nine retrains included.
+files; `--no-dense` measures everything else without them.
 
 **All of this is measured on synthetic data.** The corpus, its ground truth
 and both of its planted biases come from `app.ml.corpus` (see the README's
@@ -31,7 +30,7 @@ candidates or real hiring.
 | Training label | `advanced`, the simulated past recruiter decision |
 | Held out | 50 jobs (`--test-share 0.25 --split-seed 0`), each with its whole slate: 2,500 pairs |
 | Relevant share of held-out pairs | 0.1744 (no held-out job lacks a relevant candidate) |
-| Environment | CPython 3.14.6, scikit-learn 1.9.0 |
+| Environment | CPython 3.14.6, scikit-learn 1.9.0; for the dense scorer, sentence-transformers 6.1.0 and torch 2.14.1+cpu |
 
 The script regenerates the corpus from the matcher's manifest, holds out the
 same jobs, and first recomputes the held-out ROC-AUC the training run recorded
@@ -58,7 +57,9 @@ first is what the matcher is for.
 - **ROC-AUC** is pooled over all 2,500 held-out pairs.
 - Tied scores are averaged over every order of the tie, which makes "all
   scores equal" the exact expected value of a random ranking. The matcher's
-  2,500 held-out scores are all distinct, so this only affects the baselines.
+  2,500 held-out scores are all distinct. Ties affect the baselines, and the
+  hybrid retrieval scorer below, whose fused scores tie whenever two
+  candidates' ranks are swapped between its two sides.
 
 ## Results on the held-out jobs
 
@@ -112,7 +113,7 @@ below the mean for P@5 (0.7760 against 0.8012); it also has the lowest ROC-AUC
 against `relevance` of the ten. The headline figures above are that one
 matcher's, since it is the one the API serves.
 
-## Retrieval without training: lexical, dense and hybrid
+## Retrieval fitted to no label: lexical, dense and hybrid
 
 Three more scorers rank the same slates without fitting anything to a label
 ([`backend/app/ml/retrieval.py`](../backend/app/ml/retrieval.py)):
@@ -126,10 +127,14 @@ Three more scorers rank the same slates without fitting anything to a label
   all-MiniLM-L6-v2, pinned to revision `1110a243`.
 - **Hybrid**: reciprocal rank fusion of the two, `sum(1 / (60 + rank))`,
   ranked within each job's slate, both sides weighted equally. `k = 60` is the
-  value from the paper that introduced it, not tuned.
+  value from the paper that introduced it, not tuned. Fusion ties two
+  candidates whose ranks are swapped between the sides (3rd and 7th against
+  7th and 3rd); 458 of the 10,000 pairs share their fused score with another
+  on their slate, and the metrics average over the order of each tie.
 
-None of them is trained, so every job is unseen to them, and besides the 50
-held-out jobs they are measured on all 200, four times the sample.
+None of them is fitted to this corpus's labels (the embedding model was
+pretrained elsewhere, and BM25 reads only the candidates' text), so besides
+the 50 held-out jobs they are measured on all 200.
 
 | Scorer | 50 held-out jobs: NDCG@10 | P@5 | All 200 jobs: NDCG@10 | P@5 |
 | --- | --- | --- | --- | --- |
@@ -155,17 +160,18 @@ Read plainly:
   slightly *worse* than dense alone: lower on both metrics and on both sets of
   jobs, worse on more jobs than it is better. Three of the four intervals
   against dense exclude zero; the fourth, NDCG@10 over all 200 jobs, reaches
-  +0.0002. Here fusion costs dense about 0.02 to 0.04 NDCG@10 and gains
-  nothing.
-- **A likely reason is the gap between the two sides.** BM25 is far weaker
-  than dense on these documents (0.53 against 0.66 NDCG@10 over all jobs), and
-  equal-weight fusion gives its ranking as much say as the better one's.
-  Fusion tends to help when the two sides are comparably good and wrong about
-  different candidates. Weighting the sides, or another `k`, might change
-  that, but choosing either on these same jobs would be tuning on the test
-  set, so neither was tried.
+  +0.0002. On average, fusion costs dense about 0.02 to 0.04 NDCG@10.
+- **Why: the two sides mostly agree, and where they differ BM25 is usually
+  the worse.** Their rankings of a slate correlate closely (Spearman 0.8439
+  on average over all 200 slates, 0.6517 at the lowest), so fusion has little
+  independent signal to add, and equal weighting gives the weaker side as
+  much say as the better one. Whether fusion helps a job follows which side
+  ranks it better: on the 53 jobs where BM25 ranks at least as well as dense,
+  the hybrid beats dense on 46; on the other 147, on 41. Weighting the sides,
+  or another `k`, might change the overall result, but choosing either on
+  these same jobs would be tuning on the test set, so neither was tried.
 - **All three sit well below the trained matcher** (0.8024 on the held-out
-  jobs). Untrained retrieval reads only the text, while the matcher also has
+  jobs). These scorers read only the text, while the matcher also has
   engineered features over the structured fields (skill coverage, experience,
   seniority, education) and learns their weights. Dense alone is about level
   with `required_skill_coverage` alone (0.6637 against 0.6533, intervals
