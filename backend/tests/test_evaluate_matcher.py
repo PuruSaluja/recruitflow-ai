@@ -7,19 +7,22 @@ import json
 import shutil
 import subprocess
 import sys
+from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import numpy as np
 import pytest
 from fake_encoder import FakeEncoder
+from scipy.stats import spearmanr
 
 from app.config import REPO_ROOT
 from app.ml.artifact import load_manifest, load_matcher, manifest_path_for, matcher_version
 from app.ml.corpus import Corpus, CorpusConfig, generate_corpus
 from app.ml.encoder import EncoderUnavailable, candidate_document, job_document
-from app.ml.evaluate import Evaluation, bootstrap_interval, evaluate_scores
+from app.ml.evaluate import bootstrap_interval, evaluate_scores
 from app.ml.retrieval import BM25Index, fuse_per_group
 from app.ml.train import (
     TrainingData,
@@ -207,14 +210,16 @@ def _fake_cosine(data: TrainingData) -> np.ndarray:
     return np.array(out)
 
 
-def _measured(corpus: Corpus, data: TrainingData) -> dict[str, Evaluation]:
+def _measured(corpus: Corpus, data: TrainingData) -> dict[str, Any]:
     scores = {"bm25": _bm25(corpus, data), "dense": _fake_cosine(data)}
     scores["hybrid_rrf"] = fuse_per_group(data.job_refs, scores["bm25"], scores["dense"])
-    return {name: evaluate_scores(data, s) for name, s in scores.items()}
+    measured: dict[str, Any] = {name: evaluate_scores(data, s) for name, s in scores.items()}
+    measured["scores"], measured["job_refs"] = scores, np.array(data.job_refs)
+    return measured
 
 
 @pytest.fixture(scope="module")
-def recomputed() -> dict[str, dict[str, Evaluation]]:
+def recomputed() -> dict[str, dict[str, Any]]:
     """Every retrieval score recomputed pair by pair, independently of the script."""
     corpus = generate_corpus(CorpusConfig(seed=5, n_jobs=40, n_candidates=1200))
     data = training_data(corpus)
@@ -276,6 +281,88 @@ def test_fusion_is_compared_with_each_side_job_by_job(
     assert paired["ndcg_at_10_jobs_worse"] == sum(d < 0 for d in ndcg)
 
 
+@pytest.mark.parametrize("scope", ["held_out", "all"])
+def test_agreement_is_spearman_per_slate_and_wins_split_by_the_better_side(
+    results: dict, recomputed: dict, scope: str
+) -> None:
+    agreement = results["agreement"] if scope == "held_out" else results["all_jobs"]["agreement"]
+    measured = recomputed[scope]
+    scores, refs = measured["scores"], measured["job_refs"]
+    rhos = [
+        spearmanr(scores["bm25"][refs == ref], scores["dense"][refs == ref]).statistic
+        for ref in sorted(set(refs))
+    ]
+    spread = agreement["bm25_dense_spearman_per_slate"]
+    assert spread["mean"] == pytest.approx(np.mean(rhos), abs=1e-12)
+    assert (spread["min"], spread["max"]) == pytest.approx((min(rhos), max(rhos)), abs=1e-12)
+    assert agreement["slates_without_a_correlation"] == 0
+    fused = measured["scores"]["hybrid_rrf"]
+    in_ties = sum(
+        sum(n for n in Counter(fused[refs == ref].tolist()).values() if n > 1) for ref in set(refs)
+    )
+    assert agreement["hybrid_rrf_pairs_in_ties"] == in_ties
+
+    level = {"jobs": 0, "hybrid_better_than_dense": 0}
+    below = {"jobs": 0, "hybrid_better_than_dense": 0}
+    for bm25, dense, hybrid in zip(
+        measured["bm25"].slates,
+        measured["dense"].slates,
+        measured["hybrid_rrf"].slates,
+        strict=True,
+    ):
+        side = level if bm25.ndcg >= dense.ndcg else below
+        side["jobs"] += 1
+        side["hybrid_better_than_dense"] += hybrid.ndcg > dense.ndcg
+    assert agreement["ndcg_at_10_bm25_at_least_dense"] == level
+    assert agreement["ndcg_at_10_bm25_below_dense"] == below
+    assert level["jobs"] + below["jobs"] == len(rhos)
+
+
+def test_a_slate_one_side_ranks_all_equal_has_no_correlation() -> None:
+    assert script._spearman(np.array([1.0, 1.0, 1.0]), np.array([1.0, 2.0, 3.0])) is None
+    assert script._spearman(np.array([1.0, 2.0, 3.0]), np.array([5.0, 5.0, 5.0])) is None
+    assert script._spearman(np.array([3.0, 1.0, 2.0]), np.array([30.0, 10.0, 20.0])) == 1.0
+
+
+def test_agreement_on_three_hand_made_slates() -> None:
+    # J0: BM25 ranks everyone equal, so it has no correlation. J1: both sides
+    # put the strong fit first, so BM25 ties dense on NDCG and counts as at
+    # least as good. J2: BM25 puts the strong fit second, below dense.
+    refs = ("J0",) * 3 + ("J1",) * 3 + ("J2",) * 3
+    data = TrainingData(
+        pairs=tuple((None, None) for _ in refs),
+        advanced=np.zeros(9, dtype=bool),
+        relevance=np.array([2, 0, 0, 2, 0, 0, 0, 2, 0]),
+        job_refs=refs,
+    )
+    scores = {
+        "bm25": np.array([1.0, 1.0, 1.0, 3.0, 2.0, 1.0, 3.0, 2.0, 1.0]),
+        "dense": np.array([0.9, 0.5, 0.1, 0.9, 0.1, 0.5, 0.1, 0.9, 0.5]),
+    }
+    scores["hybrid_rrf"] = fuse_per_group(refs, scores["bm25"], scores["dense"])
+    results = {name: evaluate_scores(data, s) for name, s in scores.items()}
+
+    agreement = script._agreement(data, scores, results)
+
+    assert agreement["slates_without_a_correlation"] == 1
+    j1 = spearmanr([3.0, 2.0, 1.0], [0.9, 0.1, 0.5]).statistic
+    j2 = spearmanr([3.0, 2.0, 1.0], [0.1, 0.9, 0.5]).statistic
+    assert agreement["bm25_dense_spearman_per_slate"]["mean"] == pytest.approx((j1 + j2) / 2)
+    assert agreement["ndcg_at_10_bm25_at_least_dense"] == {
+        "jobs": 1,
+        "hybrid_better_than_dense": 0,
+    }
+    assert agreement["ndcg_at_10_bm25_below_dense"] == {"jobs": 2, "hybrid_better_than_dense": 0}
+    # J1's second and third candidates rank 2nd and 3rd by BM25, 3rd and 2nd by
+    # dense: swapped, so their fused scores tie. No other slate has a swap.
+    assert agreement["hybrid_rrf_pairs_in_ties"] == 2
+
+
+def test_package_versions_are_read_from_the_installed_distribution() -> None:
+    assert script._package_version("numpy") == np.__version__
+    assert script._package_version("no-such-distribution-anywhere") is None
+
+
 def test_it_records_how_retrieval_was_configured(results: dict) -> None:
     assert results["retrieval"] == {
         "bm25": {"k1": 1.2, "b": 0.75, "pool": 1200},
@@ -299,7 +386,9 @@ def test_no_dense_skips_the_encoder_and_what_needs_it(
     assert not {"dense", "hybrid_rrf"} & set(written["scorers"])
     assert set(written["all_jobs"]["scorers"]) == {"bm25"}
     assert written["comparisons"] == {} == written["all_jobs"]["comparisons"]
+    assert written["agreement"] == {} == written["all_jobs"]["agreement"]
     assert written["retrieval"]["encoder"] is None
+    assert written["sentence_transformers"] is None and written["torch"] is None
 
 
 def test_an_encoder_it_cannot_load_is_refused_naming_no_dense(
@@ -308,12 +397,21 @@ def test_an_encoder_it_cannot_load_is_refused_naming_no_dense(
     def unavailable() -> None:
         raise EncoderUnavailable("sentence-transformers is not installed")
 
+    def too_early(*args: object, **kwargs: object) -> None:
+        raise AssertionError("work started before the encoder was loaded")
+
     monkeypatch.setattr(script, "load_encoder", unavailable)
+    monkeypatch.setattr(script, "generate_corpus", too_early)
     out = tmp_path / "evaluation.json"
     assert script.main(["--model", str(model), "--out", str(out), *FAST]) == 2
     err = capsys.readouterr().err
     assert "sentence-transformers is not installed" in err and "--no-dense" in err
     assert not out.exists()
+
+
+def test_it_records_the_encoder_packages_it_ran_with(results: dict) -> None:
+    assert results["sentence_transformers"] == script._package_version("sentence-transformers")
+    assert results["torch"] == script._package_version("torch")
 
 
 # --- refusals ----------------------------------------------------------

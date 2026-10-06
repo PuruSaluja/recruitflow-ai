@@ -26,12 +26,17 @@ Every scorer is measured on the same held-out pairs with :mod:`app.ml.evaluate`:
   (:mod:`app.ml.encoder`);
 * ``hybrid_rrf`` -- the two fused by reciprocal rank fusion within each slate.
 
-The three retrieval scorers fit nothing to a label, so every job is unseen to
-them: besides the held-out jobs they are measured on **all** the corpus's jobs,
-four times the sample. Whether fusion beats either side alone is reported as
-a paired difference, per job, with its own bootstrap interval, and as the
-number of jobs it wins, ties and loses on NDCG@10. ``--no-dense`` skips the
-two scorers that need the encoder (the ``embeddings`` extra).
+The three retrieval scorers fit nothing to a label, so no job's labels have
+been seen by them: besides the held-out jobs they are measured on **every**
+job in the corpus. Whether fusion beats either side alone is reported as a
+paired difference, per job, with its own bootstrap interval, and as the
+number of jobs it wins, ties and loses on NDCG@10. ``agreement`` says how
+alike the two sides rank (Spearman per slate) and how often fusion beats
+dense on the jobs where BM25 ranks at least as well as dense, against the
+rest, and how many pairs share their fused score with another on their
+slate. ``--no-dense`` skips the scorers that need the encoder (the
+``embeddings`` extra); the encoder is loaded before anything is trained, so a
+missing one is refused at once.
 
 NDCG@10 and P@5 carry a 95% bootstrap interval over held-out jobs. Then the
 whole training is repeated on ``--split-seeds`` other splits of the same
@@ -46,6 +51,7 @@ Writes JSON (default ``docs/model_evaluation.json``), which
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import json
 import math
 import platform
@@ -56,6 +62,7 @@ from typing import Any
 
 import numpy as np
 import sklearn
+from scipy.stats import rankdata
 
 from app.config import REPO_ROOT
 from app.ml.artifact import (
@@ -214,6 +221,67 @@ def _paired(first: Evaluation, second: Evaluation, *, resamples: int) -> dict[st
     }
 
 
+def _spearman(a: np.ndarray, b: np.ndarray) -> float | None:
+    """Spearman correlation of two rankings; ``None`` when either ranks everything equal."""
+    ranks_a, ranks_b = rankdata(a), rankdata(b)
+    if ranks_a.std() == 0 or ranks_b.std() == 0:
+        return None
+    return float(np.corrcoef(ranks_a, ranks_b)[0, 1])
+
+
+def _agreement(
+    data: TrainingData, scores: dict[str, np.ndarray], results: dict[str, Evaluation]
+) -> dict[str, Any]:
+    """How alike BM25 and dense rank each slate, and where fusion beats dense.
+
+    Also how many pairs share their fused score with another on their slate:
+    ranks swapped between the two sides fuse to equal scores, and the metrics
+    average over the order of every tie.
+    """
+    if "hybrid_rrf" not in results:
+        return {}
+    refs = np.array(data.job_refs)
+    correlations = [
+        _spearman(scores["bm25"][refs == ref], scores["dense"][refs == ref])
+        for ref in sorted(set(data.job_refs))
+    ]
+    measured = [c for c in correlations if c is not None]
+    in_ties = 0
+    for ref in set(data.job_refs):
+        _, counts = np.unique(scores["hybrid_rrf"][refs == ref], return_counts=True)
+        in_ties += int(counts[counts > 1].sum())
+    gaps, gains = [], []
+    for bm25, dense, hybrid in zip(
+        results["bm25"].slates, results["dense"].slates, results["hybrid_rrf"].slates, strict=True
+    ):
+        if dense.ndcg is not None:
+            gaps.append(bm25.ndcg - dense.ndcg)
+            gains.append(hybrid.ndcg - dense.ndcg)
+    gaps_array, gains_array = np.array(gaps), np.array(gains)
+    bm25_level = gaps_array >= 0
+    return {
+        "bm25_dense_spearman_per_slate": _spread(measured) if measured else None,
+        "slates_without_a_correlation": len(correlations) - len(measured),
+        "hybrid_rrf_pairs_in_ties": in_ties,
+        f"ndcg_at_{NDCG_K}_bm25_at_least_dense": {
+            "jobs": int(bm25_level.sum()),
+            "hybrid_better_than_dense": int((gains_array[bm25_level] > 0).sum()),
+        },
+        f"ndcg_at_{NDCG_K}_bm25_below_dense": {
+            "jobs": int((~bm25_level).sum()),
+            "hybrid_better_than_dense": int((gains_array[~bm25_level] > 0).sum()),
+        },
+    }
+
+
+def _package_version(name: str) -> str | None:
+    """The installed version of ``name``, or ``None`` when it is not installed."""
+    try:
+        return importlib.metadata.version(name)
+    except importlib.metadata.PackageNotFoundError:
+        return None
+
+
 def _comparisons(results: dict[str, Evaluation], *, resamples: int) -> dict[str, Any]:
     """Fusion against each side alone, when there is a fusion to compare."""
     if "hybrid_rrf" not in results:
@@ -312,6 +380,7 @@ def evaluate(
             f"({split_seed}); got {list(split_seeds)}"
         )
 
+    encoder = load_encoder() if dense else None
     try:
         corpus = generate_corpus(config)
         data = training_data(corpus)
@@ -343,10 +412,12 @@ def evaluate(
         ),
     }
 
-    encoder = load_encoder() if dense else None
     retrieval = _retrieval_scores(corpus, data, encoder)
-    for name, all_scores in retrieval.items():
-        scorers[name] = evaluate_scores(test_set, _on(data, test_set, all_scores))
+    held_out_retrieval = {
+        name: _on(data, test_set, all_scores) for name, all_scores in retrieval.items()
+    }
+    for name, test_scores in held_out_retrieval.items():
+        scorers[name] = evaluate_scores(test_set, test_scores)
     every_job = {name: evaluate_scores(data, all_scores) for name, all_scores in retrieval.items()}
 
     per_split = []
@@ -399,6 +470,7 @@ def evaluate(
             name: _summary(result, resamples=resamples) for name, result in scorers.items()
         },
         "comparisons": _comparisons(scorers, resamples=resamples),
+        "agreement": _agreement(test_set, held_out_retrieval, scorers),
         "retrieval": {
             "bm25": {"k1": BM25_K1, "b": BM25_B, "pool": len(corpus.candidates)},
             "encoder": None if encoder is None else encoder.name,
@@ -413,6 +485,7 @@ def evaluate(
                 name: _summary(result, resamples=resamples) for name, result in every_job.items()
             },
             "comparisons": _comparisons(every_job, resamples=resamples),
+            "agreement": _agreement(data, retrieval, every_job),
         },
         "splits": every_split,
         "split_spread": {
@@ -420,6 +493,8 @@ def evaluate(
         },
         "python": platform.python_version(),
         "scikit_learn": sklearn.__version__,
+        "sentence_transformers": _package_version("sentence-transformers") if dense else None,
+        "torch": _package_version("torch") if dense else None,
     }
 
 
