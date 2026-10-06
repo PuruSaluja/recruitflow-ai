@@ -103,3 +103,7 @@ jobs:
 
       - name: Test the encoder
         run: pytest -W default -rs backend/tests/test_encoder.py
+
+      # A separate call: -k would also filter test_encoder.py.
+      - name: Test the evaluation's dense scorer against the real model
+        run: pytest -W default -rs backend/tests/test_evaluate_matcher.py -k real_model

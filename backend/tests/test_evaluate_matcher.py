@@ -1,9 +1,16 @@
-"""Unit tests for scripts/evaluate_matcher.py, the evaluation CLI. No database needed."""
+"""Unit tests for scripts/evaluate_matcher.py, the evaluation CLI. No database needed.
+
+Every test but the ``real_model`` ones uses a stand-in encoder. Those load the
+pinned model through the script's own ``load_encoder`` and are skipped where it
+cannot be loaded, unless ``RECRUITFLOW_REQUIRE_ENCODER`` is set, as in CI's
+``embeddings`` job, which runs them.
+"""
 
 from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -21,7 +28,14 @@ from scipy.stats import spearmanr
 from app.config import REPO_ROOT
 from app.ml.artifact import load_manifest, load_matcher, manifest_path_for, matcher_version
 from app.ml.corpus import Corpus, CorpusConfig, generate_corpus
-from app.ml.encoder import EncoderUnavailable, candidate_document, job_document
+from app.ml.encoder import (
+    DEFAULT_MODEL,
+    DEFAULT_REVISION,
+    Encoder,
+    EncoderUnavailable,
+    candidate_document,
+    job_document,
+)
 from app.ml.evaluate import bootstrap_interval, evaluate_scores
 from app.ml.retrieval import BM25Index, fuse_per_group
 from app.ml.train import (
@@ -51,6 +65,8 @@ def _load(path: Path, name: str) -> ModuleType:
 
 
 script = _load(SCRIPT, "evaluate_matcher")
+#: Taken before any test replaces it with the stand-in.
+REAL_LOAD_ENCODER = script.load_encoder
 
 
 @pytest.fixture(autouse=True)
@@ -412,6 +428,46 @@ def test_an_encoder_it_cannot_load_is_refused_naming_no_dense(
 def test_it_records_the_encoder_packages_it_ran_with(results: dict) -> None:
     assert results["sentence_transformers"] == script._package_version("sentence-transformers")
     assert results["torch"] == script._package_version("torch")
+
+
+# --- the real model ----------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def real_encoder() -> Encoder:
+    try:
+        return REAL_LOAD_ENCODER()
+    except EncoderUnavailable as exc:  # pragma: no cover - depends on the machine
+        if os.environ.get("RECRUITFLOW_REQUIRE_ENCODER"):
+            raise
+        pytest.skip(str(exc))
+
+
+def test_real_model_is_the_pinned_one(real_encoder: Encoder) -> None:
+    assert real_encoder.name == f"{DEFAULT_MODEL}@{DEFAULT_REVISION}+chunks254"
+
+
+def test_real_model_dense_scores_are_each_pairs_cosine(real_encoder: Encoder) -> None:
+    corpus = generate_corpus(CorpusConfig(seed=5, n_jobs=40, n_candidates=1200))
+    data = training_data(corpus)
+    # Two whole slates, so the batch holds two jobs and about a hundred candidates.
+    first_two = set(sorted(set(data.job_refs))[:2])
+    keep = np.array([ref in first_two for ref in data.job_refs])
+    pairs = [pair for pair, kept in zip(data.pairs, keep, strict=True) if kept]
+    subset = TrainingData(
+        pairs=tuple(pairs),
+        advanced=data.advanced[keep],
+        relevance=data.relevance[keep],
+        job_refs=tuple(ref for ref, kept in zip(data.job_refs, keep, strict=True) if kept),
+    )
+
+    scores = script._dense_scores(real_encoder, subset)
+
+    assert scores.shape == (len(subset),) and np.isfinite(scores).all()
+    for (job, candidate), score in list(zip(subset.pairs, scores, strict=True))[::7]:
+        j, c = real_encoder.encode([job_document(job), candidate_document(candidate)])
+        # Batches move a value by up to 1.6e-7 (see app.ml.encoder).
+        assert score == pytest.approx(float(j @ c), abs=1e-5)
 
 
 # --- refusals ----------------------------------------------------------
