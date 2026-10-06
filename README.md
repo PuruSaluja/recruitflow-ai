@@ -609,12 +609,12 @@ definitions, the tie handling and what these numbers cannot show are in
 
 ### Lexical, dense and hybrid retrieval
 
-The same script measures three untrained scorers
+The same script measures three scorers fitted to no label
 (`app/ml/retrieval.py`): BM25 over the candidates' documents with the job's
-as the query, cosine between the documents' embeddings, and the two fused by
-reciprocal rank fusion (`k = 60`) within each slate. Every setting is the
-textbook default; none was tuned. Being untrained, they are also measured on
-all 200 jobs:
+as the query, cosine between the documents' embeddings from the pretrained
+model, and the two fused by reciprocal rank fusion (`k = 60`) within each
+slate. Every setting is the textbook default; none was tuned. Since none has
+seen this corpus's labels, they are also measured on all 200 jobs:
 
 | NDCG@10 | 50 held-out jobs | All 200 jobs |
 | --- | --- | --- |
@@ -625,8 +625,10 @@ all 200 jobs:
 **Fusion does not beat dense retrieval here.** Job by job, the hybrid beats
 BM25 by +0.1059 NDCG@10 over all jobs (95% CI +0.0886 to +0.1231) but trails
 dense by 0.0174 (−0.0344 to +0.0002), and on the held-out jobs by 0.0378
-(−0.0655 to −0.0096). BM25 is much the weaker side on these documents, and
-equal-weight fusion gives it as much say as dense. All three sit well below
+(−0.0655 to −0.0096). The two sides rank each slate much alike (Spearman
+0.8439 on average), BM25 is much the weaker, and equal-weight fusion gives it
+as much say as dense: fusion beat dense on 46 of the 53 jobs where BM25 ranked
+at least as well, but on only 41 of the other 147. All three sit well below
 the trained matcher. Details and P@5 are in
 [`docs/model_evaluation.md`](docs/model_evaluation.md).
 
