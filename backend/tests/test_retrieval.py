@@ -110,9 +110,12 @@ def test_skill_names_stay_whole_and_text_is_folded() -> None:
     [
         ([], {}, "at least one document"),
         (["", "  "], {}, "at least one word"),
-        (["a b"], {"k1": -0.1}, "k1"),
+        (["a b"], {"k1": -0.1}, "k1 must be"),
+        (["a b"], {"k1": math.nan}, "k1 must be"),
+        (["a b"], {"k1": math.inf}, "k1 must be"),
         (["a b"], {"b": 1.5}, "b must be"),
         (["a b"], {"b": -0.1}, "b must be"),
+        (["a b"], {"b": math.nan}, "b must be"),
     ],
 )
 def test_an_index_refuses_what_it_cannot_score(
@@ -120,6 +123,11 @@ def test_an_index_refuses_what_it_cannot_score(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         BM25Index(documents, **kwargs)
+
+
+def test_a_bare_string_is_refused_as_a_pool_rather_than_read_letter_by_letter() -> None:
+    with pytest.raises(TypeError, match="a sequence of documents, not one string"):
+        BM25Index("python developer")
 
 
 # --- cosine -----------------------------------------------------------------
@@ -183,18 +191,39 @@ def test_an_item_both_rank_first_is_first_when_fused() -> None:
     assert int(np.argmax(fused)) == 0
 
 
+def test_ranks_swapped_between_two_scorers_fuse_to_exactly_equal_scores() -> None:
+    # 3rd and 7th against 7th and 3rd: a tie the fused ranking has to break.
+    a = np.array([9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0])
+    b = np.array([9.0, 8.0, 3.0, 6.0, 5.0, 4.0, 7.0])
+    fused = reciprocal_rank_fusion(a, b)
+    assert fused[2] == fused[6]
+
+
+def test_fusing_a_slate_alone_can_order_it_differently_from_fusing_the_pool() -> None:
+    a = np.array([5.0, 0.0, 1.0, 4.0, 2.0, 6.0, 3.0, 7.0])
+    b = np.array([1.0, 6.0, 7.0, 2.0, 3.0, 4.0, 5.0, 0.0])
+    slate = [0, 1, 2]
+    over_pool = reciprocal_rank_fusion(a, b)[slate]
+    within = reciprocal_rank_fusion(a[slate], b[slate])
+    assert np.argsort(-over_pool).tolist() == [2, 1, 0]
+    assert np.argsort(-within).tolist() == [2, 0, 1]
+
+
 @pytest.mark.parametrize(
-    ("scores", "kwargs"),
+    ("scores", "kwargs", "message"),
     [
-        ((), {}),
-        (([1.0, 2.0], [1.0]), {}),
-        (([[1.0, 2.0]],), {}),
-        (([1.0, math.nan],), {}),
-        (([1.0, 2.0],), {"k": -1}),
+        ((), {}, "at least one ranking"),
+        (([1.0, 2.0], [1.0]), {}, "same items"),
+        (([[1.0, 2.0]],), {}, "same items"),
+        (([1.0, math.nan],), {}, "finite"),
+        (([1.0, math.inf],), {}, "finite"),
+        (([1.0, 2.0],), {"k": -1}, "k must be"),
+        (([1.0, 2.0],), {"k": math.nan}, "k must be"),
+        (([1.0, 2.0],), {"k": math.inf}, "k must be"),
     ],
 )
-def test_fusion_refuses_what_it_cannot_rank(scores: tuple, kwargs: dict) -> None:
-    with pytest.raises(ValueError):
+def test_fusion_refuses_what_it_cannot_rank(scores: tuple, kwargs: dict, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
         reciprocal_rank_fusion(*scores, **kwargs)
 
 
@@ -210,3 +239,8 @@ def test_fusing_per_group_ranks_each_group_on_its_own() -> None:
 def test_fusing_per_group_refuses_misaligned_input() -> None:
     with pytest.raises(ValueError, match="group keys"):
         fuse_per_group(["J1", "J1"], [1.0, 2.0], [1.0])
+
+
+def test_fusing_per_group_refuses_keys_that_are_not_one_flat_sequence() -> None:
+    with pytest.raises(ValueError, match="one key per item"):
+        fuse_per_group([["J1"], ["J1"]], [[1.0], [2.0]])

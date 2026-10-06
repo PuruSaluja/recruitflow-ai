@@ -1,4 +1,4 @@
-"""Untrained retrieval scorers and the fusion that combines them.
+"""Retrieval scorers fitted to no label, and the fusion that combines them.
 
 Three ways to rank a pool of candidates for a job without fitting anything to
 a label:
@@ -20,7 +20,9 @@ a label:
   ``sum(1 / (k + rank))`` over the scorers, with ``k = 60`` as in the paper.
   Only ranks are fused, so BM25's unbounded scores and cosine's [-1, 1] need
   no common scale. Tied scores share their average rank, so a fused score never
-  depends on the order the candidates happen to arrive in.
+  depends on the order the candidates happen to arrive in. Fusion makes ties
+  of its own: two candidates whose ranks are swapped between the scorers, 3rd
+  and 7th against 7th and 3rd, get exactly equal fused scores.
 
 **Fusion depends on the pool it ranks.** A candidate's rank among 50 is not
 its rank among 4,000, and fusing ranks is not monotone in either scorer, so
@@ -31,6 +33,7 @@ slate, in the evaluation), which is what ranking a slate means.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 
 import numpy as np
@@ -55,15 +58,15 @@ class BM25Index:
     """
 
     def __init__(self, documents: Sequence[str], *, k1: float = BM25_K1, b: float = BM25_B) -> None:
+        if isinstance(documents, str):
+            raise TypeError("a BM25 index takes a sequence of documents, not one string")
         if not documents:
             raise ValueError("a BM25 index needs at least one document")
-        if k1 < 0:
-            raise ValueError(f"k1 must not be negative, got {k1}")
+        if not (math.isfinite(k1) and k1 >= 0):
+            raise ValueError(f"k1 must be a finite number of at least 0, got {k1}")
         if not 0.0 <= b <= 1.0:
             raise ValueError(f"b must be between 0 and 1, got {b}")
-        self._vectoriser = CountVectorizer(
-            preprocessor=fold_text, token_pattern=TOKEN_PATTERN, lowercase=False
-        )
+        self._vectoriser = CountVectorizer(preprocessor=fold_text, token_pattern=TOKEN_PATTERN)
         try:
             counts = self._vectoriser.fit_transform(documents).tocsr().astype(np.float64)
         except ValueError as error:  # every document empty, or only punctuation
@@ -84,7 +87,7 @@ class BM25Index:
     def scores(self, query: str) -> np.ndarray:
         """BM25 score of every document in the pool for ``query``, in pool order."""
         terms = self._vectoriser.transform([query]).indices
-        return np.asarray(self._weights[:, np.unique(terms)].sum(axis=1)).ravel()
+        return np.asarray(self._weights[:, terms].sum(axis=1)).ravel()
 
 
 def cosine_scores(stored: np.ndarray, query: np.ndarray) -> np.ndarray:
@@ -107,8 +110,8 @@ def reciprocal_rank_fusion(*scores: Sequence[float], k: float = RRF_K) -> np.nda
     """
     if not scores:
         raise ValueError("fusion needs at least one ranking")
-    if k < 0:
-        raise ValueError(f"k must not be negative, got {k}")
+    if not (math.isfinite(k) and k >= 0):
+        raise ValueError(f"k must be a finite number of at least 0, got {k}")
     arrays = [np.asarray(s, dtype=float) for s in scores]
     length = arrays[0].shape
     if any(a.ndim != 1 or a.shape != length for a in arrays):
@@ -123,6 +126,8 @@ def reciprocal_rank_fusion(*scores: Sequence[float], k: float = RRF_K) -> np.nda
 def fuse_per_group(groups: Sequence[str], *scores: Sequence[float], k: float = RRF_K) -> np.ndarray:
     """:func:`reciprocal_rank_fusion` within each group, returned in the input order."""
     keys = np.asarray(groups)
+    if keys.ndim != 1:
+        raise ValueError(f"groups must hold one key per item, got shape {keys.shape}")
     arrays = [np.asarray(s, dtype=float) for s in scores]
     if any(a.shape != keys.shape for a in arrays):
         raise ValueError(f"{len(keys)} group keys for scores of shapes {[a.shape for a in arrays]}")
