@@ -65,6 +65,7 @@ from app.ml.artifact import (
     load_versioned_matcher,
 )
 from app.ml.corpus import Corpus, CorpusConfig, generate_corpus
+from app.ml.embeddings import cosine_scores
 from app.ml.encoder import (
     Encoder,
     EncoderUnavailable,
@@ -86,7 +87,6 @@ from app.ml.retrieval import (
     BM25_K1,
     RRF_K,
     BM25Index,
-    cosine_scores,
     fuse_per_group,
 )
 from app.ml.train import TRAINING_LABEL, TrainingData, make_matcher, split_by_job, training_data

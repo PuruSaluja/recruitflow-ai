@@ -14,7 +14,7 @@ a label:
   query term counts once: a job description naming Python in its text and in
   its required skills does not double Python's weight.
 * **Dense.** Cosine between the job's and the candidate's sentence embeddings
-  (:mod:`app.ml.encoder`).
+  (:mod:`app.ml.encoder`, :func:`app.ml.embeddings.cosine_scores`).
 * **Reciprocal rank fusion** (Cormack, Clarke and Buettcher, 2009). Each
   scorer ranks the pool on its own; a candidate's fused score is
   ``sum(1 / (k + rank))`` over the scorers, with ``k = 60`` as in the paper.
@@ -88,19 +88,6 @@ class BM25Index:
         """BM25 score of every document in the pool for ``query``, in pool order."""
         terms = self._vectoriser.transform([query]).indices
         return np.asarray(self._weights[:, terms].sum(axis=1)).ravel()
-
-
-def cosine_scores(stored: np.ndarray, query: np.ndarray) -> np.ndarray:
-    """Cosine of every row of ``stored`` with ``query``, in row order."""
-    if stored.ndim != 2 or query.ndim != 1 or stored.shape[1] != query.shape[0]:
-        raise ValueError(
-            f"cannot compare a query of shape {query.shape} with vectors of shape {stored.shape}"
-        )
-    row_norms = np.linalg.norm(stored, axis=1)
-    query_norm = np.linalg.norm(query)
-    if query_norm == 0 or (row_norms == 0).any():
-        raise ValueError("cosine similarity is undefined for a zero vector")
-    return (stored @ query) / (row_norms * query_norm)
 
 
 def reciprocal_rank_fusion(*scores: Sequence[float], k: float = RRF_K) -> np.ndarray:

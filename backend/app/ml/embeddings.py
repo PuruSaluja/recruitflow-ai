@@ -77,17 +77,15 @@ def stack(blobs: Iterable[bytes], dimensions: int) -> np.ndarray:
     return np.vstack(rows)
 
 
-def top_k_cosine(stored: np.ndarray, query: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
-    """Rows of ``stored`` most cosine-similar to ``query``: (indices, similarities).
+def cosine_scores(stored: np.ndarray, query: np.ndarray) -> np.ndarray:
+    """Cosine of every row of ``stored`` with ``query``, in row order.
 
-    Best first; equal similarities keep the order of ``stored``, so the
-    result is the same on every run. Both sides are normalised here rather
-    than trusted to be unit length. ``k`` larger than the pool returns the
-    whole pool. A zero-length row or query is refused, as :func:`to_bytes`
-    refuses to store one.
+    Both sides are normalised here rather than trusted to be unit length. A
+    zero-length row or query is refused, as :func:`to_bytes` refuses to store
+    one, and so is NaN or infinity on either side: either makes a similarity
+    NaN, which no ranking can place. That is checked on the similarities, one
+    per row, rather than on every value of the matrix.
     """
-    if k <= 0:
-        raise ValueError(f"k must be positive, got {k}")
     if stored.ndim != 2 or query.ndim != 1 or stored.shape[1] != query.shape[0]:
         raise ValueError(
             f"cannot compare a query of shape {query.shape} with vectors of shape {stored.shape}"
@@ -96,7 +94,23 @@ def top_k_cosine(stored: np.ndarray, query: np.ndarray, k: int) -> tuple[np.ndar
     query_norm = np.linalg.norm(query)
     if query_norm == 0 or (row_norms == 0).any():
         raise ValueError("cosine similarity is undefined for a zero vector")
-    similarities = (stored @ query) / (row_norms * query_norm)
+    with np.errstate(invalid="ignore"):  # inf / inf is refused just below
+        similarities = (stored @ query) / (row_norms * query_norm)
+    if not np.isfinite(similarities).all():
+        raise ValueError("cosine similarity needs finite vectors; NaN cannot be ranked")
+    return similarities
+
+
+def top_k_cosine(stored: np.ndarray, query: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
+    """Rows of ``stored`` most cosine-similar to ``query``: (indices, similarities).
+
+    Best first; equal similarities keep the order of ``stored``, so the
+    result is the same on every run. ``k`` larger than the pool returns the
+    whole pool. The similarities are :func:`cosine_scores`, with its refusals.
+    """
+    if k <= 0:
+        raise ValueError(f"k must be positive, got {k}")
+    similarities = cosine_scores(stored, query)
     # A full stable sort rather than argpartition, so ties keep their order.
     # Measured for a top-10, best of 5, in two sessions: 0.18-0.21 ms over
     # 4,000 scores and 1.18-1.34 ms over 20,000, against 0.02 and 0.04-0.05 ms

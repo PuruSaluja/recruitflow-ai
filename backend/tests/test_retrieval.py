@@ -13,7 +13,6 @@ from app.ml.retrieval import (
     BM25_K1,
     RRF_K,
     BM25Index,
-    cosine_scores,
     fuse_per_group,
     reciprocal_rank_fusion,
 )
@@ -128,30 +127,6 @@ def test_an_index_refuses_what_it_cannot_score(
 def test_a_bare_string_is_refused_as_a_pool_rather_than_read_letter_by_letter() -> None:
     with pytest.raises(TypeError, match="a sequence of documents, not one string"):
         BM25Index("python developer")
-
-
-# --- cosine -----------------------------------------------------------------
-
-
-def test_cosine_scores_ignore_length() -> None:
-    stored = np.array([[1.0, 0.0], [0.0, 3.0], [2.0, 2.0]])
-    np.testing.assert_allclose(
-        cosine_scores(stored, np.array([5.0, 0.0])), [1.0, 0.0, math.sqrt(0.5)]
-    )
-
-
-@pytest.mark.parametrize(
-    ("stored", "query"),
-    [
-        (np.ones((2, 3)), np.ones(2)),
-        (np.ones(3), np.ones(3)),
-        (np.array([[1.0, 0.0], [0.0, 0.0]]), np.ones(2)),
-        (np.ones((2, 2)), np.zeros(2)),
-    ],
-)
-def test_cosine_refuses_mismatched_or_zero_vectors(stored: np.ndarray, query: np.ndarray) -> None:
-    with pytest.raises(ValueError):
-        cosine_scores(stored, query)
 
 
 # --- fusion -----------------------------------------------------------------

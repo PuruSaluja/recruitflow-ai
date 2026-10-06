@@ -5,7 +5,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from app.ml.embeddings import BYTES_PER_VALUE, from_bytes, stack, to_bytes, top_k_cosine
+from app.ml.embeddings import (
+    BYTES_PER_VALUE,
+    cosine_scores,
+    from_bytes,
+    stack,
+    to_bytes,
+    top_k_cosine,
+)
 
 # --- to_bytes / from_bytes -------------------------------------------------
 
@@ -244,6 +251,45 @@ def test_k_must_be_positive(k: int) -> None:
 def test_shapes_must_agree(stored: np.ndarray, query: np.ndarray) -> None:
     with pytest.raises(ValueError, match="cannot compare"):
         top_k_cosine(stored, query, 1)
+
+
+@pytest.mark.parametrize(
+    ("stored", "query"),
+    [
+        (np.array([[1.0, 0.0], [np.nan, 1.0]], np.float32), np.ones(2, np.float32)),
+        (np.array([[1.0, 0.0], [np.inf, 1.0]], np.float32), np.ones(2, np.float32)),
+        (np.eye(2, dtype=np.float32), np.array([np.nan, 1.0], np.float32)),
+        (np.eye(2, dtype=np.float32), np.array([-np.inf, 1.0], np.float32)),
+    ],
+    ids=["nan-row", "inf-row", "nan-query", "inf-query"],
+)
+@pytest.mark.filterwarnings("error::RuntimeWarning")  # refused, not warned about first
+def test_a_vector_that_is_not_finite_is_refused(stored: np.ndarray, query: np.ndarray) -> None:
+    with pytest.raises(ValueError, match="finite"):
+        top_k_cosine(stored, query, 1)
+    with pytest.raises(ValueError, match="finite"):
+        cosine_scores(stored, query)
+
+
+def test_cosine_scores_are_in_row_order_and_ignore_length() -> None:
+    stored = np.array([[1.0, 0.0], [0.0, 3.0], [2.0, 2.0]])
+    np.testing.assert_allclose(cosine_scores(stored, np.array([5.0, 0.0])), [1.0, 0.0, 0.5**0.5])
+
+
+@pytest.mark.parametrize(
+    ("stored", "query", "message"),
+    [
+        (np.ones((2, 3)), np.ones(2), "cannot compare"),
+        (np.ones(3), np.ones(3), "cannot compare"),
+        (np.array([[1.0, 0.0], [0.0, 0.0]]), np.ones(2), "zero vector"),
+        (np.ones((2, 2)), np.zeros(2), "zero vector"),
+    ],
+)
+def test_cosine_scores_refuse_mismatched_or_zero_vectors(
+    stored: np.ndarray, query: np.ndarray, message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        cosine_scores(stored, query)
 
 
 def test_a_zero_query_or_row_is_refused() -> None:
