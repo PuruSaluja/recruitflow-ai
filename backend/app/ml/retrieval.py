@@ -205,6 +205,7 @@ def rerank_per_group(
     groups: Sequence[str], first: Sequence[float], second: Sequence[float], n: int
 ) -> np.ndarray:
     """:func:`rerank_top_n` within each group, returned in the input order."""
+    _check_n(n)
     keys = np.asarray(groups)
     first_array, second_array = np.asarray(first, dtype=float), np.asarray(second, dtype=float)
     if keys.ndim != 1 or first_array.shape != keys.shape or second_array.shape != keys.shape:

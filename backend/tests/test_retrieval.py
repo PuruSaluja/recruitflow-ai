@@ -351,6 +351,12 @@ def test_re_ranking_per_group_cuts_and_ranks_each_group_on_its_own() -> None:
         np.testing.assert_array_equal(out[rows], rerank_top_n(first[rows], second[rows], 2))
 
 
+@pytest.mark.parametrize("n", [0, 2.5, True])
+def test_re_ranking_per_group_refuses_a_bad_n_even_with_no_groups(n: object) -> None:
+    with pytest.raises(ValueError, match="n must be"):
+        rerank_per_group([], [], [], n)
+
+
 def test_re_ranking_per_group_refuses_misaligned_input() -> None:
     with pytest.raises(ValueError, match="group keys"):
         rerank_per_group(["J1", "J1"], [1.0, 2.0], [1.0], 1)
