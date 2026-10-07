@@ -485,6 +485,59 @@ def test_the_written_json_is_strict(model: Path, results: dict, tmp_path: Path) 
     json.loads(out.read_text(encoding="utf-8"), parse_constant=refuse)
 
 
+@pytest.mark.parametrize("scope", ["training_jobs", "held_out", "all_jobs"])
+def test_the_slates_relevant_counts_and_recall_ceilings_are_recorded(
+    results: dict, recomputed: dict, scope: str
+) -> None:
+    refs = recomputed["all"]["job_refs"]
+    held_out = set(recomputed["held_out"]["job_refs"].tolist())
+    jobs = {
+        "training_jobs": set(refs.tolist()) - held_out,
+        "held_out": held_out,
+        "all_jobs": set(refs.tolist()),
+    }[scope]
+    data = training_data(generate_corpus(CorpusConfig(seed=5, n_jobs=40, n_candidates=1200)))
+    counts = [int((data.relevance[refs == ref] >= 1).sum()) for ref in sorted(jobs)]
+    slates = results["first_stage"]["slates"][scope]
+    assert slates["jobs"] == len(jobs)
+    assert slates["relevant_per_slate"] == {
+        "mean": pytest.approx(np.mean(counts), abs=1e-12),
+        "min": min(counts),
+        "max": max(counts),
+    }
+    for n in script.RECALL_CUTOFFS:
+        ceiling = np.mean([min(1.0, n / c) for c in counts if c > 0])
+        assert slates["recall_ceiling_at_n"][str(n)] == pytest.approx(ceiling, abs=1e-12)
+
+
+def test_a_set_with_nobody_relevant_has_no_recall_ceiling() -> None:
+    data = TrainingData(
+        pairs=tuple((None, None) for _ in range(4)),
+        advanced=np.zeros(4, dtype=bool),
+        relevance=np.zeros(4, dtype=int),
+        job_refs=("J0", "J0", "J1", "J1"),
+    )
+    slates = script._slates(data)
+    assert slates["relevant_per_slate"] == {"mean": 0.0, "min": 0, "max": 0}
+    assert set(slates["recall_ceiling_at_n"].values()) == {None}
+
+
+def test_a_job_with_nobody_relevant_counts_in_the_slates_but_not_the_ceiling() -> None:
+    # J0 has 10 relevant of 12, J1 none: the counts include J1, the ceiling not.
+    relevance = np.zeros(24, dtype=int)
+    relevance[:10] = 1
+    data = TrainingData(
+        pairs=tuple((None, None) for _ in range(24)),
+        advanced=np.zeros(24, dtype=bool),
+        relevance=relevance,
+        job_refs=("J0",) * 12 + ("J1",) * 12,
+    )
+    slates = script._slates(data)
+    assert slates["relevant_per_slate"] == {"mean": 5.0, "min": 0, "max": 10}
+    assert slates["recall_ceiling_at_n"]["5"] == 0.5
+    assert slates["recall_ceiling_at_n"]["10"] == 1.0
+
+
 def test_first_stage_recall_never_falls_as_n_grows(results: dict) -> None:
     for scope in ("training_jobs", "held_out", "all_jobs"):
         for measured in results["first_stage"][scope].values():

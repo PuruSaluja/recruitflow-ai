@@ -327,6 +327,35 @@ def _first_stage_recall(data: TrainingData, scores: dict[str, np.ndarray]) -> di
     return out
 
 
+def _slates(data: TrainingData) -> dict[str, Any]:
+    """How many relevant candidates the slates of ``data`` hold, and the recall ceiling.
+
+    The ceiling at N is the most a cut of exactly N can keep,
+    ``min(1, N / relevant)``, averaged over the jobs that have a relevant
+    candidate; a cut that keeps ties at N can hold more.
+    """
+    refs = np.array(data.job_refs)
+    relevant = np.array(
+        [
+            int((data.relevance[refs == ref] >= RELEVANT_GRADE).sum())
+            for ref in sorted(set(data.job_refs))
+        ]
+    )
+    some = relevant[relevant > 0]
+    return {
+        "jobs": len(relevant),
+        "relevant_per_slate": {
+            "mean": float(relevant.mean()),
+            "min": int(relevant.min()),
+            "max": int(relevant.max()),
+        },
+        "recall_ceiling_at_n": {
+            str(n): float(np.minimum(1.0, n / some).mean()) if len(some) else None
+            for n in RECALL_CUTOFFS
+        },
+    }
+
+
 def choose_first_stage(training: dict[str, Any]) -> dict[str, Any]:
     """The first stage and N for a re-rank, from recall on the training jobs.
 
@@ -378,6 +407,11 @@ def _first_stage(
             test_set, {n: _on(data, test_set, s) for n, s in scores.items()}
         ),
         "all_jobs": _first_stage_recall(data, scores),
+        "slates": {
+            "training_jobs": _slates(train_set),
+            "held_out": _slates(test_set),
+            "all_jobs": _slates(data),
+        },
     }
 
 
