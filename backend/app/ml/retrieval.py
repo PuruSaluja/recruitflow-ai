@@ -118,11 +118,31 @@ def reciprocal_rank_fusion(*scores: Sequence[float], k: float = RRF_K) -> np.nda
     return sum(1.0 / (k + rankdata(-a, method="average")) for a in arrays)
 
 
-def fuse_per_group(groups: Sequence[str], *scores: Sequence[float], k: float = RRF_K) -> np.ndarray:
-    """:func:`reciprocal_rank_fusion` within each group, returned in the input order."""
+def _group_keys(groups: Sequence[object]) -> np.ndarray:
+    """``groups`` as an array, refusing keys the conversion would merge or split.
+
+    numpy stores ``[1, "1"]`` as ``["1", "1"]``, which would rank two groups
+    as one; each distinct key has to stay exactly one distinct key.
+    """
     keys = np.asarray(groups)
     if keys.ndim != 1:
         raise ValueError(f"groups must hold one key per item, got shape {keys.shape}")
+    originals, converted = list(groups), keys.tolist()
+    if (
+        not len(set(originals))
+        == len(set(converted))
+        == len(set(zip(originals, converted, strict=True)))
+    ):
+        raise ValueError(
+            "groups must use distinct group keys of one kind; "
+            f"{sorted(map(repr, set(originals)))} do not stay distinct as an array"
+        )
+    return keys
+
+
+def fuse_per_group(groups: Sequence[str], *scores: Sequence[float], k: float = RRF_K) -> np.ndarray:
+    """:func:`reciprocal_rank_fusion` within each group, returned in the input order."""
+    keys = _group_keys(groups)
     arrays = [np.asarray(s, dtype=float) for s in scores]
     if any(a.shape != keys.shape for a in arrays):
         raise ValueError(f"{len(keys)} group keys for scores of shapes {[a.shape for a in arrays]}")
@@ -206,7 +226,7 @@ def rerank_per_group(
 ) -> np.ndarray:
     """:func:`rerank_top_n` within each group, returned in the input order."""
     _check_n(n)
-    keys = np.asarray(groups)
+    keys = _group_keys(groups)
     first_array, second_array = np.asarray(first, dtype=float), np.asarray(second, dtype=float)
     if keys.ndim != 1 or first_array.shape != keys.shape or second_array.shape != keys.shape:
         raise ValueError(

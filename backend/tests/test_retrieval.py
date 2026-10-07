@@ -360,3 +360,26 @@ def test_re_ranking_per_group_refuses_a_bad_n_even_with_no_groups(n: object) -> 
 def test_re_ranking_per_group_refuses_misaligned_input() -> None:
     with pytest.raises(ValueError, match="group keys"):
         rerank_per_group(["J1", "J1"], [1.0, 2.0], [1.0], 1)
+
+
+# numpy turns [1, "1"] into ["1", "1"], so two keys would silently become one group.
+@pytest.mark.parametrize("groups", [[1, "1", 1], ["J1", 1, "1"], [2, "2.0", 2.0]])
+def test_per_group_functions_refuse_keys_that_would_merge(groups: list) -> None:
+    scores = [1.0, 2.0, 3.0]
+    with pytest.raises(ValueError, match="distinct group keys"):
+        fuse_per_group(groups, scores, scores)
+    with pytest.raises(ValueError, match="distinct group keys"):
+        rerank_per_group(groups, scores, scores, 1)
+
+
+def test_per_group_functions_accept_one_kind_of_key() -> None:
+    scores = np.array([1.0, 2.0, 3.0, 4.0])
+    for groups in (["J1", "J2", "J1", "J2"], [1, 2, 1, 2], np.array(["J1", "J2", "J1", "J2"])):
+        fused = fuse_per_group(groups, scores, -scores)
+        reranked = rerank_per_group(groups, scores, -scores, 1)
+        np.testing.assert_allclose(
+            fused[[0, 2]], reciprocal_rank_fusion(scores[[0, 2]], -scores[[0, 2]])
+        )
+        np.testing.assert_array_equal(
+            reranked[[1, 3]], rerank_top_n(scores[[1, 3]], -scores[[1, 3]], 1)
+        )
