@@ -181,6 +181,53 @@ Read plainly:
   its pooled AUC is not comparable with the others'. The per-job NDCG and P@5
   above are the comparison that holds.
 
+## The first stage for a re-rank
+
+A slower, more precise scorer (a cross-encoder reads the job and the
+candidate together) is too costly to run over a whole pool, so it re-orders
+only the top N a cheap scorer keeps. It can only promote a candidate the
+first stage let through, so a first stage is judged by **recall@N**: the
+share of a slate's relevant candidates (`relevance >= 1`) in its top N,
+averaged over jobs. Candidates tied with the N-th score are all kept, so the
+cut never depends on the order candidates arrive in. Only the hybrid makes
+such ties here: at N = 20 it keeps 20.01 candidates a slate on average over
+all 200 jobs, the other two exactly 20.
+
+The first stage and N were fixed **before any re-rank was run**, on the 150
+training jobs, by a rule written beforehand
+([`choose_first_stage`](../scripts/evaluate_matcher.py)): the smallest N of
+5, 10, 15, 20, 25 and 30 at which some scorer keeps at least 90% of the
+relevant candidates on average, and at that N the scorer that keeps the
+most, the cheaper one on a tie. The held-out jobs, where a re-rank will be
+measured, play no part in the choice.
+
+| Recall@N, 150 training jobs | 5 | 10 | 15 | 20 | 25 | 30 |
+| --- | --- | --- | --- | --- | --- | --- |
+| BM25 | 0.3346 | 0.6086 | 0.8426 | 0.9641 | 0.9869 | 0.9911 |
+| Dense | 0.3982 | 0.6710 | 0.8619 | 0.9648 | 0.9897 | 0.9920 |
+| Hybrid (RRF) | 0.3984 | 0.6807 | 0.8691 | **0.9678** | 0.9896 | 0.9957 |
+
+**Chosen: the hybrid, N = 20**, 40% of a 50-candidate slate. Read plainly:
+
+- **At N = 20 the choice barely matters.** The three keep 96.4% to 96.8%
+  of the relevant candidates on the training jobs, and on the 50 held-out
+  jobs 95.3% (BM25), 95.0% (dense) and 95.0% (hybrid). The rule picks the
+  highest, and the hybrid's margin over dense is 0.003.
+- **The strong fits are almost all kept.** Recall of `relevance == 2` at
+  N = 20 is 99.7% for the hybrid on the training jobs and 99.5% on the
+  held-out ones.
+- **Small N has a ceiling.** A training slate holds 8.4 relevant
+  candidates on average (1 to 16), so no scorer can keep more than 64% of
+  them in a top 5, or 96% in a top 10, averaged per slate. The best
+  measured, 0.40 and 0.68, are well below both, so the scorers, not the
+  ceiling, are what N = 10 falls short on.
+- What the re-rank can gain is bounded by what the first stage keeps, and
+  about 5% of the relevant candidates on a held-out slate start below the
+  cut, where no second stage can reach them.
+
+Recall on all 200 jobs and of the strong fits, and the mean number kept, are
+in the JSON under `first_stage`.
+
 ## What this does not show
 
 - **Real-world accuracy.** The ground truth is a formula over a synthetic
@@ -190,7 +237,8 @@ Read plainly:
   to the planted bias by construction. That is the fairness audit's job.
 - **Tuning or model choice.** Nothing was tuned on these numbers. The
   estimators keep scikit-learn's defaults, and no other model family was
-  tried. The retrieval scorers keep their textbook settings. A cross-encoder
-  re-rank is planned, to be measured on these same metrics and held-out jobs.
+  tried. The retrieval scorers keep their textbook settings. The re-rank's
+  first stage and N were chosen on the training jobs only; the cross-encoder
+  re-rank itself is not measured yet.
 - **Generalisation across corpora.** One corpus seed. Splits vary which jobs
   are held out, not which candidates or jobs were generated.
