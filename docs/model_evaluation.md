@@ -183,9 +183,10 @@ Read plainly:
 
 ## The first stage for a re-rank
 
-A slower, more precise scorer (a cross-encoder reads the job and the
-candidate together) is too costly to run over a whole pool, so it re-orders
-only the top N a cheap scorer keeps. It can only promote a candidate the
+A cross-encoder reads the job and the candidate together, one model pass
+per pair, so in a two-stage ranking it re-orders only the top N a cheaper
+scorer keeps. Whether it ranks better here is not measured yet. It can only
+promote a candidate the
 first stage let through, so a first stage is judged by **recall@N**: the
 share of a slate's relevant candidates (`relevance >= 1`) in its top N,
 averaged over jobs. Candidates tied with the N-th score are all kept, so the
@@ -217,16 +218,17 @@ measured, play no part in the choice.
   N = 20 is 99.7% for the hybrid on the training jobs and 99.5% on the
   held-out ones.
 - **Small N has a ceiling.** A training slate holds 8.4 relevant
-  candidates on average (1 to 16), so no scorer can keep more than 64% of
-  them in a top 5, or 96% in a top 10, averaged per slate. The best
+  candidates on average (1 to 16), so a cut of exactly 5 can keep at most
+  64% of them, and one of 10 at most 96%, averaged per slate. The best
   measured, 0.40 and 0.68, are well below both, so the scorers, not the
   ceiling, are what N = 10 falls short on.
 - What the re-rank can gain is bounded by what the first stage keeps, and
   about 5% of the relevant candidates on a held-out slate start below the
   cut, where no second stage can reach them.
 
-Recall on all 200 jobs and of the strong fits, and the mean number kept, are
-in the JSON under `first_stage`.
+Recall on all 200 jobs and of the strong fits, the mean number kept, and
+each set's relevant candidates per slate and recall ceilings
+(`first_stage.slates`) are in the JSON under `first_stage`.
 
 ## What this does not show
 
