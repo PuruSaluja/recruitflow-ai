@@ -295,11 +295,18 @@ def _agreement(
     }
 
 
+def _mean_or_none(values: Sequence[float | None]) -> float | None:
+    """Mean of the values that are not ``None``; ``None`` when none are."""
+    measured = [v for v in values if v is not None]
+    return float(np.mean(measured)) if measured else None
+
+
 def _first_stage_recall(data: TrainingData, scores: dict[str, np.ndarray]) -> dict[str, Any]:
     """Mean recall@N per scorer over the slates of ``data``, and the mean kept size.
 
     Recall of the relevant and of the strong fits, each averaged over the
-    jobs that have at least one; the kept size over every job.
+    jobs that have at least one, and ``None`` when no job does; the kept
+    size over every job.
     """
     refs = np.array(data.job_refs)
     slates = [refs == ref for ref in sorted(set(data.job_refs))]
@@ -313,8 +320,8 @@ def _first_stage_recall(data: TrainingData, scores: dict[str, np.ndarray]) -> di
             per_job_strong = [
                 recall_at_n(all_scores[m], data.relevance[m] == STRONG_GRADE, n) for m in slates
             ]
-            recall[str(n)] = float(np.mean([r for r in per_job if r is not None]))
-            strong[str(n)] = float(np.mean([r for r in per_job_strong if r is not None]))
+            recall[str(n)] = _mean_or_none(per_job)
+            strong[str(n)] = _mean_or_none(per_job_strong)
             kept[str(n)] = float(np.mean([first_stage_cut(all_scores[m], n).sum() for m in slates]))
         out[name] = {"recall_at_n": recall, "strong_recall_at_n": strong, "mean_kept": kept}
     return out
@@ -327,11 +334,15 @@ def choose_first_stage(training: dict[str, Any]) -> dict[str, Any]:
     recall@N reaches :data:`FIRST_STAGE_TARGET`; at that N, the scorer with
     the highest recall, the cheaper one (:data:`FIRST_STAGE_ORDER`) on a tie.
     If none reaches it, the largest N and the best scorer there, with
-    ``target_met`` false.
+    ``target_met`` false. If no training job has a relevant candidate there
+    is no recall to choose on, and the choice is all ``None``.
     """
     names = [name for name in FIRST_STAGE_ORDER if name in training]
     if not names:
         raise ValueError("no retrieval scorer to choose a first stage from")
+    # Whether a job has a relevant candidate depends on the jobs, not the scorer.
+    if training[names[0]]["recall_at_n"][str(RECALL_CUTOFFS[0])] is None:
+        return {"scorer": None, "n": None, "target_met": False, "recall_on_training_jobs": None}
     for n in RECALL_CUTOFFS:
         reaching = [m for m in names if training[m]["recall_at_n"][str(n)] >= FIRST_STAGE_TARGET]
         if reaching:
@@ -660,7 +671,7 @@ def main(argv: list[str] | None = None) -> int:
     chosen = first["chosen"]
     print(f"  first stage, recall@N on the training jobs (target {first['target_recall']}):")
     for name, measured in first["training_jobs"].items():
-        cells = " ".join(f"@{n} {measured['recall_at_n'][str(n)]:.4f}" for n in first["cutoffs"])
+        cells = " ".join(f"@{n} {_fmt(measured['recall_at_n'][str(n)])}" for n in first["cutoffs"])
         print(f"    {name:<12} {cells}")
     print(
         f"    chosen: {chosen['scorer']}, N = {chosen['n']} "

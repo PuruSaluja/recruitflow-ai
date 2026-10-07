@@ -14,6 +14,7 @@ import os
 import shutil
 import subprocess
 import sys
+import warnings
 from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
@@ -449,6 +450,39 @@ def test_first_stage_recall_on_hand_made_slates_leaves_out_a_job_with_nobody_to_
     assert measured["recall_at_n"]["10"] == 1.0
     assert measured["strong_recall_at_n"]["5"] == 0.0
     assert measured["mean_kept"]["5"] == pytest.approx((5 + 5 + 10) / 3)
+
+
+def test_first_stage_recall_of_a_grade_no_job_has_is_none_not_nan() -> None:
+    # No strong fit on any slate, and on the second set nobody relevant at all.
+    refs = ("J0",) * 4 + ("J1",) * 4
+    scores = {"bm25": np.array([4.0, 3.0, 2.0, 1.0] * 2)}
+    for relevance in ([1, 0, 0, 1, 0, 0, 1, 0], [0] * 8):
+        data = TrainingData(
+            pairs=tuple((None, None) for _ in refs),
+            advanced=np.zeros(8, dtype=bool),
+            relevance=np.array(relevance),
+            job_refs=refs,
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            measured = script._first_stage_recall(data, scores)["bm25"]
+        assert set(measured["strong_recall_at_n"].values()) == {None}
+    assert set(measured["recall_at_n"].values()) == {None}
+    assert script.choose_first_stage({"bm25": measured, "dense": measured}) == {
+        "scorer": None,
+        "n": None,
+        "target_met": False,
+        "recall_on_training_jobs": None,
+    }
+
+
+def test_the_written_json_is_strict(model: Path, results: dict, tmp_path: Path) -> None:
+    def refuse(constant: str) -> None:
+        raise ValueError(f"{constant} is not JSON")
+
+    out = tmp_path / "evaluation.json"
+    assert script.main(["--model", str(model), "--out", str(out), *FAST]) == 0
+    json.loads(out.read_text(encoding="utf-8"), parse_constant=refuse)
 
 
 def test_first_stage_recall_never_falls_as_n_grows(results: dict) -> None:
