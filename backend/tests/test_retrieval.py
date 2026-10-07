@@ -1,4 +1,4 @@
-"""Unit tests for app.ml.retrieval: BM25, cosine scores and reciprocal rank fusion."""
+"""Unit tests for app.ml.retrieval: BM25, fusion, and the two-stage cut and re-rank."""
 
 from __future__ import annotations
 
@@ -13,8 +13,12 @@ from app.ml.retrieval import (
     BM25_K1,
     RRF_K,
     BM25Index,
+    first_stage_cut,
     fuse_per_group,
+    recall_at_n,
     reciprocal_rank_fusion,
+    rerank_per_group,
+    rerank_top_n,
 )
 from app.ml.text import TOKEN_PATTERN, fold_text
 
@@ -219,3 +223,134 @@ def test_fusing_per_group_refuses_misaligned_input() -> None:
 def test_fusing_per_group_refuses_keys_that_are_not_one_flat_sequence() -> None:
     with pytest.raises(ValueError, match="one key per item"):
         fuse_per_group([["J1"], ["J1"]], [[1.0], [2.0]])
+
+
+# --- two stages ------------------------------------------------------------
+
+
+def test_the_cut_keeps_the_top_n() -> None:
+    kept = first_stage_cut([0.2, 0.9, 0.5, 0.1, 0.7], 3)
+    assert kept.tolist() == [False, True, True, False, True]
+
+
+def test_the_cut_keeps_every_item_tied_with_the_nth() -> None:
+    kept = first_stage_cut([3.0, 2.0, 2.0, 2.0, 1.0], 2)
+    assert kept.tolist() == [True, True, True, True, False]
+
+
+def test_the_cut_keeps_everyone_when_n_reaches_the_end_or_all_tie() -> None:
+    assert first_stage_cut([1.0, 2.0, 3.0], 3).all()
+    assert first_stage_cut([1.0, 2.0, 3.0], 50).all()
+    assert first_stage_cut([0.0] * 6, 1).all()
+
+
+def test_the_cut_does_not_depend_on_the_order_items_arrive_in() -> None:
+    rng = np.random.default_rng(1)
+    scores = rng.integers(0, 6, 60).astype(float)  # ties at most cuts
+    order = rng.permutation(60)
+    for n in (1, 7, 20, 59):
+        assert (first_stage_cut(scores, n)[order] == first_stage_cut(scores[order], n)).all()
+
+
+def test_recall_is_the_share_of_relevant_items_kept() -> None:
+    scores = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4]
+    relevant = [True, False, False, True, True, False]
+    assert recall_at_n(scores, relevant, 1) == pytest.approx(1 / 3)
+    assert recall_at_n(scores, relevant, 4) == pytest.approx(2 / 3)
+    assert recall_at_n(scores, relevant, 5) == 1.0
+
+
+def test_recall_counts_a_relevant_item_tied_at_the_cut_as_kept() -> None:
+    assert recall_at_n([2.0, 1.0, 1.0], [False, False, True], 2) == 1.0
+
+
+def test_recall_is_none_with_nothing_relevant() -> None:
+    assert recall_at_n([1.0, 2.0], [False, False], 1) is None
+
+
+@pytest.mark.parametrize(
+    ("scores", "relevant", "n", "message"),
+    [
+        ([1.0, 2.0], [1, 0], 1, "booleans"),
+        ([1.0, 2.0], [True], 1, "shape"),
+        ([1.0, math.nan], [True, False], 1, "finite"),
+        ([], [], 1, "non-empty"),
+        ([1.0, 2.0], [True, False], 0, "at least 1"),
+        ([1.0, 2.0], [True, False], 1.5, "whole number"),
+        ([1.0, 2.0], [True, False], True, "whole number"),
+    ],
+)
+def test_recall_refuses_what_it_cannot_measure(
+    scores: list, relevant: list, n: object, message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        recall_at_n(scores, np.array(relevant, dtype=None if relevant else bool), n)
+
+
+def _two_stage_order(first: np.ndarray, second: np.ndarray, n: int) -> list[int]:
+    """The two-stage order written out: the kept by second, then the rest by first."""
+    threshold = sorted(first, reverse=True)[min(n, len(first)) - 1]
+    kept = [i for i in range(len(first)) if first[i] >= threshold]
+    rest = [i for i in range(len(first)) if first[i] < threshold]
+    return sorted(kept, key=lambda i: -second[i]) + sorted(rest, key=lambda i: -first[i])
+
+
+@pytest.mark.parametrize("n", [1, 3, 10, 29, 30, 45])
+def test_the_re_rank_orders_the_kept_by_the_second_stage_above_the_rest(n: int) -> None:
+    rng = np.random.default_rng(n)
+    first, second = rng.standard_normal(30), rng.standard_normal(30)
+    scores = rerank_top_n(first, second, n)
+    assert np.argsort(-scores, kind="stable").tolist() == _two_stage_order(first, second, n)
+
+
+def test_the_re_rank_returns_ranks_as_scores() -> None:
+    first = np.array([0.9, 0.1, 0.5, 0.3, 0.7])
+    second = np.array([0.0, 9.0, 1.0, 9.0, 2.0])
+    # kept: items 0, 4, 2; second ranks them 1, 3, 2 among themselves.
+    assert rerank_top_n(first, second, 3).tolist() == [7.0, 1.0, 8.0, 2.0, 9.0]
+
+
+def test_the_re_rank_keeps_ties_in_either_stage_as_ties() -> None:
+    first = np.array([5.0, 4.0, 3.0, 1.0, 1.0])
+    second = np.array([0.5, 0.5, 0.2, 0.0, 0.0])
+    scores = rerank_top_n(first, second, 3)
+    assert scores[0] == scores[1] > scores[2] > scores[3] == scores[4]
+
+
+def test_the_re_rank_never_reads_the_second_stage_of_an_item_it_cut() -> None:
+    first = np.array([3.0, 2.0, 1.0])
+    second = np.array([0.1, 0.2, math.nan])
+    assert rerank_top_n(first, second, 2).tolist() == [5.0, 6.0, 1.0]
+
+
+def test_the_re_rank_with_n_past_the_end_is_the_second_stage_alone() -> None:
+    first, second = np.array([3.0, 2.0, 1.0]), np.array([0.1, 0.3, 0.2])
+    assert np.argsort(-rerank_top_n(first, second, 3)).tolist() == [1, 2, 0]
+
+
+@pytest.mark.parametrize(
+    ("first", "second", "message"),
+    [
+        ([1.0, 2.0], [1.0], "same items"),
+        ([1.0, math.inf], [1.0, 2.0], "first-stage scores must be finite"),
+        ([1.0, 2.0], [math.nan, 1.0], "second-stage scores of the kept items must be finite"),
+        ([], [], "non-empty"),
+    ],
+)
+def test_the_re_rank_refuses_what_it_cannot_rank(first: list, second: list, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        rerank_top_n(first, second, 2)
+
+
+def test_re_ranking_per_group_cuts_and_ranks_each_group_on_its_own() -> None:
+    groups = ["J2", "J1", "J2", "J1", "J2", "J1"]
+    first = np.array([3.0, 1.0, 2.0, 5.0, 1.0, 4.0])
+    second = np.array([0.1, 0.9, 0.3, 0.2, 0.2, 0.4])
+    out = rerank_per_group(groups, first, second, 2)
+    for rows in ([1, 3, 5], [0, 2, 4]):
+        np.testing.assert_array_equal(out[rows], rerank_top_n(first[rows], second[rows], 2))
+
+
+def test_re_ranking_per_group_refuses_misaligned_input() -> None:
+    with pytest.raises(ValueError, match="group keys"):
+        rerank_per_group(["J1", "J1"], [1.0, 2.0], [1.0], 1)

@@ -29,6 +29,14 @@ its rank among 4,000, and fusing ranks is not monotone in either scorer, so
 fusing over a job's slate and fusing over the whole pool can order the same
 slate differently. :func:`fuse_per_group` ranks within each group (a job's
 slate, in the evaluation), which is what ranking a slate means.
+
+**Two stages.** A cheap scorer keeps its top ``n`` and a precise one re-orders
+only those (:func:`rerank_top_n`); the rest stay below, in the first stage's
+order. A first stage is judged by what it keeps, :func:`recall_at_n`, since
+the second can only promote a candidate the first let through. Candidates
+tied with the ``n``-th score are all kept, so the cut never depends on the
+order the candidates arrive in, and a stage that scores everyone equal keeps
+everyone; :func:`first_stage_cut` is that rule, shared by both.
 """
 
 from __future__ import annotations
@@ -123,3 +131,89 @@ def fuse_per_group(groups: Sequence[str], *scores: Sequence[float], k: float = R
         mask = keys == key
         fused[mask] = reciprocal_rank_fusion(*(a[mask] for a in arrays), k=k)
     return fused
+
+
+def _finite_scores(scores: Sequence[float], name: str) -> np.ndarray:
+    array = np.asarray(scores, dtype=float)
+    if array.ndim != 1 or len(array) == 0:
+        raise ValueError(f"{name} must be a non-empty flat sequence, got shape {array.shape}")
+    if not np.isfinite(array).all():
+        raise ValueError(f"{name} must be finite; NaN cannot be ranked")
+    return array
+
+
+def _check_n(n: int) -> None:
+    if isinstance(n, bool) or not isinstance(n, int | np.integer) or n < 1:
+        raise ValueError(f"n must be a whole number of at least 1, got {n!r}")
+
+
+def first_stage_cut(scores: Sequence[float], n: int) -> np.ndarray:
+    """Which items a first stage keeping its top ``n`` lets through, as a mask.
+
+    Every item scoring at least the ``n``-th highest score is kept, so ties at
+    the cut make the kept set larger than ``n``; ``n`` past the end keeps all.
+    """
+    array = _finite_scores(scores, "scores")
+    _check_n(n)
+    if n >= len(array):
+        return np.ones(len(array), dtype=bool)
+    threshold = np.sort(array)[::-1][n - 1]
+    return array >= threshold
+
+
+def recall_at_n(scores: Sequence[float], relevant: Sequence[bool], n: int) -> float | None:
+    """Share of the ``relevant`` items that :func:`first_stage_cut` keeps.
+
+    ``None`` when nothing is relevant, as there is nothing to keep.
+    """
+    hits = np.asarray(relevant)
+    if hits.dtype != bool:
+        raise ValueError(f"relevant must be booleans, got dtype {hits.dtype}")
+    kept = first_stage_cut(scores, n)
+    if hits.shape != kept.shape:
+        raise ValueError(f"{len(kept)} scores for relevance of shape {hits.shape}")
+    total = int(hits.sum())
+    return None if total == 0 else int(hits[kept].sum()) / total
+
+
+def rerank_top_n(first: Sequence[float], second: Sequence[float], n: int) -> np.ndarray:
+    """Scores that rank the kept items by ``second``, all above the rest by ``first``.
+
+    The kept items are :func:`first_stage_cut` of ``first``. Only ranks are
+    returned, as scores: the rest get their average rank by ``first`` (1 for
+    the lowest), the kept ones ``len(first) + 1`` plus their average rank by
+    ``second`` among themselves, so ties within either stage stay ties.
+    ``second`` is only read for the kept items; the rest may hold anything.
+    """
+    first_array = _finite_scores(first, "first-stage scores")
+    second_array = np.asarray(second, dtype=float)
+    if second_array.shape != first_array.shape:
+        raise ValueError(
+            f"both stages must score the same items, got shapes {first_array.shape} "
+            f"and {second_array.shape}"
+        )
+    kept = first_stage_cut(first_array, n)
+    kept_scores = _finite_scores(second_array[kept], "second-stage scores of the kept items")
+    out = np.empty(len(first_array), dtype=float)
+    if (~kept).any():
+        out[~kept] = rankdata(first_array[~kept], method="average")
+    out[kept] = len(first_array) + 1 + rankdata(kept_scores, method="average")
+    return out
+
+
+def rerank_per_group(
+    groups: Sequence[str], first: Sequence[float], second: Sequence[float], n: int
+) -> np.ndarray:
+    """:func:`rerank_top_n` within each group, returned in the input order."""
+    keys = np.asarray(groups)
+    first_array, second_array = np.asarray(first, dtype=float), np.asarray(second, dtype=float)
+    if keys.ndim != 1 or first_array.shape != keys.shape or second_array.shape != keys.shape:
+        raise ValueError(
+            f"{keys.shape} group keys for scores of shapes {first_array.shape} "
+            f"and {second_array.shape}"
+        )
+    out = np.empty(len(keys), dtype=float)
+    for key in np.unique(keys):
+        mask = keys == key
+        out[mask] = rerank_top_n(first_array[mask], second_array[mask], n)
+    return out
