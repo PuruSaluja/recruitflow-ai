@@ -34,7 +34,16 @@ number of jobs it wins, ties and loses on NDCG@10. ``agreement`` says how
 alike the two sides rank (Spearman per slate) and how often fusion beats
 dense on the jobs where BM25 ranks at least as well as dense, against the
 rest, and how many pairs share their fused score with another on their
-slate. ``--no-dense`` skips the scorers that need the encoder (the
+slate.
+
+``first_stage`` judges the three as the first stage of a two-stage ranking,
+which keeps its top N of a slate for a slower scorer to re-order: the mean
+share of each slate's relevant candidates in its top N, for N in
+:data:`RECALL_CUTOFFS`, on the training jobs, the held-out jobs and all jobs.
+The first stage and N are chosen on the **training jobs** by a fixed rule
+(:func:`choose_first_stage`), so the held-out jobs a re-rank is measured on
+play no part in choosing what it re-ranks. ``--no-dense`` skips the scorers
+that need the encoder (the
 ``embeddings`` extra); the encoder is loaded before anything is trained, so a
 missing one is refused at once.
 
@@ -84,6 +93,7 @@ from app.ml.evaluate import (
     NDCG_K,
     PRECISION_K,
     RELEVANT_GRADE,
+    STRONG_GRADE,
     Evaluation,
     bootstrap_interval,
     evaluate_scores,
@@ -94,7 +104,9 @@ from app.ml.retrieval import (
     BM25_K1,
     RRF_K,
     BM25Index,
+    first_stage_cut,
     fuse_per_group,
+    recall_at_n,
 )
 from app.ml.train import TRAINING_LABEL, TrainingData, make_matcher, split_by_job, training_data
 
@@ -107,6 +119,15 @@ DEFAULT_SPLIT_SEEDS = tuple(range(1, 10))
 #: is taken not to match it. Both come from the same float arithmetic, so the
 #: real difference is zero; this only absorbs summation order.
 MANIFEST_TOLERANCE = 1e-9
+
+#: The top-N cuts a first stage is measured at. A slate holds 50 candidates.
+RECALL_CUTOFFS = (5, 10, 15, 20, 25, 30)
+
+#: The mean recall@N a first stage has to reach on the training jobs.
+FIRST_STAGE_TARGET = 0.9
+
+#: Cheapest first: on equal recall, the cheaper first stage is chosen.
+FIRST_STAGE_ORDER = ("bm25", "dense", "hybrid_rrf")
 
 
 class EvaluationRefused(RuntimeError):
@@ -271,6 +292,81 @@ def _agreement(
             "jobs": int((~bm25_level).sum()),
             "hybrid_better_than_dense": int((gains_array[~bm25_level] > 0).sum()),
         },
+    }
+
+
+def _first_stage_recall(data: TrainingData, scores: dict[str, np.ndarray]) -> dict[str, Any]:
+    """Mean recall@N per scorer over the slates of ``data``, and the mean kept size.
+
+    Recall of the relevant and of the strong fits, each averaged over the
+    jobs that have at least one; the kept size over every job.
+    """
+    refs = np.array(data.job_refs)
+    slates = [refs == ref for ref in sorted(set(data.job_refs))]
+    out: dict[str, Any] = {}
+    for name, all_scores in scores.items():
+        recall, strong, kept = {}, {}, {}
+        for n in RECALL_CUTOFFS:
+            per_job = [
+                recall_at_n(all_scores[m], data.relevance[m] >= RELEVANT_GRADE, n) for m in slates
+            ]
+            per_job_strong = [
+                recall_at_n(all_scores[m], data.relevance[m] == STRONG_GRADE, n) for m in slates
+            ]
+            recall[str(n)] = float(np.mean([r for r in per_job if r is not None]))
+            strong[str(n)] = float(np.mean([r for r in per_job_strong if r is not None]))
+            kept[str(n)] = float(np.mean([first_stage_cut(all_scores[m], n).sum() for m in slates]))
+        out[name] = {"recall_at_n": recall, "strong_recall_at_n": strong, "mean_kept": kept}
+    return out
+
+
+def choose_first_stage(training: dict[str, Any]) -> dict[str, Any]:
+    """The first stage and N for a re-rank, from recall on the training jobs.
+
+    The smallest N in :data:`RECALL_CUTOFFS` at which some scorer's mean
+    recall@N reaches :data:`FIRST_STAGE_TARGET`; at that N, the scorer with
+    the highest recall, the cheaper one (:data:`FIRST_STAGE_ORDER`) on a tie.
+    If none reaches it, the largest N and the best scorer there, with
+    ``target_met`` false.
+    """
+    names = [name for name in FIRST_STAGE_ORDER if name in training]
+    if not names:
+        raise ValueError("no retrieval scorer to choose a first stage from")
+    for n in RECALL_CUTOFFS:
+        reaching = [m for m in names if training[m]["recall_at_n"][str(n)] >= FIRST_STAGE_TARGET]
+        if reaching:
+            break
+    # The best at that N reaches the target whenever any scorer does.
+    best = max(names, key=lambda m: (training[m]["recall_at_n"][str(n)], -names.index(m)))
+    return {
+        "scorer": best,
+        "n": n,
+        "target_met": bool(reaching),
+        "recall_on_training_jobs": training[best]["recall_at_n"][str(n)],
+    }
+
+
+def _first_stage(
+    data: TrainingData,
+    train_set: TrainingData,
+    test_set: TrainingData,
+    scores: dict[str, np.ndarray],
+) -> dict[str, Any]:
+    training = _first_stage_recall(
+        train_set, {n: _on(data, train_set, s) for n, s in scores.items()}
+    )
+    return {
+        "relevant_grade": RELEVANT_GRADE,
+        "cutoffs": list(RECALL_CUTOFFS),
+        "target_recall": FIRST_STAGE_TARGET,
+        "ties_at_the_cut": "kept",
+        "chosen_on": "training jobs",
+        "chosen": choose_first_stage(training),
+        "training_jobs": training,
+        "held_out": _first_stage_recall(
+            test_set, {n: _on(data, test_set, s) for n, s in scores.items()}
+        ),
+        "all_jobs": _first_stage_recall(data, scores),
     }
 
 
@@ -487,6 +583,7 @@ def evaluate(
             "comparisons": _comparisons(every_job, resamples=resamples),
             "agreement": _agreement(data, retrieval, every_job),
         },
+        "first_stage": _first_stage(data, train_set, test_set, retrieval),
         "splits": every_split,
         "split_spread": {
             name: _spread([split[name] for split in every_split]) for name in metric_names
@@ -559,6 +656,16 @@ def main(argv: list[str] | None = None) -> int:
     every = results["all_jobs"]
     print(f"  retrieval scorers on all {every['jobs']} jobs ({every['pairs']} pairs):")
     _print_table(every["scorers"], every["comparisons"])
+    first = results["first_stage"]
+    chosen = first["chosen"]
+    print(f"  first stage, recall@N on the training jobs (target {first['target_recall']}):")
+    for name, measured in first["training_jobs"].items():
+        cells = " ".join(f"@{n} {measured['recall_at_n'][str(n)]:.4f}" for n in first["cutoffs"])
+        print(f"    {name:<12} {cells}")
+    print(
+        f"    chosen: {chosen['scorer']}, N = {chosen['n']} "
+        f"({'target met' if chosen['target_met'] else 'target not met'})"
+    )
     spread = results["split_spread"]
     print(f"  over {len(results['splits'])} splits (mean, std):")
     for name, values in spread.items():

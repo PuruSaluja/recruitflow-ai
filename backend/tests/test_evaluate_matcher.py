@@ -374,6 +374,149 @@ def test_agreement_on_three_hand_made_slates() -> None:
     assert agreement["hybrid_rrf_pairs_in_ties"] == 2
 
 
+# --- the first stage of a two-stage ranking --------------------------------
+
+
+def _written_out_recall(scores: np.ndarray, hits: np.ndarray, n: int) -> tuple[float | None, int]:
+    """Recall of one slate's top ``n``, ties at the cut kept, and how many it keeps."""
+    ordered = sorted(scores.tolist(), reverse=True)
+    threshold = ordered[min(n, len(ordered)) - 1]
+    kept = [i for i in range(len(scores)) if scores[i] >= threshold]
+    total = int(hits.sum())
+    return (None if total == 0 else sum(bool(hits[i]) for i in kept) / total), len(kept)
+
+
+def _expected_recall(
+    scores: np.ndarray, refs: np.ndarray, relevance: np.ndarray, jobs: set
+) -> dict:
+    out: dict[str, dict[str, float]] = {
+        "recall_at_n": {},
+        "strong_recall_at_n": {},
+        "mean_kept": {},
+    }
+    for n in script.RECALL_CUTOFFS:
+        relevant, strong, kept = [], [], []
+        for ref in sorted(jobs):
+            mask = refs == ref
+            r, k = _written_out_recall(scores[mask], relevance[mask] >= 1, n)
+            sr, _ = _written_out_recall(scores[mask], relevance[mask] == 2, n)
+            kept.append(k)
+            relevant += [] if r is None else [r]
+            strong += [] if sr is None else [sr]
+        out["recall_at_n"][str(n)] = np.mean(relevant)
+        out["strong_recall_at_n"][str(n)] = np.mean(strong)
+        out["mean_kept"][str(n)] = np.mean(kept)
+    return out
+
+
+@pytest.mark.parametrize("scope", ["training_jobs", "held_out", "all_jobs"])
+@pytest.mark.parametrize("name", ["bm25", "dense", "hybrid_rrf"])
+def test_first_stage_recall_is_each_slates_kept_share_averaged(
+    results: dict, recomputed: dict, scope: str, name: str
+) -> None:
+    every = recomputed["all"]
+    refs = every["job_refs"]
+    held_out = set(recomputed["held_out"]["job_refs"].tolist())
+    jobs = {
+        "training_jobs": set(refs.tolist()) - held_out,
+        "held_out": held_out,
+        "all_jobs": set(refs.tolist()),
+    }[scope]
+    data = training_data(generate_corpus(CorpusConfig(seed=5, n_jobs=40, n_candidates=1200)))
+    expected = _expected_recall(every["scores"][name], refs, data.relevance, jobs)
+    measured = results["first_stage"][scope][name]
+    for key, values in expected.items():
+        assert measured[key] == pytest.approx(values, abs=1e-12), key
+
+
+def test_first_stage_recall_on_hand_made_slates_leaves_out_a_job_with_nobody_to_keep() -> None:
+    # 10 candidates a slate. J0: relevant at BM25 ranks 1 and 7, the strong fit
+    # at 7. J1: nobody relevant, so it has no recall and does not count as 0.
+    # J2: everyone tied, so every cut keeps the whole slate.
+    refs = ("J0",) * 10 + ("J1",) * 10 + ("J2",) * 10
+    relevance = np.zeros(30, dtype=int)
+    relevance[[0, 6]] = [1, 2]
+    relevance[[22]] = 1
+    data = TrainingData(
+        pairs=tuple((None, None) for _ in refs),
+        advanced=np.zeros(30, dtype=bool),
+        relevance=relevance,
+        job_refs=refs,
+    )
+    scores = np.concatenate([np.arange(10.0, 0.0, -1.0), np.arange(10.0), np.zeros(10)])
+    measured = script._first_stage_recall(data, {"bm25": scores})["bm25"]
+    assert measured["recall_at_n"]["5"] == pytest.approx((0.5 + 1.0) / 2)
+    assert measured["recall_at_n"]["10"] == 1.0
+    assert measured["strong_recall_at_n"]["5"] == 0.0
+    assert measured["mean_kept"]["5"] == pytest.approx((5 + 5 + 10) / 3)
+
+
+def test_first_stage_recall_never_falls_as_n_grows(results: dict) -> None:
+    for scope in ("training_jobs", "held_out", "all_jobs"):
+        for measured in results["first_stage"][scope].values():
+            recalls = [measured["recall_at_n"][str(n)] for n in script.RECALL_CUTOFFS]
+            assert recalls == sorted(recalls)
+            assert all(0.0 < r <= 1.0 for r in recalls)
+
+
+def test_the_first_stage_is_chosen_on_the_training_jobs(results: dict) -> None:
+    first = results["first_stage"]
+    assert first["chosen_on"] == "training jobs"
+    assert first["chosen"] == script.choose_first_stage(first["training_jobs"])
+    chosen = first["chosen"]
+    measured = first["training_jobs"][chosen["scorer"]]["recall_at_n"][str(chosen["n"])]
+    assert chosen["recall_on_training_jobs"] == measured
+    assert (first["cutoffs"], first["target_recall"]) == (list(script.RECALL_CUTOFFS), 0.9)
+
+
+def _recalls(**by_name: list[float]) -> dict:
+    return {
+        name: {"recall_at_n": dict(zip(map(str, script.RECALL_CUTOFFS), values, strict=True))}
+        for name, values in by_name.items()
+    }
+
+
+def test_the_first_stage_is_the_smallest_n_reaching_the_target() -> None:
+    chosen = script.choose_first_stage(
+        _recalls(
+            bm25=[0.5, 0.7, 0.85, 0.92, 0.97, 0.99],
+            dense=[0.6, 0.8, 0.91, 0.95, 0.98, 0.99],
+            hybrid_rrf=[0.6, 0.8, 0.90, 0.96, 0.98, 1.0],
+        )
+    )
+    assert chosen == {
+        "scorer": "dense",
+        "n": 15,
+        "target_met": True,
+        "recall_on_training_jobs": 0.91,
+    }
+
+
+def test_equal_recall_goes_to_the_cheaper_first_stage() -> None:
+    values = [0.5, 0.9, 0.95, 1.0, 1.0, 1.0]
+    chosen = script.choose_first_stage(_recalls(hybrid_rrf=values, dense=values, bm25=values))
+    assert (chosen["scorer"], chosen["n"]) == ("bm25", 10)
+    chosen = script.choose_first_stage(_recalls(hybrid_rrf=values, dense=values))
+    assert (chosen["scorer"], chosen["n"]) == ("dense", 10)
+
+
+def test_a_target_nobody_reaches_takes_the_largest_n_and_says_so() -> None:
+    chosen = script.choose_first_stage(
+        _recalls(bm25=[0.1, 0.2, 0.3, 0.4, 0.5, 0.89], dense=[0.2, 0.3, 0.4, 0.5, 0.6, 0.8])
+    )
+    assert chosen == {
+        "scorer": "bm25",
+        "n": 30,
+        "target_met": False,
+        "recall_on_training_jobs": 0.89,
+    }
+
+
+def test_choosing_a_first_stage_from_nothing_is_refused() -> None:
+    with pytest.raises(ValueError, match="no retrieval scorer"):
+        script.choose_first_stage({})
+
+
 def test_package_versions_are_read_from_the_installed_distribution() -> None:
     assert script._package_version("numpy") == np.__version__
     assert script._package_version("no-such-distribution-anywhere") is None
@@ -405,6 +548,9 @@ def test_no_dense_skips_the_encoder_and_what_needs_it(
     assert written["agreement"] == {} == written["all_jobs"]["agreement"]
     assert written["retrieval"]["encoder"] is None
     assert written["sentence_transformers"] is None and written["torch"] is None
+    first = written["first_stage"]
+    assert set(first["training_jobs"]) == set(first["held_out"]) == {"bm25"}
+    assert first["chosen"]["scorer"] == "bm25"
 
 
 def test_an_encoder_it_cannot_load_is_refused_naming_no_dense(
