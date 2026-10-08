@@ -18,7 +18,7 @@ import warnings
 from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -434,6 +434,89 @@ def test_first_stage_recall_is_each_slates_kept_share_averaged(
     measured = results["first_stage"][scope][name]
     for key, values in expected.items():
         assert measured[key] == pytest.approx(values, abs=1e-12), key
+
+
+@pytest.mark.parametrize("scope", ["training_jobs", "held_out", "all_jobs"])
+def test_same_family_shares_are_each_slates_share_averaged(
+    results: dict, recomputed: dict, scope: str
+) -> None:
+    every = recomputed["all"]
+    refs = every["job_refs"]
+    held_out = set(recomputed["held_out"]["job_refs"].tolist())
+    jobs = {
+        "training_jobs": set(refs.tolist()) - held_out,
+        "held_out": held_out,
+        "all_jobs": set(refs.tolist()),
+    }[scope]
+    data = training_data(generate_corpus(CorpusConfig(seed=5, n_jobs=40, n_candidates=1200)))
+    same = np.array([job.family == candidate.family for job, candidate in data.pairs])
+    relevant = data.relevance >= 1
+    measured = results["first_stage"]["same_family"][scope]
+    slates = [refs == ref for ref in sorted(jobs)]
+    assert measured["slate_share"] == pytest.approx(np.mean([same[m].mean() for m in slates]))
+    assert measured["relevant_share"] == pytest.approx(
+        np.mean([same[m & relevant].sum() / relevant[m].sum() for m in slates if relevant[m].any()])
+    )
+    for name in ("bm25", "dense", "hybrid_rrf"):
+        for n in script.RECALL_CUTOFFS:
+            shares = []
+            for m in slates:
+                scores = every["scores"][name][m]
+                threshold = sorted(scores, reverse=True)[n - 1]
+                shares.append(same[m][scores >= threshold].mean())
+            assert measured["kept_share"][name][str(n)] == pytest.approx(np.mean(shares)), (name, n)
+
+
+def test_same_family_shares_on_hand_made_slates() -> None:
+    # Two slates of four. J0 is "a": BM25 ranks its two "a" candidates 1st and
+    # 3rd, and the relevant one is the "b" at 2nd. J1 is "b", nobody relevant.
+    a, b = SimpleNamespace(family="a"), SimpleNamespace(family="b")
+    refs = ("J0",) * 4 + ("J1",) * 4
+    pairs = ((a, a), (a, b), (a, a), (a, b), (b, b), (b, a), (b, a), (b, a))
+    data = TrainingData(
+        pairs=pairs,
+        advanced=np.zeros(8, dtype=bool),
+        relevance=np.array([0, 1, 0, 0, 0, 0, 0, 0]),
+        job_refs=refs,
+    )
+    scores = {"bm25": np.array([4.0, 3.0, 2.0, 1.0, 1.0, 2.0, 3.0, 4.0])}
+    measured = script._same_family(data, scores)
+    assert measured["slate_share"] == pytest.approx((2 / 4 + 1 / 4) / 2)
+    # Only J0 has a relevant candidate, and it is out of the family.
+    assert measured["relevant_share"] == 0.0
+    # A slate of four is kept whole at N = 5, so the cut's share is the slate's.
+    assert measured["kept_share"]["bm25"]["5"] == pytest.approx((2 / 4 + 1 / 4) / 2)
+
+
+def test_same_family_slate_share_is_averaged_per_slate_not_per_pair() -> None:
+    # A slate of four with one in the family, and one of two with both: per
+    # slate (1/4 + 1) / 2, not 3 of 6 pairs.
+    a, b = SimpleNamespace(family="a"), SimpleNamespace(family="b")
+    data = TrainingData(
+        pairs=((a, a), (a, b), (a, b), (a, b), (b, b), (b, b)),
+        advanced=np.zeros(6, dtype=bool),
+        relevance=np.zeros(6, dtype=int),
+        job_refs=("J0",) * 4 + ("J1",) * 2,
+    )
+    measured = script._same_family(data, {"bm25": np.arange(6.0)})
+    assert measured["slate_share"] == pytest.approx((1 / 4 + 1) / 2)
+
+
+def test_same_family_cut_shares_at_small_n_on_hand_made_slates() -> None:
+    a, b = SimpleNamespace(family="a"), SimpleNamespace(family="b")
+    pairs = tuple((a, c) for c in (a, b, a, b, b, b, b, b, b, b))
+    data = TrainingData(
+        pairs=pairs,
+        advanced=np.zeros(10, dtype=bool),
+        relevance=np.zeros(10, dtype=int),
+        job_refs=("J0",) * 10,
+    )
+    # The two "a" candidates rank 1st and 3rd, so the top 5 is 2 of 5 family.
+    scores = {"bm25": np.arange(10.0, 0.0, -1.0)}
+    measured = script._same_family(data, scores)
+    assert measured["kept_share"]["bm25"]["5"] == pytest.approx(2 / 5)
+    assert measured["kept_share"]["bm25"]["10"] == pytest.approx(2 / 10)
+    assert measured["relevant_share"] is None
 
 
 def test_first_stage_recall_on_hand_made_slates_leaves_out_a_job_with_nobody_to_keep() -> None:

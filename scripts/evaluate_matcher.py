@@ -42,7 +42,9 @@ share of each slate's relevant candidates in its top N, for N in
 :data:`RECALL_CUTOFFS`, on the training jobs, the held-out jobs and all jobs.
 The first stage and N are chosen on the **training jobs** by a fixed rule
 (:func:`choose_first_stage`), so the held-out jobs a re-rank is measured on
-play no part in choosing what it re-ranks.
+play no part in choosing what it re-ranks. ``first_stage.same_family``
+records how much of each cut, and of the relevant candidates, comes from the
+job's own role family, from which a slate draws a fixed share.
 
 ``rerank`` is that two-stage ranking: within each slate, the chosen first
 stage keeps its top N and a cross-encoder (:mod:`app.ml.cross_encoder`)
@@ -375,6 +377,38 @@ def _slates(data: TrainingData) -> dict[str, Any]:
     }
 
 
+def _same_family(data: TrainingData, scores: dict[str, np.ndarray]) -> dict[str, Any]:
+    """How much of each first stage's cut, and of the relevant candidates, is the job's family.
+
+    A slate draws a fixed share of its candidates from the job's own role
+    family. A cut that keeps about that many acts largely as a family filter
+    when its kept share is near 1, and then what it keeps of the relevant
+    candidates depends mostly on how many of them are in the family. Each
+    share is averaged over slates; the relevant share over the slates that
+    have a relevant candidate, ``None`` when none does.
+    """
+    refs = np.array(data.job_refs)
+    same = np.array([job.family == candidate.family for job, candidate in data.pairs])
+    relevant = data.relevance >= RELEVANT_GRADE
+    slates = [refs == ref for ref in sorted(set(data.job_refs))]
+    kept = {
+        name: {
+            str(n): float(
+                np.mean([same[m][first_stage_cut(all_scores[m], n)].mean() for m in slates])
+            )
+            for n in RECALL_CUTOFFS
+        }
+        for name, all_scores in scores.items()
+    }
+    return {
+        "slate_share": float(np.mean([same[m].mean() for m in slates])),
+        "relevant_share": _mean_or_none(
+            [same[m][relevant[m]].mean() for m in slates if relevant[m].any()]
+        ),
+        "kept_share": kept,
+    }
+
+
 def choose_first_stage(training: dict[str, Any]) -> dict[str, Any]:
     """The first stage and N for a re-rank, from recall on the training jobs.
 
@@ -430,6 +464,15 @@ def _first_stage(
             "training_jobs": _slates(train_set),
             "held_out": _slates(test_set),
             "all_jobs": _slates(data),
+        },
+        "same_family": {
+            "training_jobs": _same_family(
+                train_set, {n: _on(data, train_set, s) for n, s in scores.items()}
+            ),
+            "held_out": _same_family(
+                test_set, {n: _on(data, test_set, s) for n, s in scores.items()}
+            ),
+            "all_jobs": _same_family(data, scores),
         },
     }
 
