@@ -124,6 +124,8 @@ class SentenceTransformerCrossEncoder:
         return word_piece_chunks(self._tokenizer, document, self.passage_tokens)
 
     def score(self, query: str, documents: Sequence[str]) -> np.ndarray:
+        if isinstance(documents, str):
+            raise TypeError("a cross-encoder scores a sequence of documents, not one string")
         documents = list(documents)
         if not documents:
             return np.empty(0, dtype=np.float64)

@@ -188,6 +188,15 @@ def test_nothing_in_nothing_out(monkeypatch: pytest.MonkeyPatch) -> None:
     assert predictions == []
 
 
+def test_one_string_is_refused_rather_than_scored_letter_by_letter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, predictions = _stand_in(monkeypatch)
+    with pytest.raises(TypeError, match="sequence of documents, not one string"):
+        SentenceTransformerCrossEncoder().score("query", "xx")
+    assert predictions == []
+
+
 def test_documents_that_fit_are_read_whole_in_order_as_raw_scores(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
