@@ -37,7 +37,7 @@ local cache nor downloaded.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Protocol
+from typing import Any, Protocol
 
 import numpy as np
 
@@ -84,6 +84,35 @@ def job_document(job: JobText) -> str:
     return fold_text(job_text(job))
 
 
+def word_piece_chunks(tokenizer: Any, text: str, limit: int) -> list[tuple[str, int]]:
+    """``text`` cut into pieces of at most ``limit`` word-pieces, each with its count.
+
+    One piece, the text itself, when it fits. Otherwise each piece is cut from
+    the original text at the start of a word, so that it tokenizes back to
+    exactly the word-pieces counted for it; only a single word longer than a
+    whole piece is cut inside the word. ``tokenizer`` is a Hugging Face fast
+    tokenizer, or anything answering the same call.
+    """
+    encoding = tokenizer(text, add_special_tokens=False, return_offsets_mapping=True, verbose=False)
+    offsets = encoding["offset_mapping"]
+    if len(offsets) <= limit:
+        return [(text, len(offsets))]
+    words = encoding.word_ids()
+    pieces = []
+    start = 0
+    while start < len(offsets):
+        end = min(start + limit, len(offsets))
+        if end < len(offsets) and words[end] == words[end - 1]:
+            first = end
+            while first > start and words[first - 1] == words[end]:
+                first -= 1
+            if first > start:
+                end = first
+        pieces.append((text[offsets[start][0] : offsets[end - 1][1]], end - start))
+        start = end
+    return pieces
+
+
 class SentenceTransformerEncoder:
     """A pinned sentence-transformer model, run on the CPU unless told otherwise."""
 
@@ -124,33 +153,8 @@ class SentenceTransformerEncoder:
         self.batch_size = batch_size
 
     def chunks(self, text: str) -> list[tuple[str, int]]:
-        """``text`` as the pieces it is encoded in, each with its word-piece count.
-
-        One piece, the text itself, when it fits. Otherwise each piece is cut
-        from the original text at the start of a word, so that it tokenizes
-        back to exactly the word-pieces counted for it; only a single word
-        longer than a whole piece is cut inside the word.
-        """
-        encoding = self._tokenizer(
-            text, add_special_tokens=False, return_offsets_mapping=True, verbose=False
-        )
-        offsets = encoding["offset_mapping"]
-        if len(offsets) <= self.chunk_tokens:
-            return [(text, len(offsets))]
-        words = encoding.word_ids()
-        pieces = []
-        start = 0
-        while start < len(offsets):
-            end = min(start + self.chunk_tokens, len(offsets))
-            if end < len(offsets) and words[end] == words[end - 1]:
-                first = end
-                while first > start and words[first - 1] == words[end]:
-                    first -= 1
-                if first > start:
-                    end = first
-            pieces.append((text[offsets[start][0] : offsets[end - 1][1]], end - start))
-            start = end
-        return pieces
+        """``text`` as the pieces it is encoded in, each with its word-piece count."""
+        return word_piece_chunks(self._tokenizer, text, self.chunk_tokens)
 
     def encode(self, texts: Sequence[str]) -> np.ndarray:
         texts = list(texts)
