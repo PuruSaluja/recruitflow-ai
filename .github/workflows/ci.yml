@@ -69,7 +69,7 @@ jobs:
         run: pytest -W default
 
   # The embeddings extra brings torch, which the main job leaves out, so the
-  # tests that load the real model skip there. This job installs it (the CPU
+  # tests that load the real models skip there. This job installs it (the CPU
   # build) and sets RECRUITFLOW_REQUIRE_ENCODER, so a model that fails to load
   # fails the job instead of skipping.
   embeddings:
@@ -90,19 +90,19 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
-      # Keyed on the pinned revision in app/ml/encoder.py.
+      # Keyed on the pinned revisions in app/ml/encoder.py and cross_encoder.py.
       - uses: actions/cache@v6
         with:
           path: ~/.cache/huggingface
-          key: hf-${{ hashFiles('backend/app/ml/encoder.py') }}
+          key: hf-${{ hashFiles('backend/app/ml/encoder.py', 'backend/app/ml/cross_encoder.py') }}
 
       - name: Install
         run: |
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
           python -m pip install -e ".[dev,embeddings]"
 
-      - name: Test the encoder
-        run: pytest -W default -rs backend/tests/test_encoder.py
+      - name: Test the encoder and the cross-encoder
+        run: pytest -W default -rs backend/tests/test_encoder.py backend/tests/test_cross_encoder.py
 
       # A separate call: -k would also filter test_encoder.py.
       - name: Test the evaluation's dense scorer against the real model
