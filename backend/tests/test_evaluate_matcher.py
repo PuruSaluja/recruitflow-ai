@@ -1109,8 +1109,9 @@ def test_it_runs_as_a_command(model: Path, tmp_path: Path) -> None:
     """Imported and invoked are different things; this is the documented way to run it."""
     out = tmp_path / "evaluation.json"
     command = [sys.executable, str(SCRIPT), "--model", str(model), "--out", str(out)]
+    # A subprocess gets the real models, which CI's main job does not install.
     result = subprocess.run(
-        [*command, "--split-seeds", "--resamples", "50", "--no-dense"],
+        [*command, "--split-seeds", "--resamples", "50", "--no-dense", "--no-rerank"],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
