@@ -653,7 +653,16 @@ per slate, about 95% of the request, against under 0.1 s for the first
 stage (`scripts/time_rerank.py`, `docs/rerank_latency.json`). The model was
 trained on web-search queries and passages, not job descriptions and
 resumes; whether that is the cause was not tested, and nothing was tuned
-after seeing these numbers.
+after seeing these numbers. **The API does not use the re-rank**, and on
+these results it should not.
+
+On this synthetic corpus the first stage's top 20 is very nearly a filter
+for the job's own role family: each slate has 20 candidates from it, BM25's
+top 20 is exactly those on every slate, the hybrid's is 99.3% from the
+family over all 200 jobs, and 96% of the relevant candidates are in the
+family. So the re-rank orders candidates almost entirely within one family,
+and the corpus barely tests finding a good candidate from another
+(`first_stage.same_family` in the JSON).
 
 ## Embeddings
 

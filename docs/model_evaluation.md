@@ -224,13 +224,27 @@ measured, play no part in the choice.
   64% of them, and one of 10 at most 96%, averaged per slate. The best
   measured, 0.40 and 0.68, are well below both, so the scorers, not the
   ceiling, are what N = 10 falls short on.
+- **At N = 20 the cut is very nearly a family filter.** Each slate draws
+  40% of its 50 candidates, 20, from the job's own role family, and those 20
+  hold 96.4% of a training slate's relevant candidates on average (95.3%
+  held out, 96.1% over all 200 jobs). BM25's top 20 is exactly those 20 on
+  every slate, so its recall@20 equals that share on each set of jobs:
+  0.9641, 0.9527 and 0.9612. The hybrid's top 20 is 99.2% from the family on
+  the training jobs and 99.5% on the held-out ones; dense's 97.7% and 98.3%.
+  So on this corpus recall@20 mostly shows how the generator splits relevant
+  candidates between families, BM25 leaves out every relevant candidate from
+  another family, and the re-rank orders candidates almost entirely within
+  the job's family. A corpus with more relevant candidates outside the
+  family would test the first stage harder.
 - What the re-rank can gain is bounded by what the first stage keeps, and
   about 5% of the relevant candidates on a held-out slate start below the
   cut, where no second stage can reach them.
 
-Recall on all 200 jobs and of the strong fits, the mean number kept, and
-each set's relevant candidates per slate and recall ceilings
-(`first_stage.slates`) are in the JSON under `first_stage`.
+Recall on all 200 jobs and of the strong fits, the mean number kept, each
+set's relevant candidates per slate and recall ceilings
+(`first_stage.slates`), and the family's share of each slate, of its
+relevant candidates and of each cut (`first_stage.same_family`) are in the
+JSON under `first_stage`.
 
 ## The cross-encoder re-rank
 
@@ -287,6 +301,9 @@ Read plainly:
 - Pooled ROC-AUC is in the JSON, but the re-rank's scores are ranks within
   each slate, as the hybrid's are, so it is not comparable with the
   pointwise scorers'.
+- **So the re-rank is not used.** The API does not rank with it, and on
+  these results it should not: the hybrid alone ranks better at about a
+  nineteenth of the cost (below).
 
 **What it costs.** Timed by
 [`scripts/time_rerank.py`](../scripts/time_rerank.py) into
@@ -332,5 +349,8 @@ python scripts/time_rerank.py --jobs 50
   tried. The retrieval scorers keep their textbook settings. The re-rank's
   first stage and N were chosen on the training jobs only, and nothing about
   the re-rank was changed after its numbers were seen.
+- **Search across role families.** 96% of the relevant candidates are in
+  the job's own family, so the first stages are barely tested on finding a
+  good candidate from another one (see *The first stage for a re-rank*).
 - **Generalisation across corpora.** One corpus seed. Splits vary which jobs
   are held out, not which candidates or jobs were generated.
