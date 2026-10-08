@@ -641,8 +641,8 @@ cross-encoder, ms-marco-MiniLM-L6-v2 pinned to one revision
 (`app/ml/cross_encoder.py`), re-orders those by reading each resume beside
 the job description. A resume is scored by its best 128-word-piece passage,
 since unrelated text around a match drowns it: a one-line Python resume
-after 60 lines of warehouse work scored -10.86 read as one window and 0.14
-as passages, against -11.36 for the warehouse lines alone.
+after 60 lines of warehouse work scored -10.86 read as one window (the
+warehouse lines alone, -11.16) and 0.14 read as passages (alone, -11.36).
 
 **On this corpus it makes the ranking worse and slower.** NDCG@10 falls from
 the hybrid's 0.6392 to 0.5611 over all 200 jobs (paired difference −0.0781,

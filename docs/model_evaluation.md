@@ -6,8 +6,8 @@ metrics in [`backend/app/ml/evaluate.py`](../backend/app/ml/evaluate.py).
 Every number below is copied from
 [`model_evaluation.json`](model_evaluation.json), which that script wrote in
 one run, except the re-rank's timings, which come from
-[`rerank_latency.json`](rerank_latency.json) (see *What it costs*); rerun
-the script to regenerate both:
+[`rerank_latency.json`](rerank_latency.json), written by its own script (see
+*What it costs*). Rerun the evaluation to regenerate its JSON:
 
 ```
 python scripts/train_matcher.py      # if no matcher is on disk yet
@@ -275,7 +275,8 @@ Read plainly:
   hybrid it re-orders.
 - **The loss is the cross-encoder's order, not the cut.** The top 10 now
   come entirely from the cross-encoder's order of the hybrid's 20, which
-  keep 95.0% of a held-out slate's relevant candidates (above), so a better
+  keep 95.0% of a held-out slate's relevant candidates on average (above),
+  so a better
   second stage had almost all of them to work with.
 - **Why is not measured.** The model learned to match short web-search
   queries with passages; here the query is a whole job description and the

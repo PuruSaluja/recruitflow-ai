@@ -7,12 +7,14 @@ gives a single relevance score, so it is far slower per pair and is only run
 on the candidates a first stage keeps. The default model is
 ms-marco-MiniLM-L6-v2, trained on MS MARCO passage ranking (web search queries
 against passages), **pinned to one revision**; the scorer's name is the model
-id, that revision and the window it reads.
+id, that revision and the longest passage it scores at once.
 
 The documents are the ones the encoder reads (:func:`app.ml.encoder.job_document`,
 :func:`app.ml.encoder.candidate_document`), the job's as the query. Scores are
 the model's raw logits, not passed through a sigmoid: only their order is used,
-and a sigmoid would squash the strongest matches towards equal scores.
+and a sigmoid, computed in float32 as the model computes, keeps the order but
+merges close strong scores (at a logit of 9, ones less than about 0.0007
+apart; from about 16.6 up, every score becomes 1.0).
 
 **Long resumes are read as passages.** The model was trained to score short
 passages, and unrelated text around a match drowns it even inside the 512
@@ -26,11 +28,10 @@ and the candidate's score is the best passage's ("MaxP", as in Dai and
 Callan, 2019): the best passage of a resume is what shows a match, and an
 average would mark down a strong resume for a long unrelated section. Read
 that way, the long resume above scores 0.14 and the warehouse lines alone
--11.36. The
-job's document is kept whole when it fits in half the window (254 of the 512
-word-pieces, three of which are the model's markers) and otherwise cut to its
-opening at the start of a word. Every pair in the default synthetic corpus is
-read whole (the longest job document is 118 word-pieces, the longest
+-11.36. The job's document is kept whole when it fits in half the window (254
+of the 512 word-pieces, three of which are the model's markers) and otherwise
+cut to its opening at the start of a word. Every pair in the default synthetic
+corpus is read whole (the longest job document is 118 word-pieces, the longest
 candidate's 128), so its scores are exactly the model's for the whole texts.
 
 Needs the same optional ``embeddings`` extra as the encoder;
@@ -53,7 +54,8 @@ DEFAULT_CROSS_ENCODER_REVISION = "233902d25c440f23af6f7d6e94d2946bac0bee0a"
 #: Pairs per forward pass.
 DEFAULT_BATCH_SIZE = 32
 #: The longest passage of a candidate's document scored at once, in
-#: word-pieces, about a hundred words of resume.
+#: word-pieces: about 90 words of this corpus's resumes, which average 1.40
+#: word-pieces a word.
 DEFAULT_PASSAGE_TOKENS = 128
 
 
