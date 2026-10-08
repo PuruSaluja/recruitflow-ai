@@ -23,12 +23,14 @@ from typing import Any
 
 import numpy as np
 import pytest
+from fake_cross_encoder import FakeCrossEncoder, fake_relevance
 from fake_encoder import FakeEncoder
-from scipy.stats import spearmanr
+from scipy.stats import rankdata, spearmanr
 
 from app.config import REPO_ROOT
 from app.ml.artifact import load_manifest, load_matcher, manifest_path_for, matcher_version
 from app.ml.corpus import Corpus, CorpusConfig, generate_corpus
+from app.ml.cross_encoder import DEFAULT_CROSS_ENCODER, DEFAULT_CROSS_ENCODER_REVISION
 from app.ml.encoder import (
     DEFAULT_MODEL,
     DEFAULT_REVISION,
@@ -66,14 +68,16 @@ def _load(path: Path, name: str) -> ModuleType:
 
 
 script = _load(SCRIPT, "evaluate_matcher")
-#: Taken before any test replaces it with the stand-in.
+#: Taken before any test replaces them with the stand-ins.
 REAL_LOAD_ENCODER = script.load_encoder
+REAL_LOAD_CROSS_ENCODER = script.load_cross_encoder
 
 
 @pytest.fixture(autouse=True)
 def fake_encoder(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The stand-in encoder, so no test needs the real model."""
+    """The stand-in encoder and cross-encoder, so no test needs the real models."""
     monkeypatch.setattr(script, "load_encoder", FakeEncoder)
+    monkeypatch.setattr(script, "load_cross_encoder", FakeCrossEncoder)
 
 
 @pytest.fixture(scope="module")
@@ -89,6 +93,7 @@ def results(model: Path, tmp_path_factory: pytest.TempPathFactory) -> dict:
     out = tmp_path_factory.mktemp("evaluation") / "evaluation.json"
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(script, "load_encoder", FakeEncoder)
+        patch.setattr(script, "load_cross_encoder", FakeCrossEncoder)
         assert script.main(["--model", str(model), "--out", str(out), *FAST]) == 0
     return json.loads(out.read_text(encoding="utf-8"))
 
@@ -112,6 +117,7 @@ def test_it_measures_every_scorer_on_the_held_out_jobs(results: dict) -> None:
         "bm25",
         "dense",
         "hybrid_rrf",
+        "rerank",
     }
     assert results["held_out"]["jobs"] == 10
     assert results["held_out"]["pairs"] == 500
@@ -630,14 +636,20 @@ def test_no_dense_skips_the_encoder_and_what_needs_it(
     written = json.loads(out.read_text(encoding="utf-8"))
     assert set(written["scorers"]) >= {"matcher", "bm25"}
     assert not {"dense", "hybrid_rrf"} & set(written["scorers"])
-    assert set(written["all_jobs"]["scorers"]) == {"bm25"}
-    assert written["comparisons"] == {} == written["all_jobs"]["comparisons"]
+    # BM25 is the only first stage left, and the re-rank re-orders its top N.
+    assert set(written["all_jobs"]["scorers"]) == {"bm25", "rerank"}
+    assert set(written["comparisons"]) == {"rerank_minus_bm25"}
+    assert set(written["all_jobs"]["comparisons"]) == {"rerank_minus_bm25"}
     assert written["agreement"] == {} == written["all_jobs"]["agreement"]
     assert written["retrieval"]["encoder"] is None
-    assert written["sentence_transformers"] is None and written["torch"] is None
     first = written["first_stage"]
     assert set(first["training_jobs"]) == set(first["held_out"]) == {"bm25"}
     assert first["chosen"]["scorer"] == "bm25"
+    assert written["rerank"]["first_stage"] == "bm25"
+    assert written["rerank"]["n"] == first["chosen"]["n"]
+    # The cross-encoder still ran on them.
+    assert written["sentence_transformers"] == script._package_version("sentence-transformers")
+    assert written["torch"] == script._package_version("torch")
 
 
 def test_an_encoder_it_cannot_load_is_refused_naming_no_dense(
@@ -661,6 +673,220 @@ def test_an_encoder_it_cannot_load_is_refused_naming_no_dense(
 def test_it_records_the_encoder_packages_it_ran_with(results: dict) -> None:
     assert results["sentence_transformers"] == script._package_version("sentence-transformers")
     assert results["torch"] == script._package_version("torch")
+
+
+def test_no_dense_and_no_rerank_record_no_model_packages(model: Path, tmp_path: Path) -> None:
+    out = tmp_path / "evaluation.json"
+    argv = ["--model", str(model), "--out", str(out), *FAST, "--no-dense", "--no-rerank"]
+    assert script.main(argv) == 0
+    written = json.loads(out.read_text(encoding="utf-8"))
+    assert written["sentence_transformers"] is None and written["torch"] is None
+
+
+# --- the re-rank -------------------------------------------------------
+
+
+def _two_stage(first: np.ndarray, n: int, job: str, documents: list[str]) -> list[float]:
+    """One slate's two-stage ranks, computed without the script's helpers.
+
+    Ranks, as the script gives them, since ROC-AUC pools pairs across slates:
+    the rest by the first stage from 1, the kept ones by the stand-in's score
+    from the slate's size plus 2.
+    """
+    threshold = sorted(first, reverse=True)[min(n, len(first)) - 1]
+    kept = first >= threshold
+    out = np.empty(len(first))
+    out[~kept] = rankdata(first[~kept])
+    second = [fake_relevance(job, d) for d, keep in zip(documents, kept, strict=True) if keep]
+    out[kept] = len(first) + 1 + rankdata(second)
+    return list(out)
+
+
+def _reranked(data: TrainingData, first: np.ndarray, n: int) -> np.ndarray:
+    refs = np.array(data.job_refs)
+    out = np.empty(len(data))
+    for ref in sorted(set(data.job_refs)):
+        slate = np.flatnonzero(refs == ref)
+        job = job_document(data.pairs[slate[0]][0])
+        documents = [candidate_document(data.pairs[i][1]) for i in slate]
+        out[slate] = _two_stage(first[slate], n, job, documents)
+    return out
+
+
+@pytest.fixture(scope="module")
+def recomputed_rerank(results: dict, recomputed: dict) -> dict[str, Any]:
+    """The re-rank's evaluations, recomputed from the chosen first stage."""
+    corpus = generate_corpus(CorpusConfig(seed=5, n_jobs=40, n_candidates=1200))
+    data = training_data(corpus)
+    held_out = split_by_job(data, seed=SPLIT_SEED)[1]
+    chosen = results["first_stage"]["chosen"]
+    out = {}
+    for scope, subset in (("all", data), ("held_out", held_out)):
+        first = recomputed[scope]["scores"][chosen["scorer"]]
+        out[scope] = evaluate_scores(subset, _reranked(subset, first, chosen["n"]))
+    return out
+
+
+@pytest.mark.parametrize("scope", ["held_out", "all"])
+def test_rerank_orders_the_first_stages_top_n_by_the_cross_encoder(
+    results: dict, recomputed_rerank: dict, scope: str
+) -> None:
+    measured = (results if scope == "held_out" else results["all_jobs"])["scorers"]["rerank"]
+    expected = recomputed_rerank[scope]
+    assert measured["ndcg_at_10"] == pytest.approx(expected.ndcg_at_10, abs=1e-12)
+    assert measured["precision_at_5"] == pytest.approx(expected.precision_at_5, abs=1e-12)
+    assert measured["roc_auc_relevant"] == pytest.approx(expected.roc_auc_relevant, abs=1e-12)
+    assert measured["roc_auc_strong"] == pytest.approx(expected.roc_auc_strong, abs=1e-12)
+
+
+def test_rerank_changes_the_first_stages_order(results: dict) -> None:
+    chosen = results["first_stage"]["chosen"]["scorer"]
+    assert results["scorers"]["rerank"]["ndcg_at_10"] != results["scorers"][chosen]["ndcg_at_10"]
+
+
+@pytest.mark.parametrize("scope", ["held_out", "all"])
+@pytest.mark.parametrize("other", ["bm25", "dense", "hybrid_rrf"])
+def test_rerank_is_compared_with_each_retrieval_scorer_job_by_job(
+    results: dict, recomputed: dict, recomputed_rerank: dict, scope: str, other: str
+) -> None:
+    where = results if scope == "held_out" else results["all_jobs"]
+    paired = where["comparisons"][f"rerank_minus_{other}"]
+    pairs = list(zip(recomputed_rerank[scope].slates, recomputed[scope][other].slates, strict=True))
+    ndcg = [a.ndcg - b.ndcg for a, b in pairs if a.ndcg is not None]
+    precision = [a.precision - b.precision for a, b in pairs]
+    assert paired["ndcg_at_10_difference"] == pytest.approx(np.mean(ndcg), abs=1e-12)
+    assert paired["precision_at_5_difference"] == pytest.approx(np.mean(precision), abs=1e-12)
+    assert paired["ndcg_at_10_jobs_better"] == sum(d > 0 for d in ndcg)
+    assert paired["ndcg_at_10_jobs_worse"] == sum(d < 0 for d in ndcg)
+
+
+def test_the_cross_encoder_scores_only_what_the_first_stage_keeps(
+    model: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, recomputed: dict
+) -> None:
+    made: list[FakeCrossEncoder] = []
+
+    def load() -> FakeCrossEncoder:
+        made.append(FakeCrossEncoder())
+        return made[-1]
+
+    monkeypatch.setattr(script, "load_cross_encoder", load)
+    out = tmp_path / "evaluation.json"
+    assert script.main(["--model", str(model), "--out", str(out), *FAST]) == 0
+    written = json.loads(out.read_text(encoding="utf-8"))
+    chosen = written["first_stage"]["chosen"]
+    [cross_encoder] = made
+
+    expected_calls, held_out_kept = [], 0
+    data = training_data(generate_corpus(CorpusConfig(seed=5, n_jobs=40, n_candidates=1200)))
+    held_out_jobs = set(split_by_job(data, seed=SPLIT_SEED)[1].job_refs)
+    first, refs = recomputed["all"]["scores"][chosen["scorer"]], recomputed["all"]["job_refs"]
+    pairs = data.pairs
+    for ref in sorted(set(refs)):
+        slate = np.flatnonzero(refs == ref)
+        threshold = sorted(first[slate], reverse=True)[chosen["n"] - 1]
+        kept = [i for i in slate if first[i] >= threshold]
+        expected_calls.append(
+            (job_document(pairs[slate[0]][0]), [candidate_document(pairs[i][1]) for i in kept])
+        )
+        held_out_kept += len(kept) if ref in held_out_jobs else 0
+
+    # One call per slate, holding exactly the kept candidates, in slate order.
+    assert cross_encoder.calls == expected_calls
+    assert written["rerank"]["pairs_scored"] == sum(len(docs) for _, docs in expected_calls)
+    assert written["rerank"]["pairs_scored_held_out"] == held_out_kept
+    assert written["rerank"]["pairs_scored"] < written["all_jobs"]["pairs"]
+
+
+def test_the_cut_follows_the_scores_not_the_slates_order() -> None:
+    # A slate lists its own family's candidates first, and on this corpus they
+    # are often exactly BM25's top 20, so reverse one to tell the two apart.
+    corpus = generate_corpus(CorpusConfig(seed=5, n_jobs=40, n_candidates=1200))
+    data = training_data(corpus)
+    first_job = sorted(set(data.job_refs))[0]
+    rows = [i for i, ref in enumerate(data.job_refs) if ref == first_job][::-1]
+    slate = TrainingData(
+        pairs=tuple(data.pairs[i] for i in rows),
+        advanced=data.advanced[rows],
+        relevance=data.relevance[rows],
+        job_refs=tuple(data.job_refs[i] for i in rows),
+    )
+    first = _bm25(corpus, slate)
+    cross_encoder = FakeCrossEncoder()
+
+    scores, rescored = script._rerank_scores(corpus, slate, first, 5, cross_encoder)
+
+    kept = first >= np.sort(first)[::-1][4]
+    assert not kept[:5].all()
+    assert (rescored == kept).all()
+    job = job_document(slate.pairs[0][0])
+    documents = [candidate_document(slate.pairs[i][1]) for i in np.flatnonzero(kept)]
+    assert cross_encoder.calls == [(job, documents)]
+    expected = _two_stage(first, 5, job, [candidate_document(c) for _, c in slate.pairs])
+    assert scores.tolist() == expected
+
+
+def test_the_rerank_uses_whichever_first_stage_and_n_were_chosen(
+    model: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, recomputed: dict
+) -> None:
+    def dense_at_7(training: dict) -> dict:
+        return {"scorer": "dense", "n": 7, "target_met": False, "recall_on_training_jobs": 0.5}
+
+    monkeypatch.setattr(script, "choose_first_stage", dense_at_7)
+    out = tmp_path / "evaluation.json"
+    assert script.main(["--model", str(model), "--out", str(out), *FAST]) == 0
+    written = json.loads(out.read_text(encoding="utf-8"))
+    assert (written["rerank"]["first_stage"], written["rerank"]["n"]) == ("dense", 7)
+    data = training_data(generate_corpus(CorpusConfig(seed=5, n_jobs=40, n_candidates=1200)))
+    expected = evaluate_scores(data, _reranked(data, recomputed["all"]["scores"]["dense"], 7))
+    measured = written["all_jobs"]["scorers"]["rerank"]
+    assert measured["ndcg_at_10"] == pytest.approx(expected.ndcg_at_10, abs=1e-12)
+    assert measured["roc_auc_relevant"] == pytest.approx(expected.roc_auc_relevant, abs=1e-12)
+
+
+def test_it_records_how_the_rerank_was_configured(results: dict) -> None:
+    chosen = results["first_stage"]["chosen"]
+    rerank = results["rerank"]
+    assert {k: rerank[k] for k in ("cross_encoder", "first_stage", "n", "within")} == {
+        "cross_encoder": "fake-cross-encoder@1",
+        "first_stage": chosen["scorer"],
+        "n": chosen["n"],
+        "within": "each job's slate",
+    }
+
+
+def test_no_rerank_skips_the_cross_encoder_and_what_needs_it(
+    model: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refuse() -> None:
+        raise AssertionError("the cross-encoder was loaded")
+
+    monkeypatch.setattr(script, "load_cross_encoder", refuse)
+    out = tmp_path / "evaluation.json"
+    assert script.main(["--model", str(model), "--out", str(out), *FAST, "--no-rerank"]) == 0
+    written = json.loads(out.read_text(encoding="utf-8"))
+    assert "rerank" not in written["scorers"] and "rerank" not in written["all_jobs"]["scorers"]
+    assert written["rerank"] is None
+    assert set(written["comparisons"]) == {"hybrid_rrf_minus_bm25", "hybrid_rrf_minus_dense"}
+    assert set(written["all_jobs"]["comparisons"]) == set(written["comparisons"])
+    assert {"dense", "hybrid_rrf"} <= set(written["scorers"])
+
+
+def test_a_cross_encoder_it_cannot_load_is_refused_before_any_work(
+    model: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def unavailable() -> None:
+        raise EncoderUnavailable("cannot load the cross-encoder")
+
+    def too_early(*args: object, **kwargs: object) -> None:
+        raise AssertionError("work started before the cross-encoder was loaded")
+
+    monkeypatch.setattr(script, "load_cross_encoder", unavailable)
+    monkeypatch.setattr(script, "generate_corpus", too_early)
+    out = tmp_path / "evaluation.json"
+    assert script.main(["--model", str(model), "--out", str(out), *FAST]) == 2
+    err = capsys.readouterr().err
+    assert "cannot load the cross-encoder" in err and "--no-rerank" in err
+    assert not out.exists()
 
 
 # --- the real model ----------------------------------------------------
@@ -701,6 +927,47 @@ def test_real_model_dense_scores_are_each_pairs_cosine(real_encoder: Encoder) ->
         j, c = real_encoder.encode([job_document(job), candidate_document(candidate)])
         # Batches move a value by up to 1.6e-7 (see app.ml.encoder).
         assert score == pytest.approx(float(j @ c), abs=1e-5)
+
+
+@pytest.fixture(scope="module")
+def real_cross_encoder() -> Any:
+    try:
+        return REAL_LOAD_CROSS_ENCODER()
+    except EncoderUnavailable as exc:  # pragma: no cover - depends on the machine
+        if os.environ.get("RECRUITFLOW_REQUIRE_ENCODER"):
+            raise
+        pytest.skip(str(exc))
+
+
+def test_real_model_cross_encoder_is_the_pinned_one(real_cross_encoder: Any) -> None:
+    assert real_cross_encoder.name == (
+        f"{DEFAULT_CROSS_ENCODER}@{DEFAULT_CROSS_ENCODER_REVISION}+maxp128"
+    )
+
+
+def test_real_model_rerank_orders_the_kept_by_the_cross_encoder(real_cross_encoder: Any) -> None:
+    corpus = generate_corpus(CorpusConfig(seed=5, n_jobs=40, n_candidates=1200))
+    data = training_data(corpus)
+    first_job = sorted(set(data.job_refs))[0]
+    keep = np.array([ref == first_job for ref in data.job_refs])
+    subset = TrainingData(
+        pairs=tuple(pair for pair, kept in zip(data.pairs, keep, strict=True) if kept),
+        advanced=data.advanced[keep],
+        relevance=data.relevance[keep],
+        job_refs=tuple(ref for ref, kept in zip(data.job_refs, keep, strict=True) if kept),
+    )
+    first = _bm25(corpus, subset)
+
+    scores, rescored = script._rerank_scores(corpus, subset, first, 10, real_cross_encoder)
+
+    kept = first >= np.sort(first)[::-1][9]
+    assert (rescored == kept).all() and kept.sum() >= 10
+    assert scores[kept].min() > scores[~kept].max()
+    job = job_document(subset.pairs[0][0])
+    direct = real_cross_encoder.score(
+        job, [candidate_document(subset.pairs[i][1]) for i in np.flatnonzero(kept)]
+    )
+    assert (rankdata(scores[kept]) == rankdata(direct)).all()
 
 
 # --- refusals ----------------------------------------------------------

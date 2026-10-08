@@ -42,10 +42,17 @@ share of each slate's relevant candidates in its top N, for N in
 :data:`RECALL_CUTOFFS`, on the training jobs, the held-out jobs and all jobs.
 The first stage and N are chosen on the **training jobs** by a fixed rule
 (:func:`choose_first_stage`), so the held-out jobs a re-rank is measured on
-play no part in choosing what it re-ranks. ``--no-dense`` skips the scorers
-that need the encoder (the
-``embeddings`` extra); the encoder is loaded before anything is trained, so a
-missing one is refused at once.
+play no part in choosing what it re-ranks.
+
+``rerank`` is that two-stage ranking: within each slate, the chosen first
+stage keeps its top N and a cross-encoder (:mod:`app.ml.cross_encoder`)
+orders those, above the rest in the first stage's order. The cross-encoder
+fits nothing to a label either, so it is measured on the held-out jobs and on
+every job, and compared job by job with each retrieval scorer.
+
+``--no-dense`` skips the scorers that need the encoder and ``--no-rerank``
+the cross-encoder (both need the ``embeddings`` extra). Both models are
+loaded before anything is trained, so a missing one is refused at once.
 
 NDCG@10 and P@5 carry a 95% bootstrap interval over held-out jobs. Then the
 whole training is repeated on ``--split-seeds`` other splits of the same
@@ -81,6 +88,7 @@ from app.ml.artifact import (
     load_versioned_matcher,
 )
 from app.ml.corpus import Corpus, CorpusConfig, generate_corpus
+from app.ml.cross_encoder import CrossEncoderScorer, SentenceTransformerCrossEncoder
 from app.ml.embeddings import cosine_scores
 from app.ml.encoder import (
     Encoder,
@@ -107,6 +115,7 @@ from app.ml.retrieval import (
     first_stage_cut,
     fuse_per_group,
     recall_at_n,
+    rerank_per_group,
 )
 from app.ml.train import TRAINING_LABEL, TrainingData, make_matcher, split_by_job, training_data
 
@@ -163,12 +172,22 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="skip the dense and hybrid scorers, which need the embeddings extra",
     )
+    parser.add_argument(
+        "--no-rerank",
+        action="store_true",
+        help="skip the cross-encoder re-rank, which needs the embeddings extra",
+    )
     return parser
 
 
 def load_encoder() -> Encoder:
     """The pinned sentence-transformer. Raises ``EncoderUnavailable``."""
     return SentenceTransformerEncoder()
+
+
+def load_cross_encoder() -> CrossEncoderScorer:
+    """The pinned cross-encoder. Raises ``EncoderUnavailable``."""
+    return SentenceTransformerCrossEncoder()
 
 
 def _baseline_coverage(data: TrainingData) -> np.ndarray:
@@ -415,6 +434,30 @@ def _first_stage(
     }
 
 
+def _rerank_scores(
+    corpus: Corpus,
+    data: TrainingData,
+    first: np.ndarray,
+    n: int,
+    cross_encoder: CrossEncoderScorer,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Each pair's score in the two-stage ranking of its slate, and which were re-scored.
+
+    ``first`` is the first stage's score of every pair of ``data``. Within
+    each slate, the candidates :func:`app.ml.retrieval.first_stage_cut` keeps
+    are scored by the cross-encoder against the job, and only those.
+    """
+    jobs = {job.ref: job for job in corpus.jobs}
+    refs = np.array(data.job_refs)
+    second = np.full(len(data), np.nan)
+    for ref in sorted(set(data.job_refs)):
+        slate = np.flatnonzero(refs == ref)
+        kept = slate[first_stage_cut(first[slate], n)]
+        documents = [candidate_document(data.pairs[i][1]) for i in kept]
+        second[kept] = cross_encoder.score(job_document(jobs[ref]), documents)
+    return rerank_per_group(data.job_refs, first, second, n), np.isfinite(second)
+
+
 def _package_version(name: str) -> str | None:
     """The installed version of ``name``, or ``None`` when it is not installed."""
     try:
@@ -424,15 +467,20 @@ def _package_version(name: str) -> str | None:
 
 
 def _comparisons(results: dict[str, Evaluation], *, resamples: int) -> dict[str, Any]:
-    """Fusion against each side alone, when there is a fusion to compare."""
-    if "hybrid_rrf" not in results:
-        return {}
-    return {
-        f"hybrid_rrf_minus_{other}": _paired(
-            results["hybrid_rrf"], results[other], resamples=resamples
-        )
-        for other in ("bm25", "dense")
-    }
+    """Fusion against each side alone, and the re-rank against each retrieval scorer."""
+    compared = {}
+    if "hybrid_rrf" in results:
+        for other in ("bm25", "dense"):
+            compared[f"hybrid_rrf_minus_{other}"] = _paired(
+                results["hybrid_rrf"], results[other], resamples=resamples
+            )
+    if "rerank" in results:
+        for other in FIRST_STAGE_ORDER:
+            if other in results:
+                compared[f"rerank_minus_{other}"] = _paired(
+                    results["rerank"], results[other], resamples=resamples
+                )
+    return compared
 
 
 def _summary(evaluation: Evaluation, *, resamples: int) -> dict[str, Any]:
@@ -504,12 +552,18 @@ def _manifest_fields(manifest: dict[str, Any]) -> tuple[CorpusConfig, float, int
 
 
 def evaluate(
-    model: Path, *, split_seeds: Sequence[int], resamples: int, dense: bool = True
+    model: Path,
+    *,
+    split_seeds: Sequence[int],
+    resamples: int,
+    dense: bool = True,
+    rerank: bool = True,
 ) -> dict[str, Any]:
     """Everything the JSON holds.
 
     Raises :class:`EvaluationRefused`, ``MatcherUnavailable``, or, when
-    ``dense`` is set and the encoder cannot be loaded, ``EncoderUnavailable``.
+    ``dense`` or ``rerank`` is set and its model cannot be loaded,
+    ``EncoderUnavailable``.
     """
     matcher, version = load_versioned_matcher(model)
     manifest = load_manifest(model)
@@ -522,6 +576,7 @@ def evaluate(
         )
 
     encoder = load_encoder() if dense else None
+    cross_encoder = load_cross_encoder() if rerank else None
     try:
         corpus = generate_corpus(config)
         data = training_data(corpus)
@@ -560,6 +615,16 @@ def evaluate(
     for name, test_scores in held_out_retrieval.items():
         scorers[name] = evaluate_scores(test_set, test_scores)
     every_job = {name: evaluate_scores(data, all_scores) for name, all_scores in retrieval.items()}
+
+    first_stage = _first_stage(data, train_set, test_set, retrieval)
+    chosen = first_stage["chosen"]
+    reranked = None
+    if cross_encoder is not None and chosen["scorer"] is not None:
+        reranked, rescored = _rerank_scores(
+            corpus, data, retrieval[chosen["scorer"]], chosen["n"], cross_encoder
+        )
+        scorers["rerank"] = evaluate_scores(test_set, _on(data, test_set, reranked))
+        every_job["rerank"] = evaluate_scores(data, reranked)
 
     per_split = []
     for seed in split_seeds:
@@ -628,15 +693,27 @@ def evaluate(
             "comparisons": _comparisons(every_job, resamples=resamples),
             "agreement": _agreement(data, retrieval, every_job),
         },
-        "first_stage": _first_stage(data, train_set, test_set, retrieval),
+        "first_stage": first_stage,
+        "rerank": None
+        if reranked is None
+        else {
+            "cross_encoder": cross_encoder.name,
+            "first_stage": chosen["scorer"],
+            "n": chosen["n"],
+            "within": "each job's slate",
+            "pairs_scored": int(rescored.sum()),
+            "pairs_scored_held_out": int(_on(data, test_set, rescored).sum()),
+        },
         "splits": every_split,
         "split_spread": {
             name: _spread([split[name] for split in every_split]) for name in metric_names
         },
         "python": platform.python_version(),
         "scikit_learn": sklearn.__version__,
-        "sentence_transformers": _package_version("sentence-transformers") if dense else None,
-        "torch": _package_version("torch") if dense else None,
+        "sentence_transformers": _package_version("sentence-transformers")
+        if dense or rerank
+        else None,
+        "torch": _package_version("torch") if dense or rerank else None,
     }
 
 
@@ -672,12 +749,16 @@ def main(argv: list[str] | None = None) -> int:
             split_seeds=args.split_seeds,
             resamples=args.resamples,
             dense=not args.no_dense,
+            rerank=not args.no_rerank,
         )
     except (MatcherUnavailable, EvaluationRefused) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
     except EncoderUnavailable as error:
-        print(f"error: {error}; or pass --no-dense to skip the dense scorers", file=sys.stderr)
+        print(
+            f"error: {error}; or pass --no-dense and --no-rerank to skip what needs it",
+            file=sys.stderr,
+        )
         return 2
 
     try:
