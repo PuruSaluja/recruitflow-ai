@@ -666,6 +666,18 @@ class CorpusConfig:
     proxy_share: float = 0.6
 
     def __post_init__(self) -> None:
+        # A config can come from a manifest or an evaluation JSON, edited by
+        # hand. The seed is formatted into each generator's own seed, so "42"
+        # would make seed 42's corpus under another name; refuse such values
+        # by name rather than let them through or fail deep inside.
+        for name in ("seed", "n_jobs", "n_candidates", "slate_size"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise TypeError(f"{name} must be a whole number, got {value!r}")
+        for name in ("same_family_share", "historical_bias", "proxy_share"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int | float):
+                raise TypeError(f"{name} must be a number, got {value!r}")
         if min(self.n_jobs, self.n_candidates, self.slate_size) < 1:
             raise ValueError("n_jobs, n_candidates and slate_size must all be at least 1")
         if self.slate_size > self.n_candidates:

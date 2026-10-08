@@ -418,6 +418,33 @@ def test_an_impossible_config_is_refused(changes: dict[str, float]) -> None:
 
 
 @pytest.mark.parametrize(
+    ("changes", "field"),
+    [
+        # Each seed is formatted into the generators' own seeds, so "42" would
+        # make 42's corpus under another name, and True 1's under "True".
+        ({"seed": "42"}, "seed"),
+        ({"seed": 1.5}, "seed"),
+        ({"seed": True}, "seed"),
+        ({"n_jobs": True}, "n_jobs"),
+        ({"n_jobs": 4.0}, "n_jobs"),
+        ({"n_candidates": "400"}, "n_candidates"),
+        ({"slate_size": 10.0}, "slate_size"),
+        ({"same_family_share": "0.4"}, "same_family_share"),
+        ({"historical_bias": True}, "historical_bias"),
+        ({"proxy_share": None}, "proxy_share"),
+    ],
+)
+def test_a_config_value_of_the_wrong_type_is_refused_by_name(changes: dict, field: str) -> None:
+    with pytest.raises(TypeError, match=f"^{field} must be"):
+        CorpusConfig(**changes)
+
+
+def test_whole_number_shares_and_a_negative_seed_are_accepted() -> None:
+    config = CorpusConfig(seed=-1, same_family_share=1, historical_bias=0, proxy_share=1)
+    assert config.same_family_share == 1 and config.seed == -1
+
+
+@pytest.mark.parametrize(
     "changes",
     [
         {"n_candidates": 50, "slate_size": 50},
