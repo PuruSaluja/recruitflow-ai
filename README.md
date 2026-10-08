@@ -10,9 +10,10 @@ descriptions.
 > the synthetic corpus the matcher trains on, its features, the calibrated
 > classifier, endpoints that score a job's candidate pool and cache the
 > ranking, a held-out evaluation, sentence-transformer embeddings of every
-> candidate and job, cached in PostgreSQL, and a measured comparison of
-> lexical, dense and hybrid retrieval. A cross-encoder re-rank, the fairness
-> audit, PDF reporting and the frontend are landing incrementally.
+> candidate and job, cached in PostgreSQL, a measured comparison of lexical,
+> dense and hybrid retrieval, and a measured cross-encoder re-rank of the
+> hybrid's shortlist. The fairness audit, PDF reporting and the frontend are
+> landing incrementally.
 
 ## Tech stack
 
@@ -631,6 +632,28 @@ as much say as dense: fusion beat dense on 46 of the 53 jobs where BM25 ranked
 at least as well, but on only 41 of the other 147. All three sit well below
 the trained matcher. Details and P@5 are in
 [`docs/model_evaluation.md`](docs/model_evaluation.md).
+
+### Cross-encoder re-rank
+
+A two-stage ranking: the hybrid keeps the top 20 of each slate (chosen on
+the training jobs, by recall, before any re-rank was run), and a pretrained
+cross-encoder, ms-marco-MiniLM-L6-v2 pinned to one revision
+(`app/ml/cross_encoder.py`), re-orders those by reading each resume beside
+the job description. A resume is scored by its best 128-word-piece passage,
+since unrelated text around a match drowns it: a one-line Python resume
+after 60 lines of warehouse work scored -10.86 read as one window and 0.14
+as passages, against -11.36 for the warehouse lines alone.
+
+**On this corpus it makes the ranking worse and slower.** NDCG@10 falls from
+the hybrid's 0.6392 to 0.5611 over all 200 jobs (paired difference −0.0781,
+95% CI −0.1021 to −0.0527, worse on 138 jobs and better on 61), and from
+0.6259 to 0.5788 on the held-out jobs (−0.0472, −0.0959 to +0.0006). It
+still beats BM25 alone. On a laptop CPU the cross-encoder takes 1.6 to 1.8 s
+per slate, about 95% of the request, against under 0.1 s for the first
+stage (`scripts/time_rerank.py`, `docs/rerank_latency.json`). The model was
+trained on web-search queries and passages, not job descriptions and
+resumes; whether that is the cause was not tested, and nothing was tuned
+after seeing these numbers.
 
 ## Embeddings
 

@@ -5,15 +5,18 @@ Held-out ranking quality of the matcher, measured by
 metrics in [`backend/app/ml/evaluate.py`](../backend/app/ml/evaluate.py).
 Every number below is copied from
 [`model_evaluation.json`](model_evaluation.json), which that script wrote in
-one run; rerun it to regenerate both:
+one run, except the re-rank's timings, which come from
+[`rerank_latency.json`](rerank_latency.json) (see *What it costs*); rerun
+the script to regenerate both:
 
 ```
 python scripts/train_matcher.py      # if no matcher is on disk yet
 python scripts/evaluate_matcher.py
 ```
 
-The dense and hybrid scorers need the `embeddings` extra and the model's
-files; `--no-dense` measures everything else without them.
+The dense and hybrid scorers and the cross-encoder re-rank need the
+`embeddings` extra and the models' files; `--no-dense` and `--no-rerank`
+measure everything else without them.
 
 **All of this is measured on synthetic data.** The corpus, its ground truth
 and both of its planted biases come from `app.ml.corpus` (see the README's
@@ -185,9 +188,8 @@ Read plainly:
 
 A cross-encoder reads the job and the candidate together, one model pass
 per pair, so in a two-stage ranking it re-orders only the top N a cheaper
-scorer keeps. Whether it ranks better here is not measured yet. It can only
-promote a candidate the
-first stage let through, so a first stage is judged by **recall@N**: the
+scorer keeps; whether it ranks better is measured in the next section. It can
+only promote a candidate the first stage let through, so a first stage is judged by **recall@N**: the
 share of a slate's relevant candidates (`relevance >= 1`) in its top N,
 averaged over jobs. Candidates tied with the N-th score are all kept, so the
 cut never depends on the order candidates arrive in. Only the hybrid makes
@@ -199,7 +201,7 @@ training jobs, by a rule written beforehand
 ([`choose_first_stage`](../scripts/evaluate_matcher.py)): the smallest N of
 5, 10, 15, 20, 25 and 30 at which some scorer keeps at least 90% of the
 relevant candidates on average, and at that N the scorer that keeps the
-most, the cheaper one on a tie. The held-out jobs, where a re-rank will be
+most, the cheaper one on a tie. The held-out jobs, where the re-rank is
 measured, play no part in the choice.
 
 | Recall@N, 150 training jobs | 5 | 10 | 15 | 20 | 25 | 30 |
@@ -230,6 +232,93 @@ Recall on all 200 jobs and of the strong fits, the mean number kept, and
 each set's relevant candidates per slate and recall ceilings
 (`first_stage.slates`) are in the JSON under `first_stage`.
 
+## The cross-encoder re-rank
+
+The second stage is ms-marco-MiniLM-L6-v2, a cross-encoder trained on MS
+MARCO passage ranking (web-search queries against passages that answer them),
+pinned to revision `233902d2`
+([`backend/app/ml/cross_encoder.py`](../backend/app/ml/cross_encoder.py)).
+Within each slate the hybrid keeps its top 20, ties included; the
+cross-encoder reads each kept candidate's document beside the job's and gives
+one score; the kept ones are ranked by it, above the rest in the hybrid's
+order.
+It scored 1,000 pairs on the 50 held-out jobs and 4,002 over all 200. A
+resume longer than 128 word-pieces would be scored by its best passage, but
+every document in this corpus fits in one, so these are the model's scores
+for whole documents. Like the other retrieval scorers it fits nothing to
+this corpus's labels, so it is measured on all 200 jobs too.
+
+| Scorer | 50 held-out jobs: NDCG@10 | P@5 | All 200 jobs: NDCG@10 | P@5 |
+| --- | --- | --- | --- | --- |
+| Hybrid (RRF), the first stage | 0.6259 (0.5790–0.6689) | 0.6200 (0.5560–0.6760) | 0.6392 (0.6156–0.6637) | 0.6415 (0.6100–0.6735) |
+| **Re-rank of its top 20** | **0.5788** (0.5258–0.6284) | **0.5880** (0.5280–0.6480) | **0.5611** (0.5324–0.5888) | **0.5880** (0.5560–0.6220) |
+
+Compared job by job, as above:
+
+| Re-rank minus | Jobs | NDCG@10 | P@5 | Re-rank better / tied / worse (NDCG@10) |
+| --- | --- | --- | --- | --- |
+| Hybrid (RRF) | 50 held out | −0.0472 (−0.0959 to +0.0006) | −0.0320 (−0.0840 to +0.0200) | 17 / 0 / 33 |
+| Hybrid (RRF) | all 200 | −0.0781 (−0.1021 to −0.0527) | −0.0535 (−0.0820 to −0.0255) | 61 / 1 / 138 |
+| Dense | 50 held out | −0.0849 (−0.1328 to −0.0374) | −0.0880 (−0.1440 to −0.0320) | 12 / 1 / 37 |
+| Dense | all 200 | −0.0955 (−0.1218 to −0.0699) | −0.0780 (−0.1080 to −0.0480) | 53 / 4 / 143 |
+| BM25 | 50 held out | +0.0707 (+0.0212 to +0.1215) | +0.0880 (+0.0360 to +0.1440) | 33 / 0 / 17 |
+| BM25 | all 200 | +0.0278 (+0.0019 to +0.0546) | +0.0550 (+0.0270 to +0.0820) | 119 / 1 / 80 |
+
+Read plainly:
+
+- **No: the re-rank makes the ranking worse.** Re-ordering the hybrid's
+  top 20 by the cross-encoder lowers NDCG@10 on 138 of the 200 jobs and
+  raises it on 61; over all 200 the mean loss is 0.0781, an interval that
+  excludes zero, and P@5 falls too. On the 50 held-out jobs the loss is
+  smaller, 0.0472, with an interval that just reaches +0.0006. The re-rank
+  still beats BM25 alone, but ranks below both dense retrieval and the
+  hybrid it re-orders.
+- **The loss is the cross-encoder's order, not the cut.** The top 10 now
+  come entirely from the cross-encoder's order of the hybrid's 20, which
+  keep 95.0% of a held-out slate's relevant candidates (above), so a better
+  second stage had almost all of them to work with.
+- **Why is not measured.** The model learned to match short web-search
+  queries with passages; here the query is a whole job description and the
+  passage a resume, text of a kind it was not trained on. That may be the
+  reason, but it was not tested. Nothing was changed after these numbers
+  were seen: no other model, passage length or N was tried, since choosing
+  any of them on these jobs would be tuning on the test set.
+- Pooled ROC-AUC is in the JSON, but the re-rank's scores are ranks within
+  each slate, as the hybrid's are, so it is not comparable with the
+  pointwise scorers'.
+
+**What it costs.** Timed by
+[`scripts/time_rerank.py`](../scripts/time_rerank.py) into
+[`rerank_latency.json`](rerank_latency.json): the first 50 jobs' slates,
+three passes after an untimed warm-up, each step timed on its own as a
+request would run it (the pool's BM25 index and the candidates' vectors are
+built beforehand, as a service would keep them). It ran on a laptop's
+CPU, torch on 4 threads, with other programs open, so the absolute times are
+this machine's under that load; the ratios between steps are what carries
+over.
+
+| Step, per slate | Median ms, lowest and highest of the three passes |
+| --- | --- |
+| BM25, the job's document against the pool of 4,000 | 2.01 to 2.27 |
+| Dense: encode the job's document, cosine with the slate's 50 stored vectors | 82.51 to 93.92 |
+| Fusion and the top-20 cut | 1.22 to 1.56 |
+| **Cross-encoder on the 20 kept** | 1,595.30 to 1,757.31 |
+| Cross-encoder on all 50 (for comparison: no first stage) | 3,689.38 to 4,456.99 |
+
+- **The cross-encoder is about 95% of a request.** Adding up a pass's
+  medians, ranking one slate takes 1.68 to 1.86 s, of which the first stage
+  is 86 to 98 ms.
+- **The first stage makes the second 2.3 to 2.5 times cheaper** than
+  cross-encoding the whole slate, close to 50 / 20 = 2.5, since the cost is
+  per pair. It keeps 20.02 candidates a slate here.
+- Together with the quality above: on this corpus the re-rank makes ranking
+  a slate 19.0 to 19.6 times slower than the first stage alone, and ranks
+  worse.
+
+```
+python scripts/time_rerank.py --jobs 50
+```
+
 ## What this does not show
 
 - **Real-world accuracy.** The ground truth is a formula over a synthetic
@@ -240,7 +329,7 @@ each set's relevant candidates per slate and recall ceilings
 - **Tuning or model choice.** Nothing was tuned on these numbers. The
   estimators keep scikit-learn's defaults, and no other model family was
   tried. The retrieval scorers keep their textbook settings. The re-rank's
-  first stage and N were chosen on the training jobs only; the cross-encoder
-  re-rank itself is not measured yet.
+  first stage and N were chosen on the training jobs only, and nothing about
+  the re-rank was changed after its numbers were seen.
 - **Generalisation across corpora.** One corpus seed. Splits vary which jobs
   are held out, not which candidates or jobs were generated.

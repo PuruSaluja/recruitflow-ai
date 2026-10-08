@@ -1,0 +1,128 @@
+{
+  "evaluation_corpus_config": {
+    "seed": 42,
+    "n_jobs": 200,
+    "n_candidates": 4000,
+    "slate_size": 50,
+    "same_family_share": 0.4,
+    "historical_bias": 0.25,
+    "proxy_share": 0.6
+  },
+  "first_stage": "hybrid_rrf",
+  "n": 20,
+  "encoder": "sentence-transformers/all-MiniLM-L6-v2@1110a243fdf4706b3f48f1d95db1a4f5529b4d41+chunks254",
+  "cross_encoder": "cross-encoder/ms-marco-MiniLM-L6-v2@233902d25c440f23af6f7d6e94d2946bac0bee0a+maxp128",
+  "slates": 50,
+  "slate_size_mean": 50.0,
+  "kept_mean": 20.02,
+  "pool": 4000,
+  "repeats": [
+    {
+      "bm25": {
+        "median_ms": 2.044,
+        "p90_ms": 2.856,
+        "mean_ms": 1.834
+      },
+      "dense": {
+        "median_ms": 82.506,
+        "p90_ms": 99.178,
+        "mean_ms": 64.626
+      },
+      "fuse_and_cut": {
+        "median_ms": 1.215,
+        "p90_ms": 1.598,
+        "mean_ms": 1.079
+      },
+      "cross_encoder_kept": {
+        "median_ms": 1595.304,
+        "p90_ms": 1843.468,
+        "mean_ms": 1239.364
+      },
+      "cross_encoder_slate": {
+        "median_ms": 3689.378,
+        "p90_ms": 4572.917,
+        "mean_ms": 3050.818
+      }
+    },
+    {
+      "bm25": {
+        "median_ms": 2.268,
+        "p90_ms": 2.538,
+        "mean_ms": 2.203
+      },
+      "dense": {
+        "median_ms": 93.924,
+        "p90_ms": 100.848,
+        "mean_ms": 93.487
+      },
+      "fuse_and_cut": {
+        "median_ms": 1.559,
+        "p90_ms": 1.87,
+        "mean_ms": 1.611
+      },
+      "cross_encoder_kept": {
+        "median_ms": 1757.312,
+        "p90_ms": 1940.693,
+        "mean_ms": 1782.634
+      },
+      "cross_encoder_slate": {
+        "median_ms": 4456.991,
+        "p90_ms": 4639.014,
+        "mean_ms": 4414.538
+      }
+    },
+    {
+      "bm25": {
+        "median_ms": 2.008,
+        "p90_ms": 2.859,
+        "mean_ms": 1.813
+      },
+      "dense": {
+        "median_ms": 88.718,
+        "p90_ms": 101.292,
+        "mean_ms": 71.091
+      },
+      "fuse_and_cut": {
+        "median_ms": 1.302,
+        "p90_ms": 1.651,
+        "mean_ms": 1.156
+      },
+      "cross_encoder_kept": {
+        "median_ms": 1676.175,
+        "p90_ms": 1849.437,
+        "mean_ms": 1327.709
+      },
+      "cross_encoder_slate": {
+        "median_ms": 4113.457,
+        "p90_ms": 4608.652,
+        "mean_ms": 3300.974
+      }
+    }
+  ],
+  "median_ms_across_repeats": {
+    "bm25": {
+      "min": 2.008,
+      "max": 2.268
+    },
+    "dense": {
+      "min": 82.506,
+      "max": 93.924
+    },
+    "fuse_and_cut": {
+      "min": 1.215,
+      "max": 1.559
+    },
+    "cross_encoder_kept": {
+      "min": 1595.304,
+      "max": 1757.312
+    },
+    "cross_encoder_slate": {
+      "min": 3689.378,
+      "max": 4456.991
+    }
+  },
+  "torch_threads": 4,
+  "python": "3.14.6",
+  "platform": "Windows-11",
+  "processor": "Intel64 Family 6 Model 140 Stepping 1, GenuineIntel"
+}
