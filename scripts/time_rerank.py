@@ -94,8 +94,15 @@ def load_cross_encoder() -> CrossEncoderScorer:
     return SentenceTransformerCrossEncoder()
 
 
-def _rerank_config(evaluation: dict[str, Any], encoder: Encoder | None) -> dict[str, Any]:
-    """The re-rank the evaluation measured, checked against the models loaded here."""
+def _rerank_config(evaluation: Any) -> tuple[dict[str, Any], CorpusConfig]:
+    """The re-rank the evaluation measured and its corpus, each checked.
+
+    An evaluation file edited by hand or written by other code can lack any
+    of them or hold the wrong type; each case is refused by name, before any
+    model is loaded, rather than surfacing as a traceback from deep inside.
+    """
+    if not isinstance(evaluation, dict):
+        raise TimingRefused("the evaluation is not a JSON object")
     rerank = evaluation.get("rerank")
     if not isinstance(rerank, dict):
         raise TimingRefused(
@@ -103,14 +110,21 @@ def _rerank_config(evaluation: dict[str, Any], encoder: Encoder | None) -> dict[
         )
     if rerank.get("first_stage") not in ("bm25", "dense", "hybrid_rrf"):
         raise TimingRefused(f"unknown first stage {rerank.get('first_stage')!r}")
-    if not isinstance(evaluation.get("corpus_config"), dict):
-        raise TimingRefused("the evaluation records no corpus_config")
-    measured_encoder = evaluation.get("retrieval", {}).get("encoder")
-    if encoder is not None and measured_encoder != encoder.name:
+    n = rerank.get("n")
+    if isinstance(n, bool) or not isinstance(n, int) or n < 1:
         raise TimingRefused(
-            f"the evaluation ran encoder {measured_encoder!r}, but {encoder.name!r} is loaded"
+            f"the evaluation's re-rank keeps no whole number of candidates (n = {n!r})"
         )
-    return rerank
+    if not isinstance(evaluation.get("retrieval", {}), dict):
+        raise TimingRefused("the evaluation has no retrieval object")
+    fields = evaluation.get("corpus_config")
+    if not isinstance(fields, dict):
+        raise TimingRefused("the evaluation records no corpus_config")
+    try:
+        config = CorpusConfig(**fields)
+    except (TypeError, ValueError) as error:
+        raise TimingRefused(f"the evaluation's corpus_config cannot be used ({error})") from error
+    return rerank, config
 
 
 def _stats(values: list[float]) -> dict[str, float]:
@@ -130,16 +144,21 @@ def _timed(clock: Callable[[], float], seconds: list[float], call: Callable[[], 
 
 
 def run(
-    evaluation: dict[str, Any],
+    evaluation: Any,
     *,
     repeats: int,
     jobs: int | None,
     clock: Callable[[], float] = time.perf_counter,
 ) -> dict[str, Any]:
     """Everything the JSON holds. Raises ``TimingRefused`` or ``EncoderUnavailable``."""
-    first_stage = (evaluation.get("rerank") or {}).get("first_stage")
+    rerank, config = _rerank_config(evaluation)
+    first_stage = rerank["first_stage"]
     encoder = load_encoder() if first_stage in ("dense", "hybrid_rrf") else None
-    rerank = _rerank_config(evaluation, encoder)
+    measured_encoder = evaluation.get("retrieval", {}).get("encoder")
+    if encoder is not None and measured_encoder != encoder.name:
+        raise TimingRefused(
+            f"the evaluation ran encoder {measured_encoder!r}, but {encoder.name!r} is loaded"
+        )
     cross_encoder = load_cross_encoder()
     if cross_encoder.name != rerank.get("cross_encoder"):
         raise TimingRefused(
@@ -147,7 +166,7 @@ def run(
             f"but {cross_encoder.name!r} is loaded"
         )
     n = rerank["n"]
-    corpus = generate_corpus(CorpusConfig(**evaluation["corpus_config"]))
+    corpus = generate_corpus(config)
     data = training_data(corpus)
     refs = np.array(data.job_refs)
     job_refs = sorted(set(data.job_refs))[:jobs]

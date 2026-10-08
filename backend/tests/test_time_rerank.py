@@ -235,6 +235,36 @@ def test_an_evaluation_it_cannot_time_is_refused(
         script.run(evaluation, repeats=1, jobs=1)
 
 
+@pytest.mark.parametrize(
+    ("evaluation", "message"),
+    [
+        ([1, 2], "not a JSON object"),
+        ({**_evaluation(), "retrieval": None}, "no retrieval object"),
+        ({**_evaluation(), "rerank": {"first_stage": "bm25", "cross_encoder": "x"}}, "n = None"),
+        (_evaluation(n=0), "n = 0"),
+        (_evaluation(n="20"), "n = '20'"),
+        (_evaluation(n=True), "n = True"),
+        (_evaluation(n=2.5), "n = 2.5"),
+        ({**_evaluation(), "corpus_config": {"seed": 5, "bogus": 1}}, "corpus_config cannot be"),
+        ({**_evaluation(), "corpus_config": {"n_jobs": 0}}, "corpus_config cannot be"),
+    ],
+)
+def test_a_damaged_evaluation_is_refused_before_any_model_loads(
+    recorder: _Recorder, evaluation: object, message: str
+) -> None:
+    with pytest.raises(script.TimingRefused, match=message):
+        script.run(evaluation, repeats=1, jobs=1)
+    assert recorder.encoders == [] and recorder.cross_encoders == []
+
+
+def test_a_damaged_evaluation_file_exits_2_naming_the_problem(
+    recorder: _Recorder, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code, out = _main(tmp_path, _evaluation(n=0))
+    assert code == 2 and "n = 0" in capsys.readouterr().err
+    assert not out.exists()
+
+
 def _main(tmp_path: Path, evaluation: dict | None, *extra: str) -> tuple[int, Path]:
     source, out = tmp_path / "evaluation.json", tmp_path / "out" / "latency.json"
     if evaluation is not None:
