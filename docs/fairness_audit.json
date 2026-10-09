@@ -1018,6 +1018,1001 @@
       }
     }
   },
+  "proxy_terms": [
+    "women",
+    "bootcamp",
+    "member"
+  ],
+  "mitigations": {
+    "drop_proxy_terms": {
+      "ndcg_at_10": 0.8020539781084026,
+      "ndcg_at_10_95ci": [
+        0.784504070710036,
+        0.8196422720326717
+      ],
+      "at_k": {
+        "5": {
+          "gender": {
+            "reference": "man",
+            "min_disparate_impact": 0.8479768621269005,
+            "groups": {
+              "man": {
+                "rates": {
+                  "pairs": 5559,
+                  "selected": 592.0,
+                  "selection_rate": 0.1064939737362835,
+                  "qualified": 959,
+                  "true_positive_rate": 0.4994786235662148
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              },
+              "nonbinary": {
+                "rates": {
+                  "pairs": 532,
+                  "selected": 55.0,
+                  "selection_rate": 0.10338345864661654,
+                  "qualified": 104,
+                  "true_positive_rate": 0.4519230769230769
+                },
+                "disparate_impact": {
+                  "value": 0.9707916327982118,
+                  "low": 0.7201826337690619,
+                  "high": 1.2253945258071124
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.04755554664313788,
+                  "low": -0.15018540853450607,
+                  "high": 0.04818797146751425
+                }
+              },
+              "woman": {
+                "rates": {
+                  "pairs": 3909,
+                  "selected": 353.0,
+                  "selection_rate": 0.09030442568431823,
+                  "qualified": 636,
+                  "true_positive_rate": 0.4481132075471698
+                },
+                "disparate_impact": {
+                  "value": 0.8479768621269005,
+                  "low": 0.752743037825262,
+                  "high": 0.9546006657046676
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.051365416019044985,
+                  "low": -0.09535837504213929,
+                  "high": -0.008407862444789393
+                }
+              }
+            }
+          },
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 1.1917806386295267,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1018,
+                  "selected": 119.0,
+                  "selection_rate": 0.1168958742632613,
+                  "qualified": 212,
+                  "true_positive_rate": 0.4669811320754717
+                },
+                "disparate_impact": {
+                  "value": 1.1917806386295267,
+                  "low": 0.965392155657408,
+                  "high": 1.4364343867630078
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.011835276801461736,
+                  "low": -0.0772372578417939,
+                  "high": 0.05835442567022307
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 8982,
+                  "selected": 881.0,
+                  "selection_rate": 0.09808505900690269,
+                  "qualified": 1487,
+                  "true_positive_rate": 0.47881640887693344
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        },
+        "10": {
+          "gender": {
+            "reference": "man",
+            "min_disparate_impact": 0.9044129266619236,
+            "groups": {
+              "man": {
+                "rates": {
+                  "pairs": 5559,
+                  "selected": 1151.0,
+                  "selection_rate": 0.2070516279906458,
+                  "qualified": 959,
+                  "true_positive_rate": 0.786235662148071
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              },
+              "nonbinary": {
+                "rates": {
+                  "pairs": 532,
+                  "selected": 117.0,
+                  "selection_rate": 0.2199248120300752,
+                  "qualified": 104,
+                  "true_positive_rate": 0.75
+                },
+                "disparate_impact": {
+                  "value": 1.0621737880757498,
+                  "low": 0.896411331224928,
+                  "high": 1.236616574034926
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.036235662148070946,
+                  "low": -0.11936761857207956,
+                  "high": 0.0477829025334318
+                }
+              },
+              "woman": {
+                "rates": {
+                  "pairs": 3909,
+                  "selected": 732.0,
+                  "selection_rate": 0.18726016884113583,
+                  "qualified": 636,
+                  "true_positive_rate": 0.7641509433962265
+                },
+                "disparate_impact": {
+                  "value": 0.9044129266619236,
+                  "low": 0.8303334128201071,
+                  "high": 0.9819813691090907
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.02208471875184448,
+                  "low": -0.0629169961294084,
+                  "high": 0.021432875628376542
+                }
+              }
+            }
+          },
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 1.14088585029048,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1018,
+                  "selected": 229.0,
+                  "selection_rate": 0.224950884086444,
+                  "qualified": 212,
+                  "true_positive_rate": 0.7924528301886793
+                },
+                "disparate_impact": {
+                  "value": 1.14088585029048,
+                  "low": 0.9626310286275911,
+                  "high": 1.3182688632944874
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.019083630457677248,
+                  "low": -0.03930220501983506,
+                  "high": 0.07642626633300309
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 8982,
+                  "selected": 1771.0,
+                  "selection_rate": 0.1971721220218214,
+                  "qualified": 1487,
+                  "true_positive_rate": 0.773369199731002
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "ndcg_at_10_minus_matcher": {
+        "mean": -0.0018776149270896664,
+        "95ci": [
+          -0.006808022861121444,
+          0.0018313762830333821
+        ],
+        "jobs_better": 34,
+        "jobs_equal": 140,
+        "jobs_worse": 26
+      }
+    },
+    "drop_community_line": {
+      "ndcg_at_10": 0.802932676624871,
+      "ndcg_at_10_95ci": [
+        0.7852961304570387,
+        0.8201285879652794
+      ],
+      "at_k": {
+        "5": {
+          "gender": {
+            "reference": "man",
+            "min_disparate_impact": 0.9380888906841163,
+            "groups": {
+              "man": {
+                "rates": {
+                  "pairs": 5559,
+                  "selected": 570.0,
+                  "selection_rate": 0.1025364274150027,
+                  "qualified": 959,
+                  "true_positive_rate": 0.48383733055265904
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              },
+              "nonbinary": {
+                "rates": {
+                  "pairs": 532,
+                  "selected": 54.0,
+                  "selection_rate": 0.10150375939849623,
+                  "qualified": 104,
+                  "true_positive_rate": 0.4423076923076923
+                },
+                "disparate_impact": {
+                  "value": 0.9899287692916501,
+                  "low": 0.7394878295718935,
+                  "high": 1.2507051902556332
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.04152963824496675,
+                  "low": -0.1430171603421987,
+                  "high": 0.058219726062467836
+                }
+              },
+              "woman": {
+                "rates": {
+                  "pairs": 3909,
+                  "selected": 376.0,
+                  "selection_rate": 0.09618828344845229,
+                  "qualified": 636,
+                  "true_positive_rate": 0.4716981132075472
+                },
+                "disparate_impact": {
+                  "value": 0.9380888906841163,
+                  "low": 0.8330795480026126,
+                  "high": 1.052485267686542
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.012139217345111863,
+                  "low": -0.058103998714382,
+                  "high": 0.030817652760741554
+                }
+              }
+            }
+          },
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 1.2374589207268034,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1018,
+                  "selected": 123.0,
+                  "selection_rate": 0.12082514734774066,
+                  "qualified": 212,
+                  "true_positive_rate": 0.4858490566037736
+                },
+                "disparate_impact": {
+                  "value": 1.2374589207268034,
+                  "low": 0.9923420412937989,
+                  "high": 1.508563408307572
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.010395122508279286,
+                  "low": -0.05848687422934034,
+                  "high": 0.08229378874312977
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 8982,
+                  "selected": 877.0,
+                  "selection_rate": 0.0976397238922289,
+                  "qualified": 1487,
+                  "true_positive_rate": 0.4754539340954943
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        },
+        "10": {
+          "gender": {
+            "reference": "man",
+            "min_disparate_impact": 0.9409684868196401,
+            "groups": {
+              "man": {
+                "rates": {
+                  "pairs": 5559,
+                  "selected": 1135.0,
+                  "selection_rate": 0.20417341248425977,
+                  "qualified": 959,
+                  "true_positive_rate": 0.7799791449426486
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              },
+              "nonbinary": {
+                "rates": {
+                  "pairs": 532,
+                  "selected": 114.0,
+                  "selection_rate": 0.21428571428571427,
+                  "qualified": 104,
+                  "true_positive_rate": 0.7596153846153846
+                },
+                "disparate_impact": {
+                  "value": 1.0495280050346127,
+                  "low": 0.8802558034654508,
+                  "high": 1.2249906807507274
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.020363760327264058,
+                  "low": -0.10230261359108175,
+                  "high": 0.061211058520150234
+                }
+              },
+              "woman": {
+                "rates": {
+                  "pairs": 3909,
+                  "selected": 751.0,
+                  "selection_rate": 0.19212074699411613,
+                  "qualified": 636,
+                  "true_positive_rate": 0.7704402515723271
+                },
+                "disparate_impact": {
+                  "value": 0.9409684868196401,
+                  "low": 0.8652161645942911,
+                  "high": 1.0229645401239045
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.009538893370321544,
+                  "low": -0.04848312904374776,
+                  "high": 0.03118816735455738
+                }
+              }
+            }
+          },
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 1.1577932064468526,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1018,
+                  "selected": 232.0,
+                  "selection_rate": 0.22789783889980353,
+                  "qualified": 212,
+                  "true_positive_rate": 0.7924528301886793
+                },
+                "disparate_impact": {
+                  "value": 1.1577932064468526,
+                  "low": 0.9753217698179506,
+                  "high": 1.3418067952595503
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.019756125413965098,
+                  "low": -0.04355365002784348,
+                  "high": 0.08030168046985448
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 8982,
+                  "selected": 1768.0,
+                  "selection_rate": 0.19683812068581608,
+                  "qualified": 1487,
+                  "true_positive_rate": 0.7726967047747142
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "ndcg_at_10_minus_matcher": {
+        "mean": -0.0009989164106214523,
+        "95ci": [
+          -0.00679764968859469,
+          0.00455395034735486
+        ],
+        "jobs_better": 67,
+        "jobs_equal": 67,
+        "jobs_worse": 66
+      }
+    },
+    "reweighing": {
+      "ndcg_at_10": 0.800975572654675,
+      "ndcg_at_10_95ci": [
+        0.7837792314915504,
+        0.8183575340541224
+      ],
+      "at_k": {
+        "5": {
+          "gender": {
+            "reference": "man",
+            "min_disparate_impact": 0.895851358509358,
+            "groups": {
+              "man": {
+                "rates": {
+                  "pairs": 5559,
+                  "selected": 581.0,
+                  "selection_rate": 0.1045152005756431,
+                  "qualified": 959,
+                  "true_positive_rate": 0.4880083420229406
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              },
+              "nonbinary": {
+                "rates": {
+                  "pairs": 532,
+                  "selected": 53.0,
+                  "selection_rate": 0.09962406015037593,
+                  "qualified": 104,
+                  "true_positive_rate": 0.4326923076923077
+                },
+                "disparate_impact": {
+                  "value": 0.9532016357589326,
+                  "low": 0.7009829939089754,
+                  "high": 1.207113149263458
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.05531603433063287,
+                  "low": -0.15476100490585715,
+                  "high": 0.04387974180175932
+                }
+              },
+              "woman": {
+                "rates": {
+                  "pairs": 3909,
+                  "selected": 366.0,
+                  "selection_rate": 0.09363008442056792,
+                  "qualified": 636,
+                  "true_positive_rate": 0.46540880503144655
+                },
+                "disparate_impact": {
+                  "value": 0.895851358509358,
+                  "low": 0.7926589104715416,
+                  "high": 1.0088479082786412
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.02259953699149403,
+                  "low": -0.06586193169464297,
+                  "high": 0.020957096357818974
+                }
+              }
+            }
+          },
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 1.260454673028347,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1018,
+                  "selected": 125.0,
+                  "selection_rate": 0.12278978388998035,
+                  "qualified": 212,
+                  "true_positive_rate": 0.49056603773584906
+                },
+                "disparate_impact": {
+                  "value": 1.260454673028347,
+                  "low": 1.0114217080399577,
+                  "high": 1.5320738866498425
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.016457093552930457,
+                  "low": -0.053670689562671854,
+                  "high": 0.08806035249488008
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 8982,
+                  "selected": 875.0,
+                  "selection_rate": 0.097417056334892,
+                  "qualified": 1487,
+                  "true_positive_rate": 0.4741089441829186
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        },
+        "10": {
+          "gender": {
+            "reference": "man",
+            "min_disparate_impact": 0.9125263207901289,
+            "groups": {
+              "man": {
+                "rates": {
+                  "pairs": 5559,
+                  "selected": 1147.0,
+                  "selection_rate": 0.2063320741140493,
+                  "qualified": 959,
+                  "true_positive_rate": 0.7872784150156413
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              },
+              "nonbinary": {
+                "rates": {
+                  "pairs": 532,
+                  "selected": 117.0,
+                  "selection_rate": 0.2199248120300752,
+                  "qualified": 104,
+                  "true_positive_rate": 0.75
+                },
+                "disparate_impact": {
+                  "value": 1.065877968679327,
+                  "low": 0.899614466672755,
+                  "high": 1.241646696965847
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.03727841501564133,
+                  "low": -0.12016044406289275,
+                  "high": 0.04433180989746363
+                }
+              },
+              "woman": {
+                "rates": {
+                  "pairs": 3909,
+                  "selected": 736.0,
+                  "selection_rate": 0.1882834484522896,
+                  "qualified": 636,
+                  "true_positive_rate": 0.7688679245283019
+                },
+                "disparate_impact": {
+                  "value": 0.9125263207901289,
+                  "low": 0.8419260181730518,
+                  "high": 0.9913523177548688
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.018410490487339448,
+                  "low": -0.05940561953513169,
+                  "high": 0.023344479331821356
+                }
+              }
+            }
+          },
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 1.1690966899322945,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1018,
+                  "selected": 234.0,
+                  "selection_rate": 0.22986247544204322,
+                  "qualified": 212,
+                  "true_positive_rate": 0.8113207547169812
+                },
+                "disparate_impact": {
+                  "value": 1.1690966899322945,
+                  "low": 0.9850728408614345,
+                  "high": 1.3566114484486005
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.03795155498597913,
+                  "low": -0.023655285786496096,
+                  "high": 0.09692420763055179
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 8982,
+                  "selected": 1766.0,
+                  "selection_rate": 0.19661545312847917,
+                  "qualified": 1487,
+                  "true_positive_rate": 0.773369199731002
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "ndcg_at_10_minus_matcher": {
+        "mean": -0.0029560203808173253,
+        "95ci": [
+          -0.00915218392126754,
+          0.0025111372141818503
+        ],
+        "jobs_better": 75,
+        "jobs_equal": 63,
+        "jobs_worse": 62
+      }
+    },
+    "drop_community_line_and_reweighing": {
+      "ndcg_at_10": 0.8036711266982027,
+      "ndcg_at_10_95ci": [
+        0.7856654628722739,
+        0.8212727839229791
+      ],
+      "at_k": {
+        "5": {
+          "gender": {
+            "reference": "man",
+            "min_disparate_impact": 0.9389365508398374,
+            "groups": {
+              "man": {
+                "rates": {
+                  "pairs": 5559,
+                  "selected": 571.0,
+                  "selection_rate": 0.10271631588415182,
+                  "qualified": 959,
+                  "true_positive_rate": 0.48279457768508866
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              },
+              "nonbinary": {
+                "rates": {
+                  "pairs": 532,
+                  "selected": 52.0,
+                  "selection_rate": 0.09774436090225563,
+                  "qualified": 104,
+                  "true_positive_rate": 0.4230769230769231
+                },
+                "disparate_impact": {
+                  "value": 0.9515952754039213,
+                  "low": 0.7201769059006996,
+                  "high": 1.1977309823986682
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.05971765460816558,
+                  "low": -0.15787803527993177,
+                  "high": 0.03648919763697032
+                }
+              },
+              "woman": {
+                "rates": {
+                  "pairs": 3909,
+                  "selected": 377.0,
+                  "selection_rate": 0.09644410335124072,
+                  "qualified": 636,
+                  "true_positive_rate": 0.4779874213836478
+                },
+                "disparate_impact": {
+                  "value": 0.9389365508398374,
+                  "low": 0.8271858099004352,
+                  "high": 1.0537504064803644
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.004807156301440851,
+                  "low": -0.050944977333896586,
+                  "high": 0.03961955009995473
+                }
+              }
+            }
+          },
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 1.283555789601604,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1018,
+                  "selected": 127.0,
+                  "selection_rate": 0.12475442043222004,
+                  "qualified": 212,
+                  "true_positive_rate": 0.49528301886792453
+                },
+                "disparate_impact": {
+                  "value": 1.283555789601604,
+                  "low": 1.0367236805875957,
+                  "high": 1.5559728665337418
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.020501579728718078,
+                  "low": -0.049080524570874466,
+                  "high": 0.09327217614598861
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 8982,
+                  "selected": 873.0,
+                  "selection_rate": 0.09719438877755511,
+                  "qualified": 1487,
+                  "true_positive_rate": 0.47478143913920645
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        },
+        "10": {
+          "gender": {
+            "reference": "man",
+            "min_disparate_impact": 0.9430523239681592,
+            "groups": {
+              "man": {
+                "rates": {
+                  "pairs": 5559,
+                  "selected": 1134.0,
+                  "selection_rate": 0.20399352401511064,
+                  "qualified": 959,
+                  "true_positive_rate": 0.7841501564129302
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              },
+              "nonbinary": {
+                "rates": {
+                  "pairs": 532,
+                  "selected": 114.0,
+                  "selection_rate": 0.21428571428571427,
+                  "qualified": 104,
+                  "true_positive_rate": 0.7596153846153846
+                },
+                "disparate_impact": {
+                  "value": 1.0504535147392289,
+                  "low": 0.883183860793869,
+                  "high": 1.2259576104262282
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.024534771797545596,
+                  "low": -0.10795938032215903,
+                  "high": 0.05903977628062996
+                }
+              },
+              "woman": {
+                "rates": {
+                  "pairs": 3909,
+                  "selected": 752.0,
+                  "selection_rate": 0.19237656689690458,
+                  "qualified": 636,
+                  "true_positive_rate": 0.7767295597484277
+                },
+                "disparate_impact": {
+                  "value": 0.9430523239681592,
+                  "low": 0.8690787066814482,
+                  "high": 1.0237644868867894
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.007420596664502455,
+                  "low": -0.04814766370445707,
+                  "high": 0.03347786530311408
+                }
+              }
+            }
+          },
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 1.180425804899563,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1018,
+                  "selected": 236.0,
+                  "selection_rate": 0.2318271119842829,
+                  "qualified": 212,
+                  "true_positive_rate": 0.8066037735849056
+                },
+                "disparate_impact": {
+                  "value": 1.180425804899563,
+                  "low": 0.9967007088297511,
+                  "high": 1.364531988490202
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.030544594028752314,
+                  "low": -0.03296614112440918,
+                  "high": 0.08963837761611931
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 8982,
+                  "selected": 1764.0,
+                  "selection_rate": 0.1963927855711423,
+                  "qualified": 1487,
+                  "true_positive_rate": 0.7760591795561533
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "ndcg_at_10_minus_matcher": {
+        "mean": -0.0002604663372896654,
+        "95ci": [
+          -0.007080902050384499,
+          0.006474540748538429
+        ],
+        "jobs_better": 80,
+        "jobs_equal": 42,
+        "jobs_worse": 78
+      }
+    }
+  },
   "python": "3.14.6",
   "scikit_learn": "1.9.0",
   "numpy": "2.4.6"
