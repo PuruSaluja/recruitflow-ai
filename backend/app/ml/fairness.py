@@ -49,6 +49,10 @@ def top_k_selection(job_refs: Sequence[str], scores: Sequence[float], k: int) ->
     1.0 above the cut, 0.0 below it, and a share for a tie group that straddles
     it. A slate of ``k`` or fewer pairs is shortlisted whole.
     """
+    # A shortlist holds whole places: 2.5 would share out half a place, and
+    # True would pass for 1.
+    if isinstance(k, bool) or not isinstance(k, int | np.integer):
+        raise TypeError(f"k must be a whole number, got {k!r}")
     if k < 1:
         raise ValueError(f"k must be at least 1, got {k}")
     scores_array = np.asarray(scores, dtype=float)
@@ -59,7 +63,7 @@ def top_k_selection(job_refs: Sequence[str], scores: Sequence[float], k: int) ->
             f"{refs.shape} and {scores_array.shape}"
         )
     if not np.all(np.isfinite(scores_array)):
-        raise ValueError("scores must be finite; NaN cannot be ranked")
+        raise ValueError("scores must be finite; NaN and infinity cannot be ranked")
 
     selected = np.zeros(len(scores_array), dtype=float)
     for ref in np.unique(refs):

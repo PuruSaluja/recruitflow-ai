@@ -70,9 +70,23 @@ def test_k_must_be_at_least_one(k: int) -> None:
         top_k_selection(["J1"], [0.5], k=k)
 
 
-def test_a_nan_score_is_refused() -> None:
-    with pytest.raises(ValueError, match="finite"):
-        top_k_selection(["J1", "J1"], [0.5, float("nan")], k=1)
+@pytest.mark.parametrize("k", [2.5, 2.0, True, "2"])
+def test_k_must_be_a_whole_number(k: object) -> None:
+    # 2.5 used to shortlist two and a half places a slate, and True one.
+    with pytest.raises(TypeError, match="k must be a whole number"):
+        top_k_selection(["J1"] * 4, [0.4, 0.3, 0.2, 0.1], k=k)
+
+
+def test_a_numpy_integer_k_is_accepted() -> None:
+    selected = top_k_selection(["J1"] * 3, [0.3, 0.2, 0.1], k=np.int64(2))
+
+    assert selected.tolist() == [1.0, 1.0, 0.0]
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_a_score_that_is_not_finite_is_refused_by_name(bad: float) -> None:
+    with pytest.raises(ValueError, match="NaN and infinity cannot be ranked"):
+        top_k_selection(["J1", "J1"], [0.5, bad], k=1)
 
 
 def test_refs_and_scores_of_different_lengths_are_refused() -> None:
