@@ -439,7 +439,7 @@ Choices in the text half, each pinned by a test:
 - **The job's own terms are not a block.** They are the same for every
   candidate on a slate, so they cannot reorder one.
 
-### The planted proxy is kept on purpose
+### The planted proxy
 
 The corpus plants a women-in-tech community line on some women's resumes, and
 the text half treats it like any other wording: `resume:women` is a column. On
@@ -459,16 +459,15 @@ same person would otherwise have written moves that pair's similarity by
 -0.0007 on average and never by more than 0.03, against a standard deviation
 of 0.22 across all pairs.
 
-The default configuration keeps these columns, and a model trained on past
-decisions is free to learn them. That is deliberate. Removing words by hand
-would be a mitigation nobody measured, and it relies on knowing which terms
-stand in for gender: deleting `women` alone would leave the other two, and real
-resumes carry stand-ins this corpus never generates, such as names and email
-addresses, since its resumes contain no contact details. It would also hide
-exactly what the fairness audit is built to find. That audit (see *Fairness
-audit* below) measures it: a model trained on `advanced` scores every pair
+`PairFeaturiser` keeps these columns, so the fairness audit can measure what
+a model trained on past decisions does with them: it scores every pair
 carrying the planted line lower, and deleting the three words closes only a
-small part of the resulting gap.
+small part of the resulting gap. Removing words by hand relies on knowing
+which terms stand in for gender, and real resumes carry stand-ins this corpus
+never generates, such as names and email addresses. So the matcher the app
+serves does not delete words. It never reads a line headed `Community:` at
+all, and it is trained on reweighed pairs (see *Training pipeline* and
+*Fairness audit* below).
 
 ### Measured on the default corpus
 
@@ -511,7 +510,9 @@ real data, where being over-qualified may count for or against a candidate.
 `training_data` resolves a corpus's labelled pairs into objects and parallel
 label arrays, `split_by_job` holds out a share of jobs with their whole
 slates, and `make_matcher`/`train_matcher` build and fit a pipeline of
-`PairFeaturiser` → `LogisticRegression`, wrapped in `CalibratedClassifierCV`.
+featuriser → `LogisticRegression`, wrapped in `CalibratedClassifierCV`. The
+featuriser is a `PairFeaturiser` that skips every line headed `Community:`
+(`EXCLUDED_HEADINGS`), and `train_matcher` reweighs the training pairs.
 
 **The training target is `advanced`**, the past recruiter's call, not
 `relevance`. `relevance` is ground truth derived from `true_skills`, which no
@@ -520,21 +521,32 @@ real recruiting system has, and the planted bias lives entirely in
 nothing to find. `relevance` is carried beside the pairs for the ranking
 evaluation and never fitted.
 
+**The bias in that record is counteracted, not inherited.** Trained plainly
+on `advanced`, the matcher shortlisted qualified women 5.0 points less often
+than qualified men, averaged over nine audit runs, mostly through the planted
+community line. So the served matcher never reads a community line, and
+`train_matcher` weights each training pair so that gender and the past
+decision are independent (Kamiran and Calders' reweighing). Gender is read
+only to compute those weights, from the training corpus. It is never a
+feature, and scoring a candidate never needs it. The *Fairness audit* below
+gives the result.
+
 **The split is by job**, so a slate is never torn in half — ranking metrics
 are per job over a whole slate. The cost is candidate overlap: 84.5% of the
 default corpus's 1,844 held-out candidates also sit on a training slate.
-Measured, that overlap does not inflate the held-out score: on the 636 pairs
-whose job *and* candidate were both held out, a strictly-split model scores
-0.8022 ROC-AUC against this one's 0.8030 on the same pairs, while splitting
-that way discards 25.5% of the training pairs.
+Measured on the served matcher, that overlap does not inflate the held-out
+score: on the 392 held-out pairs whose candidate is on no training slate, a
+matcher trained without any held-out candidate scores 0.8431 ROC-AUC against
+this one's 0.8452, while leaving those candidates out of training discards
+45.7% of the training pairs.
 
 **Calibration wraps the whole pipeline** rather than sitting inside it, so
 each fold learns its own vocabulary instead of calibrating against resumes it
-was fitted on. **Sigmoid, not isotonic**: they calibrate this corpus equally
-well (log loss 0.3539 against 0.3528, Brier 0.1071 against 0.1068), but
-sigmoid is strictly monotone — isotonic returned 786 distinct probabilities
-over 2,500 held-out pairs against sigmoid's 2,500, and every tie is two
-candidates a ranking then has to separate arbitrarily. Nothing is tuned: the
+was fitted on. **Sigmoid, not isotonic**: they calibrate this corpus about
+equally well (Brier 0.1072 against 0.1068, log loss 0.3538 against 0.3658),
+but sigmoid is strictly monotone — isotonic returned 851 distinct
+probabilities over 2,500 held-out pairs against sigmoid's 2,500, and every
+tie is two candidates a ranking then has to separate arbitrarily. Nothing is tuned: the
 estimators keep scikit-learn's defaults.
 
 ### Persisting the matcher
@@ -580,9 +592,9 @@ corpus, `--test-share 0.25 --split-seed 0`, both scikit-learn's defaults):
 | | |
 | --- | --- |
 | Trained on / held out | 7,500 pairs across 150 jobs / 2,500 pairs across 50 jobs |
-| Held-out ROC-AUC vs `advanced` | 0.7829 |
-| Held-out ROC-AUC vs `relevance >= 1` (reference only; never fitted) | 0.9427 |
-| Mean predicted probability vs training base rate | 0.1498 vs 0.1508 |
+| Held-out ROC-AUC vs `advanced` | 0.7832 |
+| Held-out ROC-AUC vs `relevance >= 1` (reference only; never fitted) | 0.9435 |
+| Mean predicted probability vs training base rate | 0.1503 vs 0.1508 |
 
 `relevance`'s ROC-AUC is higher because it is the easier, unbiased target the
 generator itself defines; the matcher is not trained on it. These numbers are
@@ -600,13 +612,13 @@ run on the default matcher, written to
 
 | 50 held-out jobs, 2,500 pairs | NDCG@10 | P@5 |
 | --- | --- | --- |
-| Matcher | 0.8024 (95% CI 0.7668–0.8353) | 0.7760 (0.7160–0.8280) |
+| Matcher | 0.8110 (95% CI 0.7754–0.8444) | 0.7960 (0.7400–0.8480) |
 | Random ranking (exact expectation) | 0.1638 | 0.1744 |
 | `required_skill_coverage` alone | 0.6533 | 0.6419 |
-| Same pipeline fitted on `relevance >= 1` (reference; no real system has it) | 0.8382 | 0.8360 |
+| Same pipeline fitted on `relevance >= 1` (reference; no real system has it) | 0.8441 | 0.8400 |
 
 Over ten splits of the same corpus (the matcher's own and nine retrained),
-NDCG@10 is 0.8063 ± 0.0231 and P@5 0.8012 ± 0.0227 (mean ± std). The metric
+NDCG@10 is 0.8102 ± 0.0198 and P@5 0.8084 ± 0.0199 (mean ± std). The metric
 definitions, the tie handling and what these numbers cannot show are in
 [`docs/model_evaluation.md`](docs/model_evaluation.md).
 
@@ -965,8 +977,14 @@ alternating between them:
 
 For the same job, both servers returned the same ranks, scores and features
 for the 500 best, the most one response carries. Run in-process, all 4,000
-matched exactly for six jobs, and a matcher retrained on the new code is
-byte-identical to the old one, so its version and every figure above stand.
+matched exactly for six jobs, and a matcher retrained on the new code was
+byte-identical to the old one.
+
+The timings above were measured on the matcher before it stopped reading
+community lines and started training on reweighed pairs (2026-10-09). Run
+in-process on 4,000 candidates for each of six jobs, alternating, the old
+matcher scored in a median of 915 ms and the new one in 943 ms, so the
+server times above should be read as about 3% low.
 
 Timed without a profiler, in-process and without the database, skill
 normalisation was 48-52% of the scoring work on the old code in three runs,

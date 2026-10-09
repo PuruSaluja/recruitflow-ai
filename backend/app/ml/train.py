@@ -36,10 +36,11 @@ The split is **by job**: every pair on a job's slate lands on the same side.
 Ranking metrics are per job over a whole slate, so a slate torn between train
 and test cannot be scored at all. The cost is that a candidate may sit on one
 slate in training and another in test -- 84.5% of test candidates do, on the
-default corpus. Measured, that overlap does not inflate the held-out score: on
-pairs whose job *and* candidate were both held out, a model trained the strict
-way scores 0.8022 ROC-AUC and this job-split model scores 0.8030 on the same
-pairs, while the strict split would throw away 25% of the training pairs.
+default corpus. Measured on the served matcher, that overlap does not inflate
+the held-out score: on the 392 held-out pairs whose candidate is on no
+training slate, a matcher trained without any held-out candidate scores
+0.8431 ROC-AUC and this job-split one 0.8452, while leaving those candidates
+out of training would throw away 45.7% of the training pairs.
 
 The classifier is logistic regression: the matrix is sparse and mostly TF-IDF
 columns, its coefficients name the term they weigh (which is what the fairness
@@ -68,13 +69,13 @@ TRAINING_LABEL = "advanced"
 #: Share of jobs held out by default.
 DEFAULT_TEST_SHARE = 0.25
 
-#: How probabilities are calibrated. Sigmoid and isotonic calibrate this corpus
-#: equally well (Brier 0.1071 against 0.1068, log loss 0.3539 against 0.3528),
-#: but sigmoid is strictly monotone, so calibrating cannot reorder a slate or
-#: tie two candidates together. Isotonic is a step function: on the same 2,500
-#: held-out pairs it returned 786 distinct probabilities against sigmoid's
-#: 2,500, and every tie is a pair of candidates a ranking has to separate
-#: arbitrarily.
+#: How probabilities are calibrated. On the served matcher's 2,500 held-out
+#: pairs sigmoid and isotonic calibrate about equally well (Brier 0.1072
+#: against 0.1068, log loss 0.3538 against 0.3658), but sigmoid is strictly
+#: monotone, so calibrating cannot reorder a slate or tie two candidates
+#: together. Isotonic is a step function: it returned 851 distinct
+#: probabilities against sigmoid's 2,500, and every tie is a pair of candidates
+#: a ranking has to separate arbitrarily.
 CALIBRATION_METHOD = "sigmoid"
 
 #: Lines the served matcher never reads, matched at the start of a line after

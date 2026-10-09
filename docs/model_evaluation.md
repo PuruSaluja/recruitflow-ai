@@ -28,7 +28,7 @@ candidates or real hiring.
 
 | | |
 | --- | --- |
-| Matcher | `04a562c4f2c1837e` (content hash of `matcher.joblib`), trained by `scripts/train_matcher.py` on the default corpus |
+| Matcher | `cb0b877b6182d568` (content hash of `matcher.joblib`), trained by `scripts/train_matcher.py` on the default corpus, with community lines unread and the training pairs reweighed against gender (see [`fairness_audit.md`](fairness_audit.md)) |
 | Corpus | seed 42, 200 jobs, 4,000 candidates, slates of 50 |
 | Training label | `advanced`, the simulated past recruiter decision |
 | Held out | 50 jobs (`--test-share 0.25 --split-seed 0`), each with its whole slate: 2,500 pairs |
@@ -37,7 +37,7 @@ candidates or real hiring.
 
 The script regenerates the corpus from the matcher's manifest, holds out the
 same jobs, and first recomputes the held-out ROC-AUC the training run recorded
-in that manifest (0.7829). It refuses to report anything if the two differ.
+in that manifest (0.7832). It refuses to report anything if the two differ.
 
 The version is a hash of the file, so it names exactly what was measured, but
 a retrain from the same config can hash differently: scikit-learn's TF-IDF
@@ -68,51 +68,53 @@ first is what the matcher is for.
 
 | Scorer | NDCG@10 | P@5 | ROC-AUC vs `advanced` | ROC-AUC vs `relevance >= 1` |
 | --- | --- | --- | --- | --- |
-| **Matcher** | **0.8024** (0.7668–0.8353) | **0.7760** (0.7160–0.8280) | **0.7829** | **0.9427** |
+| **Matcher** | **0.8110** (0.7754–0.8444) | **0.7960** (0.7400–0.8480) | **0.7832** | **0.9435** |
 | Random ranking (exact expectation) | 0.1638 | 0.1744 | 0.5000 | 0.5000 |
 | `required_skill_coverage` alone, untrained | 0.6533 (0.6064–0.6974) | 0.6419 (0.5753–0.7022) | 0.7480 | 0.8826 |
-| Same pipeline fitted on `relevance >= 1` (reference only) | 0.8382 (0.8068–0.8676) | 0.8360 (0.7840–0.8840) | 0.7922 | 0.9567 |
+| Same pipeline fitted on `relevance >= 1`, unweighted (reference only) | 0.8441 (0.8119–0.8733) | 0.8400 (0.7920–0.8840) | 0.7922 | 0.9568 |
 
 Against `relevance == 2` (strong fits only) the matcher's pooled ROC-AUC is
-0.9429.
+0.9450.
 
 Read plainly:
 
-- **The matcher ranks far above chance.** About 3.9 of its top five
-  candidates per job are relevant on average (P@5 0.7760), against 0.87 for a
+- **The matcher ranks far above chance.** About 4.0 of its top five
+  candidates per job are relevant on average (P@5 0.7960), against 0.87 for a
   random order on the same slates.
 - **The model adds a good deal over required-skill coverage alone.**
   Ranking by that one feature gets NDCG@10 0.6533; the trained matcher gets
-  0.8024, and the two intervals do not overlap. It was chosen up front as the
+  0.8110, and the two intervals do not overlap. It was chosen up front as the
   obvious recruiter heuristic and is the only single feature in the JSON. A
   one-off check during review, which the script does not repeat, ranked these
   jobs by each of the nine named features alone: this one scored highest on
   NDCG@10 and P@5, with skill Jaccard close behind.
 - **Learning from past decisions costs something, on this corpus.** The same
-  pipeline fitted on the ground truth instead scores 0.8382 NDCG@10 and 0.8360
-  P@5, 0.036 and 0.060 above the matcher. Its intervals overlap the matcher's,
+  pipeline fitted on the ground truth instead scores 0.8441 NDCG@10 and 0.8400
+  P@5, 0.033 and 0.044 above the matcher. Its intervals overlap the matcher's,
   and this is one split with no paired test, so the size of the gap is not
   pinned down. It is also not a fair competitor: no real system has
   ground-truth labels, which is why the matcher is not trained that way (see
   `app/ml/train.py`). The gap mixes two causes, the noise of any recruiter
-  decision and the planted bias against women in `advanced`; this evaluation
-  does not separate them. The fairness audit is where the bias is measured.
+  decision and the planted bias against women in `advanced`, which the
+  matcher's training counteracts; this evaluation does not separate them. The
+  fairness audit is where the bias is measured.
 
 ## Spread across splits
 
 Which 50 jobs land in the held-out set moves these numbers. The script
-retrains the same pipeline, on the same label, on nine more splits of the same
-corpus (`--split-seed` 1 to 9) and measures each on its own held-out jobs:
+retrains the matcher the same way, on the same label, on nine more splits of
+the same corpus (`--split-seed` 1 to 9) and measures each on its own held-out
+jobs:
 
 | Over 10 splits | Mean | Std | Min | Max |
 | --- | --- | --- | --- | --- |
-| NDCG@10 | 0.8063 | 0.0231 | 0.7662 | 0.8521 |
-| P@5 | 0.8012 | 0.0227 | 0.7520 | 0.8280 |
-| ROC-AUC vs `advanced` | 0.7836 | 0.0082 | 0.7698 | 0.7941 |
-| ROC-AUC vs `relevance >= 1` | 0.9498 | 0.0034 | 0.9427 | 0.9549 |
+| NDCG@10 | 0.8102 | 0.0198 | 0.7814 | 0.8462 |
+| P@5 | 0.8084 | 0.0199 | 0.7640 | 0.8360 |
+| ROC-AUC vs `advanced` | 0.7833 | 0.0080 | 0.7688 | 0.7927 |
+| ROC-AUC vs `relevance >= 1` | 0.9506 | 0.0034 | 0.9435 | 0.9559 |
 
 The persisted matcher's split (seed 0) is typical for NDCG@10 and somewhat
-below the mean for P@5 (0.7760 against 0.8012); it also has the lowest ROC-AUC
+below the mean for P@5 (0.7960 against 0.8084); it also has the lowest ROC-AUC
 against `relevance` of the ten. The headline figures above are that one
 matcher's, since it is the one the API serves.
 
@@ -173,7 +175,7 @@ Read plainly:
   the hybrid beats dense on 46; on the other 147, on 41. Weighting the sides,
   or another `k`, might change the overall result, but choosing either on
   these same jobs would be tuning on the test set, so neither was tried.
-- **All three sit well below the trained matcher** (0.8024 on the held-out
+- **All three sit well below the trained matcher** (0.8110 on the held-out
   jobs). These scorers read only the text, while the matcher also has
   engineered features over the structured fields (skill coverage, experience,
   seniority, education) and learns their weights. Dense alone is about level
