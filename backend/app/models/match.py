@@ -61,8 +61,9 @@ class MatchScore(Base):
         ForeignKey("candidates.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
-    #: Calibrated probability, in [0, 1], that a past recruiter would have
-    #: advanced this candidate for this job -- the label the matcher learns.
+    #: Calibrated probability, in [0, 1], that this candidate would be advanced
+    #: for this job, learned from past recruiters' decisions reweighed so that
+    #: gender and the decision are independent (see ``app.ml.train``).
     score: Mapped[float] = mapped_column(Float, nullable=False)
     #: 1-based position within the pool this row was last scored in, which
     #: may be a subset of the job's candidates.

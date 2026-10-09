@@ -87,7 +87,8 @@ class RankedCandidate(BaseModel):
         le=1.0,
         description=(
             "Calibrated probability that this candidate would be advanced, learned from "
-            "past recruiter decisions"
+            "past recruiter decisions reweighed so that gender and the decision are "
+            "independent"
         ),
     )
     scored_at: datetime

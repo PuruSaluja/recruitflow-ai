@@ -4,16 +4,21 @@ Who reaches the top of a slate, by gender and by age band, measured by
 [`scripts/audit_fairness.py`](../scripts/audit_fairness.py) with the metrics
 in [`backend/app/ml/fairness.py`](../backend/app/ml/fairness.py) and the
 mitigations in [`backend/app/ml/mitigation.py`](../backend/app/ml/mitigation.py).
-Every number below is copied from [`fairness_audit.json`](fairness_audit.json),
-which that script wrote in one run (a second run wrote the same JSON). There
-are four exceptions, each marked where it appears: the single-split figure
-in *Why out of fold*, the share of women's resumes carrying the planted line,
-the fit of qualified men and women in *Where the women's gap comes from*, and
-the word weights in *Mitigations*. To regenerate the JSON (about 13
-minutes on a laptop):
+Every number below is copied from one of two JSON files the script wrote:
+[`fairness_audit.json`](fairness_audit.json), the nine runs the served
+matcher's configuration was chosen on, and
+[`fairness_audit_fresh.json`](fairness_audit_fresh.json), eight runs that
+played no part in the choice. A second run of the first wrote the same JSON.
+There are five exceptions, each marked where it appears: the single-split
+figure in *Why out of fold*, the share of women's resumes carrying the planted
+line, the fit of qualified men and women in *Where the women's gap comes
+from*, the word weights in *How the configuration was chosen*, and the
+experience figures in *Other groups*. To regenerate both (about 13 minutes
+each on a laptop):
 
 ```
 python scripts/audit_fairness.py
+python scripts/audit_fairness.py --fold-seed 5 --fold-seeds 6 7 8 --corpus-seeds 5 6 7 8 --out docs/fairness_audit_fresh.json
 ```
 
 **All of this is measured on synthetic data.** The candidates, their gender
@@ -22,6 +27,34 @@ and age band, the ground truth and both planted biases come from
 show whether it finds a bias of known origin and whether a mitigation removes
 it. It says nothing about bias in real hiring. The last section says what it
 can and cannot establish.
+
+## The result
+
+The past decisions the matcher learns from are biased against women, as
+planted. Trained plainly on them, the matcher carried part of that bias into
+its shortlists: qualified women made a top 5 4.6 to 5.0 points less often
+than qualified men, averaged over runs, and 6 of 8 fresh runs' intervals
+excluded zero. **The matcher the app serves never reads a resume's community
+line and is trained on reweighed pairs.** With both:
+
+| Women against men, equal-opportunity difference | Top 5 | Top 10 |
+| --- | --- | --- |
+| Served matcher, 9 runs it was chosen on: mean (runs whose interval excludes zero) | −0.011 (0 of 9) | −0.018 (0 of 9) |
+| Served matcher, 8 fresh runs | −0.013 (0 of 8) | −0.010 (0 of 8) |
+| Without the mitigation, 9 runs | −0.050 (5 of 9) | −0.046 (6 of 9) |
+| Without the mitigation, 8 fresh runs | −0.046 (6 of 8) | −0.040 (6 of 8) |
+
+No interval for women, at either cut-off, excludes zero in any of the 17
+runs, and none for nonbinary candidates does in the 8 fresh runs. Ranking
+quality is unchanged: in no run is the served matcher's NDCG@10 measurably
+lower than the unmitigated one's.
+
+"No gap that can be told from zero" is the claim, not "no gap". Even a model
+fitted on the generator's ground truth, which learns from no biased label at
+all, shows gaps of several points either way from corpus to corpus. The
+served matcher's figures sit in the same range as that model's. Over-40s are
+shortlisted more often than under-40s in some runs, under every model
+including that one; *Other groups* explains why.
 
 ## What was measured
 
@@ -33,7 +66,8 @@ can and cannot establish.
 | Scores | out of fold: the 200 jobs dealt into 4 folds, each scored by a matcher trained on the other three |
 | Shortlist | each slate's top 5, and its top 10 |
 | Intervals | 95% percentile bootstrap over jobs, 2,000 resamples |
-| Repeats | the whole audit again on 4 other fold seeds of this corpus (1–4) and on 4 other corpora (seeds 1–4, fold seed 0): 9 runs in all |
+| Runs the configuration was chosen on | the main run (fold seed 0), 4 other fold seeds of this corpus (1–4) and 4 other corpora (seeds 1–4, fold seed 0) |
+| Fresh runs | this corpus on fold seeds 5–8, and corpora 5–8 on fold seed 5 |
 | Environment | CPython 3.14.6, scikit-learn 1.9.0, numpy 2.4.6 |
 
 The matcher does not accept or reject anyone. It orders a slate and a
@@ -63,19 +97,18 @@ experience. So a ratio somewhat off 1 is expected even from a fair ranker, and
 the equal-opportunity difference is the fairer read.
 
 **Why out of fold.** One train/test split holds out only 50 jobs. On those
-(the persisted matcher's split), a separate check found women's ratio at
-k = 5 to be 0.991 with an interval of 0.78 to 1.26, too wide to say anything.
-Scoring every job with a matcher that never saw its labels quadruples the
-pairs. It audits the training procedure, of which the persisted matcher is
-one run.
+(the persisted matcher's split, before the mitigation), a separate check found
+women's ratio at k = 5 to be 0.991 with an interval of 0.78 to 1.26, too wide
+to say anything. Scoring every job with a matcher that never saw its labels
+quadruples the pairs. It audits the training procedure, of which the
+persisted matcher is one run.
 
 **Why repeat it.** The intervals cover which jobs were sampled, not which
 jobs each model was trained on, nor which corpus the generator drew. Both
-move the figures. The fold seed alone moves the matcher's top-5
+move the figures: the fold seed alone moves the unmitigated matcher's top-5
 equal-opportunity difference for women between −0.057 and −0.078 on this
 corpus. So the sections below report the main run (corpus seed 42, fold seed
-0) in detail. *How much it moves between runs* then gives every key figure
-over all nine runs, and the conclusions rest on that section.
+0) in detail, and the conclusions rest on the repeats.
 
 ## The record the matcher learns from
 
@@ -101,7 +134,10 @@ simulated decisions moves it several points either side of 0.75. The
 equal-opportunity difference finds the bias on all five corpora: −0.125 to
 −0.149, every interval excluding zero.
 
-## The matcher
+## The matcher without the mitigation
+
+The same classifier, trained on `advanced` with every line of every resume
+read and no weights:
 
 | Top k | Group | Selection rate | Ratio | Four-fifths | Equal-opportunity difference |
 | --- | --- | --- | --- | --- | --- |
@@ -114,27 +150,12 @@ equal-opportunity difference finds the bias on all five corpora: −0.125 to
 | 10 | Nonbinary | 22.2% | 1.057 (0.893–1.226) | passes | −0.033 (−0.112 to 0.046) |
 | 10 | 40 and over | 22.1% | 1.118 (0.940–1.295) | passes | +0.013 (−0.048 to 0.072) |
 
-Its NDCG@10 over all 200 jobs is 0.8039 (0.7869–0.8213).
-
-The gap is smaller than the record's, though a decision on every pair and a
-place in a top k are not directly comparable, and it is not closed. Women's
-ratio passes the four-fifths rule at both cut-offs. At k = 5, though, the
-interval reaches down to 0.734, so this run cannot rule out a ratio below
-0.8. The clearer finding is the equal-opportunity difference: at k = 5,
-qualified women make the shortlist 6.3 points less often than qualified men
-(44.0% against 50.4%), and the interval excludes zero. At k = 10 the gap is
-smaller and its interval just reaches zero.
-
-Over all nine runs the matcher's top-5 difference is negative every time,
-from −0.017 to −0.078, with a mean of −0.050. Its interval excludes zero on
-all five splits of this corpus but on none of the four other corpora. This
-corpus is a harsher draw than most. The ratio never fails the four-fifths
-rule (0.803 to 1.090).
-
-Neither the nonbinary group nor the over-40 group shows a gap whose interval
-excludes zero. The nonbinary group is small (104 qualified pairs), so its
-intervals are wide: at k = 5 the equal-opportunity difference could be
-anywhere from −0.133 to +0.068.
+Its NDCG@10 over all 200 jobs is 0.8039 (0.7869–0.8213). At k = 5 qualified
+women make the shortlist 6.3 points less often than qualified men (44.0%
+against 50.4%), and the interval excludes zero. Over the nine runs its top-5
+difference is negative every time, from −0.017 to −0.078; the interval
+excludes zero on all five splits of this corpus but on none of the four other
+corpora, so this corpus is a harsher draw than most.
 
 ## Where the women's gap comes from
 
@@ -146,10 +167,10 @@ from the rest:
 
 | Top 5, women against men | Ratio | Equal-opportunity difference | NDCG@10 |
 | --- | --- | --- | --- |
-| Matcher | 0.828 | −0.063 (−0.107 to −0.021) | 0.8039 |
+| Without the mitigation | 0.828 | −0.063 (−0.107 to −0.021) | 0.8039 |
 | Same matchers, every planted line swapped for its neutral one | 0.932 | −0.010 (−0.057 to 0.034) | |
-| Matcher trained on the same corpus without the historical bias (reference) | 0.891 | −0.030 (−0.078 to 0.017) | 0.8080 |
-| Pipeline fitted on ground truth (reference; no real system has it) | 0.933 | −0.026 (−0.069 to 0.017) | 0.8313 |
+| Trained on the same corpus without the historical bias (reference) | 0.891 | −0.030 (−0.078 to 0.017) | 0.8080 |
+| Fitted on ground truth (reference; no real system has it) | 0.933 | −0.026 (−0.069 to 0.017) | 0.8313 |
 
 **The swap is the causal measurement.** Generating the corpus with
 `proxy_share=0` gives the same people, slates and labels; the script checks
@@ -161,152 +182,163 @@ average (median 0.020). No other pair's score moves at all. Those pairs make
 a top 5 9.1% of the time with the neutral line and 5.2% with the planted one.
 Swapping the line accounts for most of the women's gap: the equal-opportunity
 difference goes from −0.063 to −0.010 in this run, and from a mean of −0.050
-to a mean of −0.012 over the nine runs, where no swapped run's interval
-excludes zero.
+to a mean of −0.012 over the nine runs. The served matchers, scored the same
+way, do not move at all: the largest change in any served score is 0.0.
 
-The two references bracket what is left. Trained without the historical bias,
-the same pipeline still shows −0.030 in this run, and fitted on ground truth
-it shows −0.026. Neither interval excludes zero. The repeats say more about
-that residual. On all five splits of this corpus, the pipeline fitted on
-ground truth shows −0.026 to −0.033, though it learns from no biased label.
-On the other four corpora it shows −0.031 to +0.044, with a mean over all
-nine runs of −0.013. So about −0.03 of women's gap on this corpus belongs to
-the corpus, not to the matcher or its training labels. Once the proxy is
-removed, the gaps that remain on this corpus are about that size.
+The two references bracket what is left. On all five splits of this corpus,
+the pipeline fitted on ground truth shows −0.026 to −0.033, though it learns
+from no biased label; on the other four corpora it shows −0.031 to +0.044.
+So about −0.03 of women's gap on this corpus belongs to the corpus, not to
+the matcher or its training labels. A likely reason, from a separate check
+not in the JSON: this corpus's qualified women are slightly weaker fits than
+its qualified men (mean ground-truth fit 0.559 against 0.563; 36.6% strong
+against 37.5%). On the two corpora where qualified women are clearly the
+stronger (seeds 1 and 2), the reference's difference is positive. The
+relation is loose, though: corpus 3 has weaker qualified women and a positive
+difference. So this is an explanation that fits, not one that was shown.
 
-A likely reason, from a separate check not in the JSON: this corpus's
-qualified women are slightly weaker fits than its qualified men (mean
-ground-truth fit 0.559 against 0.563; 36.6% strong against 37.5%). On the
-two corpora where qualified women are clearly the stronger (seeds 1 and 2),
-the reference's difference is positive. The relation is loose, though:
-corpus 3 has weaker qualified women and a positive difference. So this is an
-explanation that fits, not one that was shown.
+## The served matcher
 
-## Mitigations
+`app.ml.train.train_matcher` skips every line headed `Community:` before
+vectorising, and weights each training pair so that, in the weighted data,
+gender and the past decision are independent (Kamiran and Calders, 2012). It
+reads each training candidate's gender only to compute those weights; gender
+is never a feature, and scoring a candidate never needs it. In the main run:
 
-Four ways to train the matcher differently, each audited the same way and
-compared with the matcher job by job on NDCG@10. None of them is used by the
-matcher the app serves.
+| Top k | Group | Selection rate | Ratio | Four-fifths | Equal-opportunity difference |
+| --- | --- | --- | --- | --- | --- |
+| 5 | Men | 10.3% | 1 | | 0 |
+| 5 | Women | 9.6% | 0.939 (0.827–1.054) | passes | −0.005 (−0.051 to 0.040) |
+| 5 | Nonbinary | 9.8% | 0.952 (0.720–1.198) | passes | −0.060 (−0.158 to 0.036) |
+| 5 | 40 and over | 12.5% | 1.284 (1.037–1.556) | passes | +0.021 (−0.049 to 0.093) |
+| 10 | Men | 20.4% | 1 | | 0 |
+| 10 | Women | 19.2% | 0.943 (0.869–1.024) | passes | −0.007 (−0.048 to 0.033) |
+| 10 | Nonbinary | 21.4% | 1.050 (0.883–1.226) | passes | −0.025 (−0.108 to 0.059) |
+| 10 | 40 and over | 23.2% | 1.180 (0.997–1.365) | passes | +0.031 (−0.033 to 0.090) |
+
+Its NDCG@10 is 0.8037 (0.7857–0.8213). Job by job it differs from the
+unmitigated matcher's by −0.0003 (−0.0071 to 0.0065), better on 80 jobs,
+equal on 42 and worse on 78. Every interval in the table includes zero, and
+every ratio passes the four-fifths rule.
+
+## How the configuration was chosen
+
+Four configurations were compared, each one or two changes to the unmitigated
+matcher and each audited on the same nine runs:
 
 - **Drop the proxy terms**: leave `women`, `bootcamp` and `member` out of the
   vocabulary. These are the only words that occur nowhere but in the planted
   lines; a test checks this.
 - **Drop the community line**: remove every line headed `Community:` before
   vectorising, whatever it says.
-- **Reweighing** (Kamiran and Calders, 2012): weight each training pair so
-  that, in the weighted data, gender and the past decision are independent.
-  It needs each training candidate's gender to compute the weights. The
-  model never sees gender as a feature, and scoring does not need it.
-- **Drop the community line and reweigh.**
+- **Reweighing** alone, with every line read.
+- **Both the line drop and reweighing**: the served matcher.
 
-| Top 5, women against men | Ratio | Equal-opportunity difference | NDCG@10 | NDCG@10 against the matcher, per job |
+| Women against men, over the nine runs | Top 5: mean | Runs excluding zero | Top 10: mean | Runs excluding zero |
 | --- | --- | --- | --- | --- |
-| Matcher | 0.828 (0.734–0.929) | −0.063 (−0.107 to −0.021) | 0.8039 | |
-| Drop the proxy terms | 0.848 (0.753–0.955) | −0.051 (−0.095 to −0.008) | 0.8021 | −0.0019 (−0.0068 to 0.0018) |
-| Drop the community line | 0.938 (0.833–1.052) | −0.012 (−0.058 to 0.031) | 0.8029 | −0.0010 (−0.0068 to 0.0046) |
-| Reweighing | 0.896 (0.793–1.009) | −0.023 (−0.066 to 0.021) | 0.8010 | −0.0030 (−0.0092 to 0.0025) |
-| Drop the line and reweigh | 0.939 (0.827–1.054) | −0.005 (−0.051 to 0.040) | 0.8037 | −0.0003 (−0.0071 to 0.0065) |
+| Without the mitigation | −0.050 | 5 | −0.046 | 6 |
+| Drop the proxy terms | −0.043 | 5 | −0.035 | 4 |
+| Drop the community line | −0.014 | 0 | −0.021 | 1 |
+| Reweighing | −0.028 | 3 | −0.023 | 2 |
+| Both (served) | −0.011 | 0 | −0.018 | 0 |
+| Every planted line swapped for its neutral one | −0.012 | 0 | −0.020 | 1 |
 
-At k = 10 the order is the same. Women's equal-opportunity difference is
-−0.0378 for the matcher, −0.0221 with the terms dropped, −0.0095 with the
-line dropped, −0.0184 with reweighing and −0.0074 with both.
-
-This table is the main run. Over all nine runs (see *How much it moves
-between runs*) the mean top-5 difference is −0.050 for the matcher, −0.043
-with the terms dropped, −0.014 with the line dropped, −0.028 with
-reweighing and −0.011 with both.
+The rule was fixed before looking at any fresh run: serve the configuration
+with no women's interval excluding zero at either cut-off in any of the nine
+runs, and accept it only if that held on fresh runs too. Only the
+combination met it. Dropping the line alone came closest, missing once at
+k = 10 (corpus 4: −0.046, interval −0.085 to −0.004). On the eight fresh runs the
+combination held (see *Checked on fresh runs*).
 
 **Deleting the proxy words is the weakest fix.** It is the obvious one, and
-it removes every word the planted lines have to themselves. Yet the gap at
-k = 5 only shrinks from −0.063 to −0.051 in this run, and its interval still
-excludes zero, as it does on 5 of the 9 runs, the same count as the
-matcher's. The planted lines' other words appear elsewhere too: "organiser",
-"meetup", "mentor" and "coding" in the neutral community lines, and "data",
+it removes every word the planted lines have to themselves, yet it leaves a
+gap whose interval excludes zero in as many runs as no mitigation at all. The
+planted lines' other words appear elsewhere too: "organiser", "meetup",
+"mentor" and "coding" in the neutral community lines, and "data",
 "engineering", "network" and "in" in titles, duties and degrees. Once some
-women's lines use them, they carry a little of the signal.
+women's lines use them, they carry a little of the signal. A separate check,
+not in the JSON, shows this. It fits the classifier on all 10,000 pairs with
+the three words dropped, once on this corpus and once on the same corpus with
+no planted lines, and compares the weights. All 12 other words of the planted
+lines get a lower weight, for example `coding` −0.25 against +0.17,
+`network` −0.85 against −0.27 and `organiser` −0.05 against +0.10. All 12
+words that only the neutral lines use get a higher one, for example `club`
++0.41 against −0.03 and `chess` +0.17 against −0.21. A word list fixes only
+the words someone thought to list.
 
-A separate check, not in the JSON, shows this. It fits the classifier on all
-10,000 pairs with the three words dropped, once on this corpus and once on
-the same corpus with no planted lines, and compares the weights. All 12 other
-words of the planted lines get a lower weight, for example `coding` −0.25
-against +0.17, `network` −0.85 against −0.27 and `organiser` −0.05 against
-+0.10. All 12 words that only the neutral lines use get a higher one, for
-example `club` +0.41 against −0.03 and `chess` +0.17 against −0.21. A word
-list fixes only the words someone thought to list.
+**Dropping the whole line does about as well as never having planted it**:
+over the nine runs it averages −0.014 at k = 5, against the swap's −0.012.
+On this corpus that is easy, because every such line starts with the same
+heading. Real resumes rarely label an interests or community section so
+reliably, and their names, email addresses and addresses carry the same kind
+of signal. The generated resumes carry no contact details, so that could not
+be measured here.
 
-**Dropping the whole line does about as well as never having planted it.** It
-gives 0.938 and −0.012, against 0.932 and −0.010 for the swap, at no
-measurable cost in ranking. Over the nine runs it averages −0.014 against the
-swap's −0.012, and neither has an interval excluding zero in any run. On this corpus that is easy, because every such
-line starts with the same heading. Real resumes rarely label an interests or
-community section so reliably, and their names, email addresses and
-addresses carry the same kind of signal. The generated resumes carry no
-contact details, so that could not be measured here.
+**Reweighing alone only about halves the gap.** It acts on the label rather
+than the text, so it works without knowing what carries the bias and would
+also act on proxies nobody has found. But with the line still read, its
+interval excludes zero in 3 of the nine runs at k = 5. Combined with the line
+drop, it removes the one remaining miss at k = 10.
 
-**Reweighing about halves the gap; it does not close it.** It acts on the
-label instead of the text, so it works without knowing what carries the
-bias, and would also act on proxies nobody has found. In this run it brings
-the gap to −0.023, an interval spanning zero. But over the nine runs it
-averages −0.028, and on 3 of them its interval still excludes zero (−0.046,
-−0.052 and −0.057, all on this corpus). The text still carries the line, and
-weights on the label cannot fully stop a model from learning from it.
-Combined with dropping the line it averages −0.011, no better than dropping
-the line alone (−0.014). In this run the combination happened to give the
-smallest gap, −0.005, but that does not repeat.
+**No configuration costs ranking quality.** Over the nine runs no
+configuration's NDCG@10 is measurably below the unmitigated matcher's in any
+run. The served one's per-job difference averages +0.0023 and is measurably
+*better* in one run.
 
-**No mitigation measurably costs ranking quality.** In this run no mean
-per-job NDCG@10 difference from the matcher is larger than 0.003, and every
-interval includes zero. Over the nine runs no mitigation's interval is below
-zero in any run. Dropping the line ranks measurably *better* than the
-matcher on 2 of them, and dropping the terms on 3. Women's ratio passes the
-four-fifths rule under every mitigation in this run, but every interval still
-reaches below 0.85. On this corpus, 200 jobs cannot pin a ratio down to
-better than about ±0.1.
+## Checked on fresh runs
 
-## How much it moves between runs
+Eight more runs, none of which played any part in the choice. For the served
+matcher, the unmitigated one and the reference fitted on ground truth:
 
-The whole audit was repeated on four other fold seeds of this corpus and on
-four other corpora. For women's top-5 shortlists, over the nine runs:
+| Equal-opportunity difference over the 8 fresh runs: mean (runs excluding zero) | Served | Without the mitigation | Fitted on ground truth |
+| --- | --- | --- | --- |
+| Women, top 5 | −0.013 (0) | −0.046 (6 below) | −0.010 (0) |
+| Women, top 10 | −0.010 (0) | −0.040 (6 below) | +0.001 (1 above) |
+| Nonbinary, top 5 | −0.035 (0) | −0.024 (0) | −0.032 (1 above) |
+| Nonbinary, top 10 | −0.021 (0) | −0.015 (0) | −0.033 (0) |
+| 40 and over, top 5 | +0.042 (1 above) | +0.049 (1 above) | +0.036 (1 above) |
+| 40 and over, top 10 | +0.045 (2 above) | +0.041 (2 above) | +0.050 (3 above) |
 
-| Top 5, women against men | Equal-opportunity difference: mean | Range | Runs whose interval excludes zero | Ratio: range |
-| --- | --- | --- | --- | --- |
-| Past decisions (every pair, not a top 5) | −0.140 | −0.149 to −0.125 | 9 below zero | 0.708 to 0.821 |
-| Matcher | −0.050 | −0.078 to −0.017 | 5 below zero | 0.803 to 1.090 |
-| Every planted line swapped for its neutral one | −0.012 | −0.038 to 0.025 | none | 0.897 to 1.212 |
-| Drop the proxy terms | −0.043 | −0.074 to −0.007 | 5 below zero | 0.831 to 1.127 |
-| Drop the community line | −0.014 | −0.035 to 0.028 | none | 0.892 to 1.212 |
-| Reweighing | −0.028 | −0.057 to 0.007 | 3 below zero | 0.848 to 1.159 |
-| Drop the line and reweigh | −0.011 | −0.031 to 0.025 | none | 0.912 to 1.215 |
-| Trained without the historical bias (reference) | −0.017 | −0.053 to 0.012 | 1 below zero | 0.870 to 1.190 |
-| Fitted on ground truth (reference) | −0.013 | −0.033 to 0.044 | 1 above zero | 0.918 to 1.148 |
+On fresh data the served matcher shows no interval excluding zero for women
+or nonbinary candidates at either cut-off, where the unmitigated matcher
+misses for women in 6 of 8 runs at each. Its NDCG@10 is never measurably
+different from the unmitigated matcher's (per-job mean +0.0019).
 
-What holds across the runs:
+## Other groups
 
-- The record is biased against qualified women in every run, by 12.5 to 14.9
-  points.
-- The matcher carries part of it into its shortlists in every run. The
-  interval excludes zero in five runs, all five on this corpus.
-- Removing the planted line, or dropping it before vectorising, leaves no gap
-  that can be told from zero in any run. The same is true of the two
-  references, apart from one run each.
-- Deleting the three proxy words and reweighing each leave a gap that, in
-  some runs, can still be told from zero.
-- No mitigation costs ranking quality in any run.
+**Nonbinary candidates** are 532 of the 10,000 pairs, about 100 of them
+qualified in a run, so their intervals are wide (in the main run, −0.158 to
++0.036 at k = 5). Over the nine runs the served matcher's top-10 difference
+averages −0.038 and excludes zero in one run. Every other model shows about
+the same: −0.042 for the pipeline fitted on ground truth, −0.045 without the
+mitigation. Gender is drawn independently of every qualification, and five of
+the nine runs share one corpus, so this reads as the corpora's small
+nonbinary group rather than anything the matcher learned. On the eight fresh
+runs no nonbinary interval excludes zero.
 
-How much the figures move is itself a finding. On one corpus, the fold seed
-alone moves the matcher's difference over 0.021 (−0.078 to −0.057). At one
-fold seed, the five corpora move it over 0.046 (−0.063 to −0.017). An audit
-of one model on one corpus, however tight its intervals over jobs, is one
-draw from that spread.
+**Over-40s are shortlisted more often** than under-40s in some runs, under
+every model, including the one fitted on ground truth: at k = 10, in 5 of the
+nine runs for the served matcher and 2 of the eight fresh ones, against 1
+and 3 for the ground-truth model. A separate check, not in the JSON, shows
+why. Among qualified pairs, under-40s fall short of the job's minimum years
+of experience in 9.1% to 11.9% of pairs on corpora 42, 6 and 8, and over-40s
+in 0% to 0.4%. Their mean ground-truth fit is correspondingly higher (0.582
+to 0.618 against 0.559 to 0.570). The generator's ground truth counts a
+shortfall in years against a candidate, so "qualified" over-40s are more
+often the stronger fits. This gap follows the jobs' own experience
+requirements. Removing it would mean ranking candidates who fall short of a
+job's minimum years above ones who meet it; that is a decision about the jobs'
+requirements, not something this matcher learned from biased decisions, and
+it has not been made here.
 
 ## What this audit can and cannot establish
 
 It can establish that the audit works. It recovers the planted historical
 bias at its known size (0.750 for 0.25). It finds that a model trained on the
-biased record carries part of it into its shortlists. And it traces most of
-that to the one feature the generator planted for the purpose. It also shows,
-over nine runs on five generated corpora, which mitigations remove the gap,
-which only shrink it, and that none costs measurable ranking quality.
+biased record carries part of it into its shortlists, and traces most of that
+to the one feature the generator planted for the purpose. And it shows, over
+17 runs on nine generated corpora, that the served configuration leaves no
+gap for women that can be told from zero, at no measurable cost in ranking.
 
 It cannot establish anything about real candidates or real hiring:
 
@@ -320,16 +352,18 @@ It cannot establish anything about real candidates or real hiring:
   inherit whatever bias that outcome carries.
 - **The proxy is planted, and there is only one.** Real resumes carry names,
   email domains, addresses, gaps, hobbies and phrasing. Any of them can stand
-  in for a protected attribute, and none is in this corpus.
+  in for a protected attribute, and none is in this corpus. Skipping a
+  `Community:` line only works because the generator labels it.
+- **Reweighing needs gender at training time.** The synthetic corpus has it.
+  A real deployment would need demographic data for its training set, with
+  the legal and consent questions that raises.
 - **The groups are coarse and few.** There are three genders and two age
-  bands, with no race or ethnicity, no disability, and no intersections. The
-  nonbinary group holds 532 of the 10,000 pairs, and its intervals span
-  about 20 points.
-- **Many comparisons are made.** The run reports 49 equal-opportunity
+  bands, with no race or ethnicity, no disability, and no intersections.
+- **Many comparisons are made.** The main run reports 49 equal-opportunity
   intervals for groups other than the reference. If there were no gap at
   all, two or three would exclude zero by chance. Five do. Three are women's
-  gaps with a known cause: the record, the matcher at k = 5, and the matcher
-  with the proxy terms dropped at k = 5. The other two have no mechanism in
+  gaps with a known cause: the record, and at k = 5 the unmitigated matcher
+  and the one with the proxy terms dropped. The other two have no mechanism in
   the generator and are best read as that noise: nonbinary candidates at
   k = 5 under the ground-truth pipeline (−0.125), and over-40s at k = 10
   under the unbiased-record matcher (+0.063).
@@ -337,5 +371,5 @@ It cannot establish anything about real candidates or real hiring:
   finding of fairness, and failing it is not a finding of discrimination.
   Here it missed a planted 25% bias in the record on two of five corpora.
 - **The intervals are per run.** They cover which jobs were sampled, not
-  which jobs a model was trained on or which corpus was drawn. The nine runs
+  which jobs a model was trained on or which corpus was drawn. The repeats
   show those move the figures by more than a single run's interval suggests.

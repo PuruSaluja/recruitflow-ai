@@ -12,9 +12,9 @@ descriptions.
 > ranking, a held-out evaluation, sentence-transformer embeddings of every
 > candidate and job, cached in PostgreSQL, a measured comparison of lexical,
 > dense and hybrid retrieval, a measured cross-encoder re-rank of the
-> hybrid's shortlist, and a fairness audit of the matcher's shortlists with
-> four mitigations measured. PDF reporting and the frontend are landing
-> incrementally.
+> hybrid's shortlist, and a fairness audit of the matcher's shortlists, whose
+> findings the served matcher is now trained to counter. PDF reporting and the
+> frontend are landing incrementally.
 
 ## Tech stack
 
@@ -686,40 +686,40 @@ group it reports the selection rate, the disparate impact ratio with the
 four-fifths rule, and the equal-opportunity difference among qualified
 candidates, each with a bootstrap interval over jobs. Every job is scored by a
 matcher trained without it (four job folds), so all 200 jobs count. That
-interval covers only which jobs were sampled. Which jobs each model trained
-on, and which corpus was drawn, move the figures too, so the whole audit is
-repeated on four other fold seeds and four other corpora. Over those nine
-runs, written to [`docs/fairness_audit.json`](docs/fairness_audit.json),
-women against men:
+interval covers only which jobs were sampled, so the whole audit is repeated
+over other fold seeds and other corpora: nine runs that the served matcher's
+configuration was chosen on
+([`docs/fairness_audit.json`](docs/fairness_audit.json)), and eight fresh runs
+that played no part in the choice
+([`docs/fairness_audit_fresh.json`](docs/fairness_audit_fresh.json)).
 
-| Top 5 unless noted | Equal-opportunity difference: mean (range) | Runs whose interval excludes zero |
-| --- | --- | --- |
-| Past decisions the matcher learns from (every pair) | −0.140 (−0.149 to −0.125) | 9 of 9 |
-| Matcher | −0.050 (−0.078 to −0.017) | 5 of 9 |
-| Every planted line swapped for a neutral one | −0.012 (−0.038 to 0.025) | 0 of 9 |
-| The three proxy words dropped | −0.043 (−0.074 to −0.007) | 5 of 9 |
-| The community line dropped | −0.014 (−0.035 to 0.028) | 0 of 9 |
-| Training pairs reweighed | −0.028 (−0.057 to 0.007) | 3 of 9 |
-| Line dropped and pairs reweighed | −0.011 (−0.031 to 0.025) | 0 of 9 |
+Women against men, equal-opportunity difference (negative: qualified women
+shortlisted less often than qualified men), mean over the runs and how many
+runs' intervals exclude zero:
 
-The record is biased against qualified women in every run, as planted. Yet
-its four-fifths ratio passes on two of the five corpora, while the
-equal-opportunity difference never misses. The matcher carries part of the
-bias into every run's shortlists. Its interval excludes zero on all five
-splits of the default corpus, but on none of the other four corpora, so that
-corpus is a harsher draw than most. Most of the matcher's gap runs through
-the planted proxy: swapping the lines takes it from −0.050 to −0.012 on
-average.
+| | Top 5, 9 runs | Top 10, 9 runs | Top 5, 8 fresh runs | Top 10, 8 fresh runs |
+| --- | --- | --- | --- | --- |
+| Past decisions the matcher learns from (every pair) | −0.140 (9) | | −0.151 (8) | |
+| Matcher trained plainly on them | −0.050 (5) | −0.046 (6) | −0.046 (6) | −0.040 (6) |
+| **Served matcher**: community line unread, pairs reweighed | **−0.011 (0)** | **−0.018 (0)** | **−0.013 (0)** | **−0.010 (0)** |
 
-Deleting the proxy words barely helps, because the line's other words carry
-the signal once they are gone. Dropping the whole line leaves no gap that can
-be told from zero in any run. Reweighing the training pairs only about halves
-the gap. No mitigation's NDCG@10 is measurably worse than the matcher's in any
-run. The served matcher uses none of them. In the default run's shortlists,
-no group other than women shows a gap whose interval excludes zero.
+The past decisions are biased against women in every run, as planted, and a
+matcher trained plainly on them carries part of that into its shortlists,
+mostly through the planted community line. The served matcher never reads
+that line and is trained on pairs reweighed so that gender and the past
+decision are independent. It shows no gap for women that can be told from
+zero in any of the 17 runs, nor for nonbinary candidates in the fresh ones.
+Its NDCG@10 is never measurably lower than the plain matcher's. Each fix
+alone falls short: deleting the three proxy words barely helps, and
+reweighing alone only about halves the gap.
 
-The definitions, the age-band and nonbinary results, and what an audit on
-generated data can and cannot establish are in
+Two things the audit does not remove. Gaps of a few points either way
+remain, as they do for a model fitted on the generator's ground truth. And
+over-40s are shortlisted more often than under-40s in some runs, under every
+model including that one, because younger candidates more often fall short
+of a job's minimum years of experience. The definitions, every group's
+figures, how the configuration was chosen, and what an audit on generated
+data can and cannot establish are in
 [`docs/fairness_audit.md`](docs/fairness_audit.md).
 
 ## Embeddings
@@ -832,14 +832,16 @@ pages through the cache, best first, without scoring anything. Its ranks run
 from 1 to `total` across everything cached for the job, so they match the
 scoring response whenever the whole pool was scored together.
 
-**What a score is.** The calibrated probability that a past recruiter would
-have advanced this candidate for this job. The matcher is trained on
-`advanced` (see the training pipeline above), so it inherits whatever bias
-those decisions carried, the planted one included; the fairness audit is
-where that gets measured. Each row carries the eight engineered features
-behind its score, exactly `FEATURE_NAMES`. The TF-IDF half is not broken out
-per score: the calibrated matcher keeps one fitted vocabulary per
-calibration fold, so there is no single text similarity to report.
+**What a score is.** The calibrated probability that this candidate would be
+advanced for this job, learned from past recruiters' decisions (`advanced`,
+see the training pipeline above) after reweighing them so that gender and the
+decision are independent, and without reading community lines. So it is not a
+prediction of what those recruiters, with their planted bias, would have done;
+the fairness audit measures how far it departs from that. Each row carries the
+eight engineered features behind its score, exactly `FEATURE_NAMES`. The
+TF-IDF half is not broken out per score: the calibrated matcher keeps one
+fitted vocabulary per calibration fold, so there is no single text similarity
+to report.
 
 **Caching.** Rows are keyed by job, candidate and `model_version`, the first
 16 hex characters of the SHA-256 of the matcher file's bytes. Scoring again
