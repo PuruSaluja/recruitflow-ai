@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 import importlib.util
 import json
+import re
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any
@@ -13,7 +14,13 @@ import numpy as np
 import pytest
 
 from app.config import REPO_ROOT
-from app.ml.corpus import CorpusConfig, corpus_summary, generate_corpus
+from app.ml.corpus import CorpusConfig, _names_womens_group, corpus_summary, generate_corpus
+from app.ml.mitigation import (
+    LineDroppingFeaturiser,
+    TermDroppingFeaturiser,
+    reweighing_weights,
+)
+from app.ml.text import TOKEN_PATTERN, candidate_text, fold_text
 from app.ml.train import TrainingData, train_matcher, training_data
 
 SCRIPT = REPO_ROOT / "scripts" / "audit_fairness.py"
@@ -21,6 +28,7 @@ SCRIPT = REPO_ROOT / "scripts" / "audit_fairness.py"
 CORPUS = ["--seed", "5", "--jobs", "40", "--candidates", "1200"]
 CONFIG = CorpusConfig(seed=5, n_jobs=40, n_candidates=1200)
 FAST = ["--resamples", "50"]
+TOKEN = re.compile(TOKEN_PATTERN)
 
 
 def _load(path: Path, name: str) -> ModuleType:
@@ -260,6 +268,7 @@ def test_the_unbiased_reference_learns_from_the_unbiased_record(monkeypatch) -> 
 
     monkeypatch.setattr(script, "fit_on_advanced", spy)
     monkeypatch.setattr(script, "fit_on_relevance", lambda _: _SpyModel(0))
+    monkeypatch.setattr(script, "MITIGATIONS", {})
     script.audit(CONFIG, folds=2, fold_seed=0, resamples=10)
 
     biased = training_data(generate_corpus(CONFIG))
@@ -271,6 +280,122 @@ def test_the_unbiased_reference_learns_from_the_unbiased_record(monkeypatch) -> 
     # Two folds for the matcher, then two for the unbiased reference.
     assert labels == expected
     assert sum(labels[2:]) > sum(labels[:2])
+
+
+# --- mitigations -------------------------------------------------------
+
+
+def test_every_mitigation_is_audited_and_compared_with_the_matcher(results: dict) -> None:
+    assert set(results["mitigations"]) == {
+        "drop_proxy_terms",
+        "drop_community_line",
+        "reweighing",
+        "drop_community_line_and_reweighing",
+    }
+    for report in results["mitigations"].values():
+        assert set(report["at_k"]) == {"5", "10"}
+        compared = report["ndcg_at_10_minus_matcher"]
+        jobs = compared["jobs_better"] + compared["jobs_equal"] + compared["jobs_worse"]
+        assert 0 < jobs <= 40
+        low, high = compared["95ci"]
+        assert low <= compared["mean"] <= high
+        # Both are averaged over the jobs with a relevant candidate, so the mean
+        # paired difference is the difference of the two NDCG@10s.
+        matcher = results["scorers"]["matcher"]["ndcg_at_10"]
+        assert compared["mean"] == pytest.approx(report["ndcg_at_10"] - matcher)
+        assert report["ndcg_at_10"] != matcher
+
+
+def test_the_proxy_terms_occur_only_on_the_planted_lines() -> None:
+    corpus = generate_corpus(CorpusConfig())
+    for term in script.PROXY_TERMS:
+        carriers = [
+            candidate
+            for candidate in corpus.candidates
+            if term in TOKEN.findall(fold_text(candidate_text(candidate)))
+        ]
+        assert carriers, term
+        assert all(_names_womens_group(candidate.resume_text) for candidate in carriers), term
+
+
+def test_every_community_line_starts_with_the_heading() -> None:
+    corpus = generate_corpus(CorpusConfig())
+    lines = [
+        line
+        for candidate in corpus.candidates
+        for line in candidate.resume_text.split("\n")
+        if "community" in line.lower() or any(t in line.lower() for t in script.PROXY_TERMS)
+    ]
+
+    assert len(lines) > 1000
+    assert all(line.startswith(script.COMMUNITY_HEADING) for line in lines)
+
+
+def test_paired_ndcg_matches_a_hand_computation() -> None:
+    # J1: one strong fit; the first scorer ranks it first, the baseline last.
+    # J2: nobody relevant, so no NDCG either way and the job is left out.
+    pairs = tuple(
+        (SimpleNamespace(ref=job), SimpleNamespace(ref=f"C{i}"))
+        for i, job in enumerate(["J1", "J1", "J2", "J2"])
+    )
+    data = TrainingData(
+        pairs=pairs,
+        advanced=np.zeros(4, dtype=bool),
+        relevance=np.array([2, 0, 0, 0]),
+        job_refs=("J1", "J1", "J2", "J2"),
+    )
+    good = np.array([0.9, 0.1, 0.5, 0.4])
+    bad = np.array([0.1, 0.9, 0.4, 0.5])
+
+    compared = script.paired_ndcg(data, good, bad, resamples=20)
+
+    # Ranked last of two, the strong fit gains 3 / log2(3) against an ideal of 3.
+    assert compared["mean"] == pytest.approx(1 - 1 / np.log2(3))
+    assert (compared["jobs_better"], compared["jobs_equal"], compared["jobs_worse"]) == (1, 0, 0)
+
+
+class _RecordingMatcher:
+    """Stands in for make_mitigated_matcher's model and notes how it was built and fitted."""
+
+    built: list[Any] = []
+
+    def __init__(self, featuriser: Any = None) -> None:
+        self.featuriser = featuriser
+        _RecordingMatcher.built.append(self)
+
+    def fit(self, pairs: Any, labels: Any, sample_weight: Any = None) -> _RecordingMatcher:
+        self.labels = np.asarray(labels)
+        self.sample_weight = sample_weight
+        return self
+
+
+@pytest.mark.parametrize(
+    ("name", "featuriser", "argument", "weighted"),
+    [
+        ("drop_proxy_terms", TermDroppingFeaturiser, ("women", "bootcamp", "member"), False),
+        ("drop_community_line", LineDroppingFeaturiser, ("Community:",), False),
+        ("reweighing", type(None), None, True),
+        ("drop_community_line_and_reweighing", LineDroppingFeaturiser, ("Community:",), True),
+    ],
+)
+def test_each_mitigation_trains_on_the_past_decisions_as_named(
+    data, monkeypatch, name: str, featuriser: type, argument: Any, weighted: bool
+) -> None:
+    _RecordingMatcher.built = []
+    monkeypatch.setattr(script, "make_mitigated_matcher", _RecordingMatcher)
+
+    script.MITIGATIONS[name](data)
+    (model,) = _RecordingMatcher.built
+
+    assert type(model.featuriser) is featuriser
+    if argument is not None:
+        assert tuple(model.featuriser.get_params().popitem()[1]) == argument
+    assert model.labels.tolist() == data.advanced.tolist()
+    if weighted:
+        expected = reweighing_weights([c.gender for _, c in data.pairs], data.advanced)
+        assert model.sample_weight.tolist() == expected.tolist()
+    else:
+        assert model.sample_weight is None
 
 
 # --- refusals ----------------------------------------------------------

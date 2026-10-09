@@ -34,6 +34,18 @@ otherwise have written (the script checks the pairs and labels match). The
 same out-of-fold matchers score both, so the difference in a pair's score is
 what that line alone does to it.
 
+``mitigations`` are the matcher trained four other ways
+(:mod:`app.ml.mitigation`), each audited the same way and compared with the
+matcher job by job on NDCG@10, with a bootstrap interval over jobs:
+
+* ``drop_proxy_terms`` -- :data:`PROXY_TERMS`, the words only the planted
+  lines use, left out of the vocabulary;
+* ``drop_community_line`` -- every line headed ``Community:`` removed before
+  vectorising, whatever it says;
+* ``reweighing`` -- training pairs reweighed so gender and the past decision
+  are independent;
+* ``drop_community_line_and_reweighing`` -- both.
+
 Writes JSON (default ``docs/fairness_audit.json``):
 
     python scripts/audit_fairness.py
@@ -64,9 +76,22 @@ from app.ml.fairness import (
     audit_selection,
     top_k_selection,
 )
+from app.ml.mitigation import (
+    LineDroppingFeaturiser,
+    TermDroppingFeaturiser,
+    make_mitigated_matcher,
+    reweighing_weights,
+)
 from app.ml.train import TRAINING_LABEL, TrainingData, make_matcher, training_data
 
 DEFAULT_OUT = REPO_ROOT / "docs" / "fairness_audit.json"
+
+#: The words only the corpus's planted women-in-tech lines use. ``women`` is in
+#: every such line; ``bootcamp`` and ``member`` in one wording each.
+PROXY_TERMS = ("women", "bootcamp", "member")
+
+#: The heading every generated community line starts with.
+COMMUNITY_HEADING = "Community:"
 
 #: Shortlist lengths audited.
 CUTOFFS = (5, 10)
@@ -162,6 +187,52 @@ def fit_on_relevance(data: TrainingData) -> Any:
 
 def groups_of(data: TrainingData, attribute: str) -> list[str]:
     return [str(getattr(candidate, attribute)) for _, candidate in data.pairs]
+
+
+def _mitigated(featuriser: Callable[[], Any] | None, *, reweigh: bool) -> Fitter:
+    """A fitter for the matcher trained on ``advanced`` with one mitigation or two."""
+
+    def fit(data: TrainingData) -> Any:
+        weights = reweighing_weights(groups_of(data, "gender"), data.advanced) if reweigh else None
+        model = make_mitigated_matcher(featuriser() if featuriser else None)
+        return model.fit(data.pairs, data.advanced, sample_weight=weights)
+
+    return fit
+
+
+def _without_community_line() -> LineDroppingFeaturiser:
+    return LineDroppingFeaturiser((COMMUNITY_HEADING,))
+
+
+#: Each mitigation the audit measures, by name.
+MITIGATIONS: dict[str, Fitter] = {
+    "drop_proxy_terms": _mitigated(lambda: TermDroppingFeaturiser(PROXY_TERMS), reweigh=False),
+    "drop_community_line": _mitigated(_without_community_line, reweigh=False),
+    "reweighing": _mitigated(None, reweigh=True),
+    "drop_community_line_and_reweighing": _mitigated(_without_community_line, reweigh=True),
+}
+
+
+def paired_ndcg(
+    data: TrainingData, scores: np.ndarray, baseline: np.ndarray, *, resamples: int
+) -> dict[str, Any]:
+    """NDCG@10 of ``scores`` minus ``baseline``'s, job by job, and how many jobs each wins."""
+    ours = evaluate_scores(data, scores).slates
+    theirs = evaluate_scores(data, baseline).slates
+    differences = np.array(
+        [
+            mine.ndcg - other.ndcg
+            for mine, other in zip(ours, theirs, strict=True)
+            if mine.ndcg is not None and other.ndcg is not None
+        ]
+    )
+    return {
+        "mean": float(differences.mean()),
+        "95ci": bootstrap_interval(differences, resamples=resamples),
+        "jobs_better": int((differences > 0).sum()),
+        "jobs_equal": int((differences == 0).sum()),
+        "jobs_worse": int((differences < 0).sum()),
+    }
 
 
 def audit_dict(audit: FairnessAudit) -> dict[str, Any]:
@@ -276,6 +347,15 @@ def audit(config: CorpusConfig, *, folds: int, fold_seed: int, resamples: int) -
     # Trained on the unbiased record, scored on the same pairs as everything else.
     (unbiased_scores,) = out_of_fold_scores(unbiased, fold_of, fit_on_advanced)
 
+    mitigations = {}
+    for name, fit in MITIGATIONS.items():
+        (scores,) = out_of_fold_scores(data, fold_of, fit)
+        report = scorer_report(data, scores, resamples=resamples)
+        report[f"ndcg_at_{NDCG_K}_minus_matcher"] = paired_ndcg(
+            data, scores, matcher, resamples=resamples
+        )
+        mitigations[name] = report
+
     return {
         "synthetic": True,
         "generator": "scripts/audit_fairness.py",
@@ -303,6 +383,8 @@ def audit(config: CorpusConfig, *, folds: int, fold_seed: int, resamples: int) -
             ),
         },
         "proxy": proxy_report(data, matcher, matcher_no_line, swapped, resamples=resamples),
+        "proxy_terms": list(PROXY_TERMS),
+        "mitigations": mitigations,
         "python": platform.python_version(),
         "scikit_learn": sklearn.__version__,
         "numpy": np.__version__,
@@ -354,7 +436,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  {results['pairs']} pairs across {results['jobs']} jobs, {args.folds} folds")
     record = results["historical_decisions"]["gender"]["groups"]["woman"]
     print(f"  historical decisions, women/men ratio {_fmt(record['disparate_impact']['value'])}")
-    for name, report in results["scorers"].items():
+    for name, report in {**results["scorers"], **results["mitigations"]}.items():
         cells = []
         for k in CUTOFFS:
             woman = report["at_k"][str(k)]["gender"]["groups"]["woman"]
@@ -362,7 +444,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"@{k} DI {_fmt(woman['disparate_impact']['value'])} "
                 f"EOD {_fmt(woman['equal_opportunity_difference']['value'], 4)}"
             )
-        print(f"  {name:<32} NDCG@10 {report['ndcg_at_10']:.4f}  women: {'; '.join(cells)}")
+        print(f"  {name:<36} NDCG@10 {report['ndcg_at_10']:.4f}  women: {'; '.join(cells)}")
     proxy = results["proxy"]
     print(
         f"  proxy: {proxy['pairs_with_line']} pairs, mean score change "
