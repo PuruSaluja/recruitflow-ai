@@ -153,6 +153,253 @@
   },
   "scorers": {
     "matcher": {
+      "ndcg_at_10": 0.8036711266982027,
+      "ndcg_at_10_95ci": [
+        0.7856654628722739,
+        0.8212727839229791
+      ],
+      "at_k": {
+        "5": {
+          "gender": {
+            "reference": "man",
+            "min_disparate_impact": 0.9389365508398374,
+            "groups": {
+              "man": {
+                "rates": {
+                  "pairs": 5559,
+                  "selected": 571.0,
+                  "selection_rate": 0.10271631588415182,
+                  "qualified": 959,
+                  "true_positive_rate": 0.48279457768508866
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              },
+              "nonbinary": {
+                "rates": {
+                  "pairs": 532,
+                  "selected": 52.0,
+                  "selection_rate": 0.09774436090225563,
+                  "qualified": 104,
+                  "true_positive_rate": 0.4230769230769231
+                },
+                "disparate_impact": {
+                  "value": 0.9515952754039213,
+                  "low": 0.7201769059006996,
+                  "high": 1.1977309823986682
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.05971765460816558,
+                  "low": -0.15787803527993177,
+                  "high": 0.03648919763697032
+                }
+              },
+              "woman": {
+                "rates": {
+                  "pairs": 3909,
+                  "selected": 377.0,
+                  "selection_rate": 0.09644410335124072,
+                  "qualified": 636,
+                  "true_positive_rate": 0.4779874213836478
+                },
+                "disparate_impact": {
+                  "value": 0.9389365508398374,
+                  "low": 0.8271858099004352,
+                  "high": 1.0537504064803644
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.004807156301440851,
+                  "low": -0.050944977333896586,
+                  "high": 0.03961955009995473
+                }
+              }
+            }
+          },
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 1.283555789601604,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1018,
+                  "selected": 127.0,
+                  "selection_rate": 0.12475442043222004,
+                  "qualified": 212,
+                  "true_positive_rate": 0.49528301886792453
+                },
+                "disparate_impact": {
+                  "value": 1.283555789601604,
+                  "low": 1.0367236805875957,
+                  "high": 1.5559728665337418
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.020501579728718078,
+                  "low": -0.049080524570874466,
+                  "high": 0.09327217614598861
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 8982,
+                  "selected": 873.0,
+                  "selection_rate": 0.09719438877755511,
+                  "qualified": 1487,
+                  "true_positive_rate": 0.47478143913920645
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        },
+        "10": {
+          "gender": {
+            "reference": "man",
+            "min_disparate_impact": 0.9430523239681592,
+            "groups": {
+              "man": {
+                "rates": {
+                  "pairs": 5559,
+                  "selected": 1134.0,
+                  "selection_rate": 0.20399352401511064,
+                  "qualified": 959,
+                  "true_positive_rate": 0.7841501564129302
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              },
+              "nonbinary": {
+                "rates": {
+                  "pairs": 532,
+                  "selected": 114.0,
+                  "selection_rate": 0.21428571428571427,
+                  "qualified": 104,
+                  "true_positive_rate": 0.7596153846153846
+                },
+                "disparate_impact": {
+                  "value": 1.0504535147392289,
+                  "low": 0.883183860793869,
+                  "high": 1.2259576104262282
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.024534771797545596,
+                  "low": -0.10795938032215903,
+                  "high": 0.05903977628062996
+                }
+              },
+              "woman": {
+                "rates": {
+                  "pairs": 3909,
+                  "selected": 752.0,
+                  "selection_rate": 0.19237656689690458,
+                  "qualified": 636,
+                  "true_positive_rate": 0.7767295597484277
+                },
+                "disparate_impact": {
+                  "value": 0.9430523239681592,
+                  "low": 0.8690787066814482,
+                  "high": 1.0237644868867894
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.007420596664502455,
+                  "low": -0.04814766370445707,
+                  "high": 0.03347786530311408
+                }
+              }
+            }
+          },
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 1.180425804899563,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1018,
+                  "selected": 236.0,
+                  "selection_rate": 0.2318271119842829,
+                  "qualified": 212,
+                  "true_positive_rate": 0.8066037735849056
+                },
+                "disparate_impact": {
+                  "value": 1.180425804899563,
+                  "low": 0.9967007088297511,
+                  "high": 1.364531988490202
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.030544594028752314,
+                  "low": -0.03296614112440918,
+                  "high": 0.08963837761611931
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 8982,
+                  "selected": 1764.0,
+                  "selection_rate": 0.1963927855711423,
+                  "qualified": 1487,
+                  "true_positive_rate": 0.7760591795561533
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "ndcg_at_10_minus_unmitigated": {
+        "mean": -0.0002604663372896654,
+        "95ci": [
+          -0.007080902050384499,
+          0.006474540748538429
+        ],
+        "jobs_better": 80,
+        "jobs_equal": 42,
+        "jobs_worse": 78
+      }
+    },
+    "matcher_without_mitigation": {
       "ndcg_at_10": 0.8039315930354922,
       "ndcg_at_10_95ci": [
         0.7868693142944567,
@@ -864,6 +1111,10 @@
       }
     }
   },
+  "excluded_headings": [
+    "Community:"
+  ],
+  "reweighed_attribute": "gender",
   "proxy": {
     "pairs_with_line": 1017,
     "candidates_with_line": 363,
@@ -1016,7 +1267,8 @@
           }
         }
       }
-    }
+    },
+    "served_max_abs_score_change": 0.0
   },
   "proxy_terms": [
     "women",
@@ -1260,7 +1512,7 @@
           }
         }
       },
-      "ndcg_at_10_minus_matcher": {
+      "ndcg_at_10_minus_unmitigated": {
         "mean": -0.0018776149270896664,
         "95ci": [
           -0.006808022861121444,
@@ -1507,7 +1759,7 @@
           }
         }
       },
-      "ndcg_at_10_minus_matcher": {
+      "ndcg_at_10_minus_unmitigated": {
         "mean": -0.0009989164106214523,
         "95ci": [
           -0.00679764968859469,
@@ -1754,7 +2006,7 @@
           }
         }
       },
-      "ndcg_at_10_minus_matcher": {
+      "ndcg_at_10_minus_unmitigated": {
         "mean": -0.0029560203808173253,
         "95ci": [
           -0.00915218392126754,
@@ -1763,253 +2015,6 @@
         "jobs_better": 75,
         "jobs_equal": 63,
         "jobs_worse": 62
-      }
-    },
-    "drop_community_line_and_reweighing": {
-      "ndcg_at_10": 0.8036711266982027,
-      "ndcg_at_10_95ci": [
-        0.7856654628722739,
-        0.8212727839229791
-      ],
-      "at_k": {
-        "5": {
-          "gender": {
-            "reference": "man",
-            "min_disparate_impact": 0.9389365508398374,
-            "groups": {
-              "man": {
-                "rates": {
-                  "pairs": 5559,
-                  "selected": 571.0,
-                  "selection_rate": 0.10271631588415182,
-                  "qualified": 959,
-                  "true_positive_rate": 0.48279457768508866
-                },
-                "disparate_impact": {
-                  "value": 1.0,
-                  "low": 1.0,
-                  "high": 1.0
-                },
-                "passes_four_fifths": null,
-                "equal_opportunity_difference": {
-                  "value": 0.0,
-                  "low": 0.0,
-                  "high": 0.0
-                }
-              },
-              "nonbinary": {
-                "rates": {
-                  "pairs": 532,
-                  "selected": 52.0,
-                  "selection_rate": 0.09774436090225563,
-                  "qualified": 104,
-                  "true_positive_rate": 0.4230769230769231
-                },
-                "disparate_impact": {
-                  "value": 0.9515952754039213,
-                  "low": 0.7201769059006996,
-                  "high": 1.1977309823986682
-                },
-                "passes_four_fifths": true,
-                "equal_opportunity_difference": {
-                  "value": -0.05971765460816558,
-                  "low": -0.15787803527993177,
-                  "high": 0.03648919763697032
-                }
-              },
-              "woman": {
-                "rates": {
-                  "pairs": 3909,
-                  "selected": 377.0,
-                  "selection_rate": 0.09644410335124072,
-                  "qualified": 636,
-                  "true_positive_rate": 0.4779874213836478
-                },
-                "disparate_impact": {
-                  "value": 0.9389365508398374,
-                  "low": 0.8271858099004352,
-                  "high": 1.0537504064803644
-                },
-                "passes_four_fifths": true,
-                "equal_opportunity_difference": {
-                  "value": -0.004807156301440851,
-                  "low": -0.050944977333896586,
-                  "high": 0.03961955009995473
-                }
-              }
-            }
-          },
-          "age_band": {
-            "reference": "under_40",
-            "min_disparate_impact": 1.283555789601604,
-            "groups": {
-              "40_and_over": {
-                "rates": {
-                  "pairs": 1018,
-                  "selected": 127.0,
-                  "selection_rate": 0.12475442043222004,
-                  "qualified": 212,
-                  "true_positive_rate": 0.49528301886792453
-                },
-                "disparate_impact": {
-                  "value": 1.283555789601604,
-                  "low": 1.0367236805875957,
-                  "high": 1.5559728665337418
-                },
-                "passes_four_fifths": true,
-                "equal_opportunity_difference": {
-                  "value": 0.020501579728718078,
-                  "low": -0.049080524570874466,
-                  "high": 0.09327217614598861
-                }
-              },
-              "under_40": {
-                "rates": {
-                  "pairs": 8982,
-                  "selected": 873.0,
-                  "selection_rate": 0.09719438877755511,
-                  "qualified": 1487,
-                  "true_positive_rate": 0.47478143913920645
-                },
-                "disparate_impact": {
-                  "value": 1.0,
-                  "low": 1.0,
-                  "high": 1.0
-                },
-                "passes_four_fifths": null,
-                "equal_opportunity_difference": {
-                  "value": 0.0,
-                  "low": 0.0,
-                  "high": 0.0
-                }
-              }
-            }
-          }
-        },
-        "10": {
-          "gender": {
-            "reference": "man",
-            "min_disparate_impact": 0.9430523239681592,
-            "groups": {
-              "man": {
-                "rates": {
-                  "pairs": 5559,
-                  "selected": 1134.0,
-                  "selection_rate": 0.20399352401511064,
-                  "qualified": 959,
-                  "true_positive_rate": 0.7841501564129302
-                },
-                "disparate_impact": {
-                  "value": 1.0,
-                  "low": 1.0,
-                  "high": 1.0
-                },
-                "passes_four_fifths": null,
-                "equal_opportunity_difference": {
-                  "value": 0.0,
-                  "low": 0.0,
-                  "high": 0.0
-                }
-              },
-              "nonbinary": {
-                "rates": {
-                  "pairs": 532,
-                  "selected": 114.0,
-                  "selection_rate": 0.21428571428571427,
-                  "qualified": 104,
-                  "true_positive_rate": 0.7596153846153846
-                },
-                "disparate_impact": {
-                  "value": 1.0504535147392289,
-                  "low": 0.883183860793869,
-                  "high": 1.2259576104262282
-                },
-                "passes_four_fifths": true,
-                "equal_opportunity_difference": {
-                  "value": -0.024534771797545596,
-                  "low": -0.10795938032215903,
-                  "high": 0.05903977628062996
-                }
-              },
-              "woman": {
-                "rates": {
-                  "pairs": 3909,
-                  "selected": 752.0,
-                  "selection_rate": 0.19237656689690458,
-                  "qualified": 636,
-                  "true_positive_rate": 0.7767295597484277
-                },
-                "disparate_impact": {
-                  "value": 0.9430523239681592,
-                  "low": 0.8690787066814482,
-                  "high": 1.0237644868867894
-                },
-                "passes_four_fifths": true,
-                "equal_opportunity_difference": {
-                  "value": -0.007420596664502455,
-                  "low": -0.04814766370445707,
-                  "high": 0.03347786530311408
-                }
-              }
-            }
-          },
-          "age_band": {
-            "reference": "under_40",
-            "min_disparate_impact": 1.180425804899563,
-            "groups": {
-              "40_and_over": {
-                "rates": {
-                  "pairs": 1018,
-                  "selected": 236.0,
-                  "selection_rate": 0.2318271119842829,
-                  "qualified": 212,
-                  "true_positive_rate": 0.8066037735849056
-                },
-                "disparate_impact": {
-                  "value": 1.180425804899563,
-                  "low": 0.9967007088297511,
-                  "high": 1.364531988490202
-                },
-                "passes_four_fifths": true,
-                "equal_opportunity_difference": {
-                  "value": 0.030544594028752314,
-                  "low": -0.03296614112440918,
-                  "high": 0.08963837761611931
-                }
-              },
-              "under_40": {
-                "rates": {
-                  "pairs": 8982,
-                  "selected": 1764.0,
-                  "selection_rate": 0.1963927855711423,
-                  "qualified": 1487,
-                  "true_positive_rate": 0.7760591795561533
-                },
-                "disparate_impact": {
-                  "value": 1.0,
-                  "low": 1.0,
-                  "high": 1.0
-                },
-                "passes_four_fifths": null,
-                "equal_opportunity_difference": {
-                  "value": 0.0,
-                  "low": 0.0,
-                  "high": 0.0
-                }
-              }
-            }
-          }
-        }
-      },
-      "ndcg_at_10_minus_matcher": {
-        "mean": -0.0002604663372896654,
-        "95ci": [
-          -0.007080902050384499,
-          0.006474540748538429
-        ],
-        "jobs_better": 80,
-        "jobs_equal": 42,
-        "jobs_worse": 78
       }
     }
   },
@@ -2023,73 +2028,227 @@
         "fold_seed": 0,
         "rows": {
           "historical_decisions": {
-            "decision": {
+            "decision:woman": {
               "ratio": 0.7496955187026594,
               "eod": -0.1453115470124146,
               "eod_low": -0.1980853168505099,
               "eod_high": -0.09187970851972037
+            },
+            "decision:nonbinary": {
+              "ratio": 1.2039351095129127,
+              "eod": 0.011981631507179014,
+              "eod_low": -0.08753196600002022,
+              "eod_high": 0.10983513894908778
+            },
+            "decision:40_and_over": {
+              "ratio": 1.163206110240392,
+              "eod": 0.024631713847051873,
+              "eod_low": -0.04483947244978405,
+              "eod_high": 0.0986118105227188
             }
           },
           "matcher": {
+            "ndcg_at_10": 0.8036711266982027,
+            "top_5:woman": {
+              "ratio": 0.9389365508398374,
+              "eod": -0.004807156301440851,
+              "eod_low": -0.050944977333896586,
+              "eod_high": 0.03961955009995473
+            },
+            "top_5:nonbinary": {
+              "ratio": 0.9515952754039213,
+              "eod": -0.05971765460816558,
+              "eod_low": -0.15787803527993177,
+              "eod_high": 0.03648919763697032
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.283555789601604,
+              "eod": 0.020501579728718078,
+              "eod_low": -0.049080524570874466,
+              "eod_high": 0.09327217614598861
+            },
+            "top_10:woman": {
+              "ratio": 0.9430523239681592,
+              "eod": -0.007420596664502455,
+              "eod_low": -0.04814766370445707,
+              "eod_high": 0.03347786530311408
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0504535147392289,
+              "eod": -0.024534771797545596,
+              "eod_low": -0.10795938032215903,
+              "eod_high": 0.05903977628062996
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.180425804899563,
+              "eod": 0.030544594028752314,
+              "eod_low": -0.03296614112440918,
+              "eod_high": 0.08963837761611931
+            },
+            "ndcg_at_10_minus_unmitigated": {
+              "mean": -0.0002604663372896654,
+              "95ci": [
+                -0.007080902050384499,
+                0.006474540748538429
+              ]
+            }
+          },
+          "matcher_without_mitigation": {
             "ndcg_at_10": 0.8039315930354922,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.8279692707072476,
               "eod": -0.06339806270945236,
               "eod_low": -0.10733343794116557,
               "eod_high": -0.02053522200681841
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.9993408437200383,
+              "eod": -0.032495788882650256,
+              "eod_low": -0.1334013366113153,
+              "eod_high": 0.06782174955516708
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.2031612787997856,
+              "eod": -0.007118295669386265,
+              "eod_low": -0.07396435211670482,
+              "eod_high": 0.06218675649392529
+            },
+            "top_10:woman": {
               "ratio": 0.8712969411436663,
               "eod": -0.03777519822141773,
               "eod_low": -0.08013043440471138,
               "eod_high": 0.004997489903370322
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0565649341863657,
+              "eod": -0.03287679473810867,
+              "eod_low": -0.11235313050664213,
+              "eod_high": 0.045727751570496813
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.118431611278674,
+              "eod": 0.013021659413026132,
+              "eod_low": -0.04780948642714935,
+              "eod_high": 0.07181447400355155
             }
           },
           "fitted_on_relevance": {
             "ndcg_at_10": 0.8312909021132995,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9332549884881044,
               "eod": -0.025629422682170278,
               "eod_low": -0.06856821624524918,
               "eod_high": 0.016585436506102003
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.8344885651629073,
+              "eod": -0.12529076762653407,
+              "eod_low": -0.21927785244468684,
+              "eod_high": -0.025791501935742277
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.2719920155732287,
+              "eod": 0.019185139130324436,
+              "eod_low": -0.053374161429108655,
+              "eod_high": 0.0894192127184065
+            },
+            "top_10:woman": {
               "ratio": 0.9539571843285681,
               "eod": -0.0010657065470451865,
               "eod_low": -0.03870746023678695,
               "eod_high": 0.03673310184985606
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0847932831190665,
+              "eod": -0.04666319082377479,
+              "eod_low": -0.12772880478553555,
+              "eod_high": 0.03453522934899943
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.180425804899563,
+              "eod": 0.025856162210858846,
+              "eod_low": -0.03545054126798135,
+              "eod_high": 0.084775471360854
             }
           },
           "trained_without_historical_bias": {
             "ndcg_at_10": 0.8079990999633848,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.8909559958945529,
               "eod": -0.030444776726280653,
               "eod_low": -0.07806886197932737,
               "eod_high": 0.016545567430916844
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.9891715088064394,
+              "eod": -0.039213523702574804,
+              "eod_low": -0.13941377273591157,
+              "eod_high": 0.06099543406293224
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.3067629962624538,
+              "eod": 0.036670007993807985,
+              "eod_low": -0.02811001206283586,
+              "eod_high": 0.10301845936523547
+            },
+            "top_10:woman": {
               "ratio": 0.9405640592611192,
               "eod": -0.007387805693824134,
               "eod_low": -0.0460629168262942,
               "eod_high": 0.030378554863595086
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0201112940663002,
+              "eod": -0.050022058233737066,
+              "eod_low": -0.1330075238502671,
+              "eod_high": 0.029472131116867896
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.2202808189079215,
+              "eod": 0.06289096699699281,
+              "eod_low": 0.0026703932600009197,
+              "eod_high": 0.12093775225863486
             }
           },
           "drop_proxy_terms": {
             "ndcg_at_10": 0.8020539781084026,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.8479768621269005,
               "eod": -0.051365416019044985,
               "eod_low": -0.09535837504213929,
               "eod_high": -0.008407862444789393
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.9707916327982118,
+              "eod": -0.04755554664313788,
+              "eod_low": -0.15018540853450607,
+              "eod_high": 0.04818797146751425
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.1917806386295267,
+              "eod": -0.011835276801461736,
+              "eod_low": -0.0772372578417939,
+              "eod_high": 0.05835442567022307
+            },
+            "top_10:woman": {
               "ratio": 0.9044129266619236,
               "eod": -0.02208471875184448,
               "eod_low": -0.0629169961294084,
               "eod_high": 0.021432875628376542
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 1.0621737880757498,
+              "eod": -0.036235662148070946,
+              "eod_low": -0.11936761857207956,
+              "eod_high": 0.0477829025334318
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.14088585029048,
+              "eod": 0.019083630457677248,
+              "eod_low": -0.03930220501983506,
+              "eod_high": 0.07642626633300309
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": -0.0018776149270896664,
               "95ci": [
                 -0.006808022861121444,
@@ -2099,19 +2258,43 @@
           },
           "drop_community_line": {
             "ndcg_at_10": 0.802932676624871,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9380888906841163,
               "eod": -0.012139217345111863,
               "eod_low": -0.058103998714382,
               "eod_high": 0.030817652760741554
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.9899287692916501,
+              "eod": -0.04152963824496675,
+              "eod_low": -0.1430171603421987,
+              "eod_high": 0.058219726062467836
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.2374589207268034,
+              "eod": 0.010395122508279286,
+              "eod_low": -0.05848687422934034,
+              "eod_high": 0.08229378874312977
+            },
+            "top_10:woman": {
               "ratio": 0.9409684868196401,
               "eod": -0.009538893370321544,
               "eod_low": -0.04848312904374776,
               "eod_high": 0.03118816735455738
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 1.0495280050346127,
+              "eod": -0.020363760327264058,
+              "eod_low": -0.10230261359108175,
+              "eod_high": 0.061211058520150234
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.1577932064468526,
+              "eod": 0.019756125413965098,
+              "eod_low": -0.04355365002784348,
+              "eod_high": 0.08030168046985448
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": -0.0009989164106214523,
               "95ci": [
                 -0.00679764968859469,
@@ -2121,19 +2304,43 @@
           },
           "reweighing": {
             "ndcg_at_10": 0.800975572654675,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.895851358509358,
               "eod": -0.02259953699149403,
               "eod_low": -0.06586193169464297,
               "eod_high": 0.020957096357818974
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.9532016357589326,
+              "eod": -0.05531603433063287,
+              "eod_low": -0.15476100490585715,
+              "eod_high": 0.04387974180175932
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.260454673028347,
+              "eod": 0.016457093552930457,
+              "eod_low": -0.053670689562671854,
+              "eod_high": 0.08806035249488008
+            },
+            "top_10:woman": {
               "ratio": 0.9125263207901289,
               "eod": -0.018410490487339448,
               "eod_low": -0.05940561953513169,
               "eod_high": 0.023344479331821356
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 1.065877968679327,
+              "eod": -0.03727841501564133,
+              "eod_low": -0.12016044406289275,
+              "eod_high": 0.04433180989746363
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.1690966899322945,
+              "eod": 0.03795155498597913,
+              "eod_low": -0.023655285786496096,
+              "eod_high": 0.09692420763055179
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": -0.0029560203808173253,
               "95ci": [
                 -0.00915218392126754,
@@ -2141,40 +2348,30 @@
               ]
             }
           },
-          "drop_community_line_and_reweighing": {
-            "ndcg_at_10": 0.8036711266982027,
-            "top_5": {
-              "ratio": 0.9389365508398374,
-              "eod": -0.004807156301440851,
-              "eod_low": -0.050944977333896586,
-              "eod_high": 0.03961955009995473
-            },
-            "top_10": {
-              "ratio": 0.9430523239681592,
-              "eod": -0.007420596664502455,
-              "eod_low": -0.04814766370445707,
-              "eod_high": 0.03347786530311408
-            },
-            "ndcg_at_10_minus_matcher": {
-              "mean": -0.0002604663372896654,
-              "95ci": [
-                -0.007080902050384499,
-                0.006474540748538429
-              ]
-            }
-          },
           "lines_swapped": {
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9323226658222822,
               "eod": -0.010037316124631934,
               "eod_low": -0.0566058805654465,
               "eod_high": 0.03398345090407515
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.9681995635943004,
+              "eod": -0.042572391112537133,
+              "eod_low": -0.14419852288812157,
+              "eod_high": 0.05700896355391964
+            },
+            "top_10:woman": {
               "ratio": 0.9363846162160993,
               "eod": -0.009538893370321544,
               "eod_low": -0.04989114463529845,
               "eod_high": 0.03242849762204543
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0670006883405696,
+              "eod": -0.020363760327264058,
+              "eod_low": -0.09932616821060937,
+              "eod_high": 0.0584699056860509
             }
           }
         }
@@ -2184,73 +2381,227 @@
         "fold_seed": 1,
         "rows": {
           "historical_decisions": {
-            "decision": {
+            "decision:woman": {
               "ratio": 0.7496955187026594,
               "eod": -0.1453115470124146,
               "eod_low": -0.1980853168505099,
               "eod_high": -0.09187970851972037
+            },
+            "decision:nonbinary": {
+              "ratio": 1.2039351095129127,
+              "eod": 0.011981631507179014,
+              "eod_low": -0.08753196600002022,
+              "eod_high": 0.10983513894908778
+            },
+            "decision:40_and_over": {
+              "ratio": 1.163206110240392,
+              "eod": 0.024631713847051873,
+              "eod_low": -0.04483947244978405,
+              "eod_high": 0.0986118105227188
             }
           },
           "matcher": {
+            "ndcg_at_10": 0.7988391233063237,
+            "top_5:woman": {
+              "ratio": 0.9422368550607155,
+              "eod": -0.025711400108866023,
+              "eod_low": -0.07399756414084813,
+              "eod_high": 0.018293631635339182
+            },
+            "top_5:nonbinary": {
+              "ratio": 0.9916685386577163,
+              "eod": -0.061572551536055176,
+              "eod_low": -0.16054325350796642,
+              "eod_high": 0.03752483835353265
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.318406612018156,
+              "eod": 0.05958241869789754,
+              "eod_low": -0.013309570145385587,
+              "eod_high": 0.12898955826313516
+            },
+            "top_10:woman": {
+              "ratio": 0.9330990561592007,
+              "eod": -0.02575894701634962,
+              "eod_low": -0.06877487886070775,
+              "eod_high": 0.01703636929089266
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0265927977839335,
+              "eod": -0.06403906312665442,
+              "eod_low": -0.14742935617183478,
+              "eod_high": 0.017552517208053967
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.1861000014486827,
+              "eod": 0.039959523416781884,
+              "eod_low": -0.019718950609387453,
+              "eod_high": 0.09825708334373397
+            },
+            "ndcg_at_10_minus_unmitigated": {
+              "mean": -5.385390766357606e-05,
+              "95ci": [
+                -0.0066770892431882506,
+                0.006980763004493483
+              ]
+            }
+          },
+          "matcher_without_mitigation": {
             "ndcg_at_10": 0.7988929772139872,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.8255831921173132,
               "eod": -0.07541431391452053,
               "eod_low": -0.12220452255687846,
               "eod_high": -0.031956605042937895
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.0168731392238985,
+              "eod": -0.04941044357102753,
+              "eod_low": -0.14613847637046296,
+              "eod_high": 0.047842699298827035
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.318406612018156,
+              "eod": 0.04475898034538328,
+              "eod_low": -0.02662986764979802,
+              "eod_high": 0.11187796144470712
+            },
+            "top_10:woman": {
               "ratio": 0.8571412681993615,
               "eod": -0.05715630144083528,
               "eod_low": -0.09851155061237686,
               "eod_high": -0.013443640983239953
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0689767898005884,
+              "eod": -0.054193069704018604,
+              "eod_low": -0.1355654706574608,
+              "eod_high": 0.02729364285923754
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.1917806386295267,
+              "eod": 0.041977008285645434,
+              "eod_low": -0.01989874521125127,
+              "eod_high": 0.100720387557749
             }
           },
           "fitted_on_relevance": {
             "ndcg_at_10": 0.8317181808927328,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9233792743242091,
               "eod": -0.029270859975997043,
               "eod_low": -0.07744082842997083,
               "eod_high": 0.015571163624565591
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.9070527882205514,
+              "eod": -0.08242760888746292,
+              "eod_low": -0.1851147480650119,
+              "eod_high": 0.023111927757226477
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.260454673028347,
+              "eod": 0.033345598964611534,
+              "eod_low": -0.03278681639080805,
+              "eod_high": 0.09660372467533544
+            },
+            "top_10:woman": {
               "ratio": 0.9476490603712332,
               "eod": 0.0062663544966258256,
               "eod_low": -0.03335976104718657,
               "eod_high": 0.04837512264721905
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0819133009514939,
+              "eod": -0.036005053340819826,
+              "eod_low": -0.1242834861317888,
+              "eod_high": 0.04580405151889642
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.2145678134869282,
+              "eod": 0.04472408673916073,
+              "eod_low": -0.0151445259893776,
+              "eod_high": 0.10026086125655011
             }
           },
           "trained_without_historical_bias": {
             "ndcg_at_10": 0.8082834585379728,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.8702783189352644,
               "eod": -0.05293774306307014,
               "eod_low": -0.10111302293421395,
               "eod_high": -0.007494765875681303
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.018131868131868,
+              "eod": -0.04755554664313788,
+              "eod_low": -0.14939399630480135,
+              "eod_high": 0.05553486620113097
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.35349861659676,
+              "eod": 0.07506883556863891,
+              "eod_low": 0.009234884295331107,
+              "eod_high": 0.1397112740550768
+            },
+            "top_10:woman": {
               "ratio": 0.9045264161759757,
               "eod": -0.030972711354201543,
               "eod_low": -0.07158699888593502,
               "eod_high": 0.008570684413681001
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0141384657484265,
+              "eod": -0.040406673618352484,
+              "eod_low": -0.1218929979802315,
+              "eod_high": 0.04049575846215214
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.2202808189079215,
+              "eod": 0.06152694420829585,
+              "eod_low": 0.003764415206676855,
+              "eod_high": 0.11521305611955276
             }
           },
           "drop_proxy_terms": {
             "ndcg_at_10": 0.7991771064958146,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.8307570460294942,
               "eod": -0.07437156104695014,
               "eod_low": -0.12120997221587963,
               "eod_high": -0.030700521953520316
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.0378882813093337,
+              "eod": -0.03875230608807256,
+              "eod_low": -0.14245713856730863,
+              "eod_high": 0.07035717780919033
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.3067629962624538,
+              "eod": 0.04475898034538328,
+              "eod_low": -0.028313380722127877,
+              "eod_high": 0.11487945748475639
+            },
+            "top_10:woman": {
               "ratio": 0.887893223688658,
               "eod": -0.04514005023576717,
               "eod_low": -0.08782336779511107,
               "eod_high": -0.0020187379577762876
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 1.0738001090809928,
+              "eod": -0.04689379963102591,
+              "eod_low": -0.12772831222771575,
+              "eod_high": 0.03461725696219378
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.1861000014486827,
+              "eod": 0.03927751202243346,
+              "eod_low": -0.021413109865212613,
+              "eod_high": 0.09839087480706946
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0002841292818273836,
               "95ci": [
                 -0.0033452350527220765,
@@ -2260,19 +2611,43 @@
           },
           "drop_community_line": {
             "ndcg_at_10": 0.8019972467673719,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9182863013129857,
               "eod": -0.03459939271122303,
               "eod_low": -0.08285306428145839,
               "eod_high": 0.011565638359808714
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.0394540014958864,
+              "eod": -0.05612817839095213,
+              "eod_low": -0.15404942685412623,
+              "eod_high": 0.043038190564409176
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.318406612018156,
+              "eod": 0.04745847660859531,
+              "eod_low": -0.024253197877034862,
+              "eod_high": 0.11662186876095178
+            },
+            "top_10:woman": {
               "ratio": 0.9322396470494614,
               "eod": -0.026818095369259165,
               "eod_low": -0.06790518803031229,
               "eod_high": 0.013995051288851642
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 1.0651254674471768,
+              "eod": -0.03310740354535979,
+              "eod_low": -0.11895875137915396,
+              "eod_high": 0.05024267346409135
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.1861000014486827,
+              "eod": 0.03524254228470647,
+              "eod_low": -0.025048522520701708,
+              "eod_high": 0.09462642776614993
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0031042695533846053,
               "95ci": [
                 -0.003193157244097558,
@@ -2282,19 +2657,43 @@
           },
           "reweighing": {
             "ndcg_at_10": 0.7998393084818399,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.8727092639602234,
               "eod": -0.052391773401276265,
               "eod_low": -0.10046139456282038,
               "eod_high": -0.00857486330364029
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.0002699055330635,
+              "eod": -0.051726558113419474,
+              "eod_low": -0.14649272290351645,
+              "eod_high": 0.04318895698149477
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.318406612018156,
+              "eod": 0.05419294260953422,
+              "eod_low": -0.01745151527481725,
+              "eod_high": 0.12212017662067702
+            },
+            "top_10:woman": {
               "ratio": 0.8988182449425735,
               "eod": -0.044080901882857626,
               "eod_low": -0.08729451519663077,
               "eod_high": -0.001221247186445783
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 1.040401327995313,
+              "eod": -0.05859468998155137,
+              "eod_low": -0.1355518366575181,
+              "eod_high": 0.01998807689329081
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.1917806386295267,
+              "eod": 0.03726002715357002,
+              "eod_low": -0.02342628085565387,
+              "eod_high": 0.09602531473465595
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0009463312678526386,
               "95ci": [
                 -0.004582827099521127,
@@ -2302,40 +2701,30 @@
               ]
             }
           },
-          "drop_community_line_and_reweighing": {
-            "ndcg_at_10": 0.7988391233063237,
-            "top_5": {
-              "ratio": 0.9422368550607155,
-              "eod": -0.025711400108866023,
-              "eod_low": -0.07399756414084813,
-              "eod_high": 0.018293631635339182
-            },
-            "top_10": {
-              "ratio": 0.9330990561592007,
-              "eod": -0.02575894701634962,
-              "eod_low": -0.06877487886070775,
-              "eod_high": 0.01703636929089266
-            },
-            "ndcg_at_10_minus_matcher": {
-              "mean": -5.385390766357606e-05,
-              "95ci": [
-                -0.0066770892431882506,
-                0.006980763004493483
-              ]
-            }
-          },
           "lines_swapped": {
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9248640844957039,
               "eod": -0.02938562837337111,
               "eod_low": -0.07780313125877378,
               "eod_high": 0.015921192638927693
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.0230033124769966,
+              "eod": -0.04129902943771557,
+              "eod_low": -0.13798230824035504,
+              "eod_high": 0.05643499497124048
+            },
+            "top_10:woman": {
               "ratio": 0.9260494389338162,
               "eod": -0.02787724372216871,
               "eod_low": -0.0698094861454821,
               "eod_high": 0.014372670317994917
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.062324962274222,
+              "eod": -0.040637282425603605,
+              "eod_low": -0.12055793029686014,
+              "eod_high": 0.03945361134594739
             }
           }
         }
@@ -2345,73 +2734,227 @@
         "fold_seed": 2,
         "rows": {
           "historical_decisions": {
-            "decision": {
+            "decision:woman": {
               "ratio": 0.7496955187026594,
               "eod": -0.1453115470124146,
               "eod_low": -0.1980853168505099,
               "eod_high": -0.09187970851972037
+            },
+            "decision:nonbinary": {
+              "ratio": 1.2039351095129127,
+              "eod": 0.011981631507179014,
+              "eod_low": -0.08753196600002022,
+              "eod_high": 0.10983513894908778
+            },
+            "decision:40_and_over": {
+              "ratio": 1.163206110240392,
+              "eod": 0.024631713847051873,
+              "eod_low": -0.04483947244978405,
+              "eod_high": 0.0986118105227188
             }
           },
           "matcher": {
+            "ndcg_at_10": 0.7988972958197977,
+            "top_5:woman": {
+              "ratio": 0.930604138896743,
+              "eod": -0.028375666476479044,
+              "eod_low": -0.07552896443843131,
+              "eod_high": 0.01619596552777092
+            },
+            "top_5:nonbinary": {
+              "ratio": 1.0449248120300751,
+              "eod": -0.005153605518569027,
+              "eod_low": -0.10075429698735638,
+              "eod_high": 0.0896344774628356
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.3067629962624538,
+              "eod": 0.033970511730596065,
+              "eod_low": -0.0373622875354471,
+              "eod_high": 0.10456342353766876
+            },
+            "top_10:woman": {
+              "ratio": 0.9493292892016787,
+              "eod": -0.023160262590093184,
+              "eod_low": -0.062152138158878344,
+              "eod_high": 0.016094983247306374
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.1023586226203808,
+              "eod": -0.040637282425603605,
+              "eod_low": -0.12865412903110204,
+              "eod_high": 0.043290892863166466
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.2374589207268034,
+              "eod": 0.0635349126390986,
+              "eod_low": 0.001670290582633086,
+              "eod_high": 0.12377353000461064
+            },
+            "ndcg_at_10_minus_unmitigated": {
+              "mean": 0.0004892570880409352,
+              "95ci": [
+                -0.006425163365692022,
+                0.007122459459840763
+              ]
+            }
+          },
+          "matcher_without_mitigation": {
             "ndcg_at_10": 0.798408038731757,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.83879964098495,
               "eod": -0.05717433647470832,
               "eod_low": -0.10430568229064466,
               "eod_high": -0.012558515559595454
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.0980565821332993,
+              "eod": 0.028094168605117542,
+              "eod_low": -0.06671823949650012,
+              "eod_high": 0.12224471354983067
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.3067629962624538,
+              "eod": 0.043394957556686264,
+              "eod_low": -0.02964317313817239,
+              "eod_high": 0.11145460395460394
+            },
+            "top_10:woman": {
               "ratio": 0.8805248151933164,
               "eod": -0.051958932588322515,
               "eod_low": -0.0939682731587123,
               "eod_high": -0.010519408237705308
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.127941291051463,
+              "eod": -0.0073895083019170915,
+              "eod_low": -0.09586822621625468,
+              "eod_high": 0.07392735112344856
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.1861000014486827,
+              "eod": 0.04601197802337231,
+              "eod_low": -0.013101464057263298,
+              "eod_high": 0.10523178794099301
             }
           },
           "fitted_on_relevance": {
             "ndcg_at_10": 0.8288763256995125,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9184414172422615,
               "eod": -0.027218145211534595,
               "eod_low": -0.07379189252510042,
               "eod_high": 0.018763473336017942
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.9433348997493733,
+              "eod": -0.07408558594689985,
+              "eod_low": -0.17191830800809837,
+              "eod_high": 0.0231095560841386
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.260454673028347,
+              "eod": 0.01446815799824902,
+              "eod_low": -0.05632634125532064,
+              "eod_high": 0.0846611586372225
+            },
+            "top_10:woman": {
               "ratio": 0.9422214408633414,
               "eod": -0.006295866370236269,
               "eod_low": -0.04701603170722392,
               "eod_high": 0.035060855013358525
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0403216190255373,
+              "eod": -0.06797946578968483,
+              "eod_low": -0.15434862890885342,
+              "eod_high": 0.01929651343237956
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.1917806386295267,
+              "eod": 0.03798010430016108,
+              "eod_low": -0.022844906694927426,
+              "eod_high": 0.0950671926110495
             }
           },
           "trained_without_historical_bias": {
             "ndcg_at_10": 0.8035395474704718,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9174055031691256,
               "eod": -0.028375666476479044,
               "eod_low": -0.07351086067270388,
               "eod_high": 0.016923158270609282
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.0778070613596928,
+              "eod": 0.014077163712200191,
+              "eod_low": -0.08134294242887462,
+              "eod_high": 0.10969780743049633
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.4006674755900168,
+              "eod": 0.07574133052492676,
+              "eod_low": 0.0057447548809778,
+              "eod_high": 0.14499445411590642
+            },
+            "top_10:woman": {
               "ratio": 0.9281092216342853,
               "eod": -0.0037791593706757443,
               "eod_low": -0.04151431907160734,
               "eod_high": 0.03706064669780927
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0632568262762168,
+              "eod": -0.028936392075078254,
+              "eod_low": -0.11256752427937784,
+              "eod_high": 0.053209635639542126
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.2031612787997856,
+              "eod": 0.05680996307622033,
+              "eod_low": -0.003089851779251459,
+              "eod_high": 0.11347710185051336
             }
           },
           "drop_proxy_terms": {
             "ndcg_at_10": 0.8011947133152527,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.8464897854767386,
               "eod": -0.05717433647470832,
               "eod_low": -0.10573771480883457,
               "eod_high": -0.01246236561665881
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.101791468467086,
+              "eod": 0.028094168605117542,
+              "eod_low": -0.06607756650134042,
+              "eod_high": 0.12050429753554344
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.3300770255086238,
+              "eod": 0.043394957556686264,
+              "eod_low": -0.03145412441624967,
+              "eod_high": 0.11261050032271211
+            },
+            "top_10:woman": {
               "ratio": 0.8945286323814655,
               "eod": -0.04514005023576717,
               "eod_low": -0.08432825849066294,
               "eod_high": -0.003734036764241705
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 1.1348010556364847,
+              "eod": -0.008432261169487476,
+              "eod_low": -0.09764247678009806,
+              "eod_high": 0.0734540757730126
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.1974677274142103,
+              "eod": 0.0473664843740087,
+              "eod_low": -0.012461017011964916,
+              "eod_high": 0.10501074626602168
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0027866745834957906,
               "95ci": [
                 0.00014524715234820245,
@@ -2421,19 +2964,43 @@
           },
           "drop_community_line": {
             "ndcg_at_10": 0.798073093256796,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9313772118513074,
               "eod": -0.026803339432453888,
               "eod_low": -0.07421760127477593,
               "eod_high": 0.016344080001694156
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.103793815524727,
+              "eod": 0.023692548327584773,
+              "eod_low": -0.07122446047805722,
+              "eod_high": 0.11973895148667345
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.2719920155732287,
+              "eod": 0.0258910558170814,
+              "eod_low": -0.04897352826082629,
+              "eod_high": 0.09929416672842438
+            },
+            "top_10:woman": {
               "ratio": 0.9401191763999028,
               "eod": -0.015331418340645775,
               "eod_low": -0.053313716374987996,
               "eod_high": 0.02441712099870521
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 1.088271207586486,
+              "eod": -0.04399614983556599,
+              "eod_low": -0.13442874820097359,
+              "eod_high": 0.04490854417887816
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.2317263613923732,
+              "eod": 0.06218040628846233,
+              "eod_low": 0.00022035801466893383,
+              "eod_high": 0.12216618411222781
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": -0.00033494547496100343,
               "95ci": [
                 -0.006476266968423448,
@@ -2443,19 +3010,43 @@
           },
           "reweighing": {
             "ndcg_at_10": 0.7984630300689091,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.8811652706649423,
               "eod": -0.04302339307848191,
               "eod_low": -0.09161485031235517,
               "eod_high": 0.002831303462655705
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.0611112549014532,
+              "eod": -0.0007519852410363681,
+              "eod_low": -0.09597033787549401,
+              "eod_high": 0.09241388840712872
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.3300770255086238,
+              "eod": 0.039359987818959274,
+              "eod_low": -0.033524551920541774,
+              "eod_high": 0.10731554449349334
+            },
+            "top_10:woman": {
               "ratio": 0.9243043082366583,
               "eod": -0.025262163810573113,
               "eod_low": -0.0650681254248821,
               "eod_high": 0.014577528157776552
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 1.139583787965957,
+              "eod": -0.02997914494264864,
+              "eod_low": -0.11768923307983027,
+              "eod_high": 0.054588128819579584
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.2145678134869282,
+              "eod": 0.05949042646331104,
+              "eod_low": -0.0028431492621168336,
+              "eod_high": 0.1204820966284834
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": 5.499133715226368e-05,
               "95ci": [
                 -0.005713522522606445,
@@ -2463,40 +3054,30 @@
               ]
             }
           },
-          "drop_community_line_and_reweighing": {
-            "ndcg_at_10": 0.7988972958197977,
-            "top_5": {
-              "ratio": 0.930604138896743,
-              "eod": -0.028375666476479044,
-              "eod_low": -0.07552896443843131,
-              "eod_high": 0.01619596552777092
-            },
-            "top_10": {
-              "ratio": 0.9493292892016787,
-              "eod": -0.023160262590093184,
-              "eod_low": -0.062152138158878344,
-              "eod_high": 0.016094983247306374
-            },
-            "ndcg_at_10_minus_matcher": {
-              "mean": 0.0004892570880409352,
-              "95ci": [
-                -0.006425163365692022,
-                0.007122459459840763
-              ]
-            }
-          },
           "lines_swapped": {
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.958208330426289,
               "eod": -0.019504069359461196,
               "eod_low": -0.06790508631208042,
               "eod_high": 0.026811238787309007
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.136192754613807,
+              "eod": 0.030991818400577464,
+              "eod_low": -0.06409775664579777,
+              "eod_high": 0.12727693866530462
+            },
+            "top_10:woman": {
               "ratio": 0.9321978085137315,
               "eod": -0.026321312163482657,
               "eod_low": -0.0654913768739881,
               "eod_high": 0.01382530168802256
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.1139727070981418,
+              "eod": -0.02789363920750787,
+              "eod_low": -0.11499508876969065,
+              "eod_high": 0.05854962864600102
             }
           }
         }
@@ -2506,73 +3087,227 @@
         "fold_seed": 3,
         "rows": {
           "historical_decisions": {
-            "decision": {
+            "decision:woman": {
               "ratio": 0.7496955187026594,
               "eod": -0.1453115470124146,
               "eod_low": -0.1980853168505099,
               "eod_high": -0.09187970851972037
+            },
+            "decision:nonbinary": {
+              "ratio": 1.2039351095129127,
+              "eod": 0.011981631507179014,
+              "eod_low": -0.08753196600002022,
+              "eod_high": 0.10983513894908778
+            },
+            "decision:40_and_over": {
+              "ratio": 1.163206110240392,
+              "eod": 0.024631713847051873,
+              "eod_low": -0.04483947244978405,
+              "eod_high": 0.0986118105227188
             }
           },
           "matcher": {
+            "ndcg_at_10": 0.8013853119822976,
+            "top_5:woman": {
+              "ratio": 0.9119203650820464,
+              "eod": -0.018941704212328103,
+              "eod_low": -0.06778592808725414,
+              "eod_high": 0.028177126611238903
+            },
+            "top_5:nonbinary": {
+              "ratio": 0.9598096193690465,
+              "eod": -0.04361514398010752,
+              "eod_low": -0.13717521155030865,
+              "eod_high": 0.05115071343011149
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.2951460860474757,
+              "eod": 0.05418342617147359,
+              "eod_low": -0.006912217785353751,
+              "eod_high": 0.11700382283521807
+            },
+            "top_10:woman": {
+              "ratio": 0.9236209876079409,
+              "eod": -0.021041965884274094,
+              "eod_low": -0.061805858643288365,
+              "eod_high": 0.019509946225212172
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0321372706241128,
+              "eod": -0.03519290928050056,
+              "eod_low": -0.12249576959548099,
+              "eod_high": 0.05047783940438712
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.1521510493424743,
+              "eod": 0.046703505855781535,
+              "eod_low": -0.011296300464811532,
+              "eod_high": 0.10365456985007261
+            },
+            "ndcg_at_10_minus_unmitigated": {
+              "mean": 0.005953883207593004,
+              "95ci": [
+                -0.0007854787031326518,
+                0.012547878797681137
+              ]
+            }
+          },
+          "matcher_without_mitigation": {
             "ndcg_at_10": 0.7954314287747044,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.8242003056983562,
               "eod": -0.060832169253874246,
               "eod_low": -0.10871417776341707,
               "eod_high": -0.012924114873920966
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.9976669059583633,
+              "eod": -0.002837490976177137,
+              "eod_low": -0.10402415514921944,
+              "eod_high": 0.09719468847052035
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.2719920155732287,
+              "eod": 0.04473994746926191,
+              "eod_low": -0.021056096059653813,
+              "eod_high": 0.10944176502836452
+            },
+            "top_10:woman": {
               "ratio": 0.8542282987237477,
               "eod": -0.06710344239610189,
               "eod_low": -0.10833175087821414,
               "eod_high": -0.026442235061399418
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0298324400636254,
+              "eod": -0.05627857543915937,
+              "eod_low": -0.14269417046484587,
+              "eod_high": 0.030108824914216563
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.1690966899322945,
+              "eod": 0.04938396924287225,
+              "eod_low": -0.009806119724440208,
+              "eod_high": 0.10543062771175664
             }
           },
           "fitted_on_relevance": {
             "ndcg_at_10": 0.8320751817986582,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9356592853918799,
               "eod": -0.03296148372584129,
               "eod_low": -0.07869993483304022,
               "eod_high": 0.011511979628152506
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.9118017556981459,
+              "eod": -0.08787198203256602,
+              "eod_low": -0.18496289666278423,
+              "eod_high": 0.013374553639290469
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.2145678134869282,
+              "eod": 0.007733691997309999,
+              "eod_low": -0.06346233689816354,
+              "eod_high": 0.07608738041226397
+            },
+            "top_10:woman": {
               "ratio": 0.9372096246885364,
               "eod": -0.0036971819439799436,
               "eod_low": -0.042038945886534215,
               "eod_high": 0.03618163039606549
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0771471630618397,
+              "eod": -0.0638084543194033,
+              "eod_low": -0.1463427615268516,
+              "eod_high": 0.0222729970204987
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.2088613038083122,
+              "eod": 0.04673205516996359,
+              "eod_low": -0.012502331447499751,
+              "eod_high": 0.10346645884085497
             }
           },
           "trained_without_historical_bias": {
             "ndcg_at_10": 0.8003413188354649,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9313772118513074,
               "eod": -0.014770692742046565,
               "eod_low": -0.06112688591760327,
               "eod_high": 0.029761222195620114
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.103793815524727,
+              "eod": 0.01824817518248173,
+              "eod_low": -0.07511120190409835,
+              "eod_high": 0.11280054659445334
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.2951460860474757,
+              "eod": 0.05283843625889795,
+              "eod_low": -0.013672977705811426,
+              "eod_high": 0.11938028738109953
+            },
+            "top_10:woman": {
               "ratio": 0.9060967745373923,
               "eod": -0.026272125707465177,
               "eod_low": -0.06698345055070788,
               "eod_high": 0.015584180258734145
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0340401785714286,
+              "eod": -0.056509184246410604,
+              "eod_low": -0.14380410996571327,
+              "eod_high": 0.02997991032779963
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.1634417496939637,
+              "eod": 0.037269543591630594,
+              "eod_low": -0.024993317574493877,
+              "eod_high": 0.09467173209097986
             }
           },
           "drop_proxy_terms": {
             "ndcg_at_10": 0.7990193489513794,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.8369542850265116,
               "eod": -0.05507243525422839,
               "eod_low": -0.10405247665377633,
               "eod_high": -0.007469139608986941
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.0220175227275607,
+              "eod": 0.007820646506777884,
+              "eod_low": -0.09055279776556546,
+              "eod_high": 0.10589251513135108
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.260454673028347,
+              "eod": 0.03733298651203515,
+              "eod_low": -0.02519994685418819,
+              "eod_high": 0.10284539086958656
+            },
+            "top_10:woman": {
               "ratio": 0.8781424052424212,
               "eod": -0.048268308838478324,
               "eod_low": -0.08738947283739,
               "eod_high": -0.008025412557177976
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 1.021624601813281,
+              "eod": -0.050022058233737066,
+              "eod_low": -0.13702658709908713,
+              "eod_high": 0.0365842173295773
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.1634417496939637,
+              "eod": 0.04264950324193317,
+              "eod_low": -0.016923250510503113,
+              "eod_high": 0.09950634656164711
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0035879201766750124,
               "95ci": [
                 0.0001899773973535848,
@@ -2582,19 +3317,43 @@
           },
           "drop_community_line": {
             "ndcg_at_10": 0.801981344804239,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.8918686193373473,
               "eod": -0.02940202385871027,
               "eod_low": -0.079144813379922,
               "eod_high": 0.01875976384369767
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.951563832261065,
+              "eod": -0.03817077083500442,
+              "eod_low": -0.13341389281161226,
+              "eod_high": 0.06034614426922972
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.283555789601604,
+              "eod": 0.04812145512682242,
+              "eod_low": -0.016499107452415677,
+              "eod_high": 0.11189816354978631
+            },
+            "top_10:woman": {
               "ratio": 0.9170453738787789,
               "eod": -0.024203015457663568,
               "eod_low": -0.06649732839543826,
               "eod_high": 0.019054269607888613
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 1.0485720190528678,
+              "eod": -0.03206465067778941,
+              "eod_low": -0.1199804550930709,
+              "eod_high": 0.05453863198120203
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.1634417496939637,
+              "eod": 0.040632018373069734,
+              "eod_low": -0.019029929020091325,
+              "eod_high": 0.09841129650930258
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": 0.006549916029534661,
               "95ci": [
                 0.0006494107970790193,
@@ -2604,19 +3363,43 @@
           },
           "reweighing": {
             "ndcg_at_10": 0.7972407501049856,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.871768521536181,
               "eod": -0.04616804716653222,
               "eod_low": -0.09452648027164923,
               "eod_high": -0.00038571982338163736
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.0377677927695952,
+              "eod": -0.0007519852410363681,
+              "eod_low": -0.09629039761021313,
+              "eod_high": 0.09778437143069273
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.2374589207268034,
+              "eod": 0.029926025554808333,
+              "eod_low": -0.0346843608180212,
+              "eod_high": 0.09735310342457192
+            },
+            "top_10:woman": {
               "ratio": 0.9101458173445893,
               "eod": -0.031005502324879863,
               "eod_low": -0.07179131520896906,
               "eod_high": 0.010294992633434686
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 1.0358385093167701,
+              "eod": -0.04376554102831476,
+              "eod_low": -0.13077348078578396,
+              "eod_high": 0.04194262724480877
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.1634417496939637,
+              "eod": 0.0473664843740087,
+              "eod_low": -0.009035705165754268,
+              "eod_high": 0.10364970694990762
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0018093213302811208,
               "95ci": [
                 -0.00500497459297977,
@@ -2624,40 +3407,30 @@
               ]
             }
           },
-          "drop_community_line_and_reweighing": {
-            "ndcg_at_10": 0.8013853119822976,
-            "top_5": {
-              "ratio": 0.9119203650820464,
-              "eod": -0.018941704212328103,
-              "eod_low": -0.06778592808725414,
-              "eod_high": 0.028177126611238903
-            },
-            "top_10": {
-              "ratio": 0.9236209876079409,
-              "eod": -0.021041965884274094,
-              "eod_low": -0.061805858643288365,
-              "eod_high": 0.019509946225212172
-            },
-            "ndcg_at_10_minus_matcher": {
-              "mean": 0.005953883207593004,
-              "95ci": [
-                -0.0007854787031326518,
-                0.012547878797681137
-              ]
-            }
-          },
           "lines_swapped": {
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.8973959298171328,
               "eod": -0.02473422918265228,
               "eod_low": -0.0718003870551525,
               "eod_high": 0.023517840470953157
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.9728610318900699,
+              "eod": -0.019170610411486322,
+              "eod_low": -0.11330466412954679,
+              "eod_high": 0.07540842590429875
+            },
+            "top_10:woman": {
               "ratio": 0.9248640844957039,
               "eod": -0.02577534250168878,
               "eod_low": -0.06477154017713846,
               "eod_high": 0.0132014940988898
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0230033124769966,
+              "eod": -0.04168003529317399,
+              "eod_low": -0.13097197129213642,
+              "eod_high": 0.04549739378770567
             }
           }
         }
@@ -2667,73 +3440,227 @@
         "fold_seed": 4,
         "rows": {
           "historical_decisions": {
-            "decision": {
+            "decision:woman": {
               "ratio": 0.7496955187026594,
               "eod": -0.1453115470124146,
               "eod_low": -0.1980853168505099,
               "eod_high": -0.09187970851972037
+            },
+            "decision:nonbinary": {
+              "ratio": 1.2039351095129127,
+              "eod": 0.011981631507179014,
+              "eod_low": -0.08753196600002022,
+              "eod_high": 0.10983513894908778
+            },
+            "decision:40_and_over": {
+              "ratio": 1.163206110240392,
+              "eod": 0.024631713847051873,
+              "eod_low": -0.04483947244978405,
+              "eod_high": 0.0986118105227188
             }
           },
           "matcher": {
+            "ndcg_at_10": 0.8090315276754874,
+            "top_5:woman": {
+              "ratio": 0.9257318659182261,
+              "eod": -0.021027209947468872,
+              "eod_low": -0.06241836921733853,
+              "eod_high": 0.021370645985421634
+            },
+            "top_5:nonbinary": {
+              "ratio": 0.9847458961539975,
+              "eod": -0.03608526509986365,
+              "eod_low": -0.13725970606028257,
+              "eod_high": 0.0633008398478078
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.2951460860474757,
+              "eod": 0.04138698912588351,
+              "eod_low": -0.026187755949516507,
+              "eod_high": 0.11044369349452662
+            },
+            "top_10:woman": {
+              "ratio": 0.9294057928100508,
+              "eod": -0.030972711354201543,
+              "eod_low": -0.07409625637062744,
+              "eod_high": 0.011880893532883994
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0056144297752254,
+              "eod": -0.08848359669527561,
+              "eod_low": -0.18223750021466428,
+              "eod_high": -0.0013666771642675095
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.2317263613923732,
+              "eod": 0.06488941898973499,
+              "eod_low": 0.00237073779989141,
+              "eod_high": 0.1244536542998435
+            },
+            "ndcg_at_10_minus_unmitigated": {
+              "mean": -0.0001355381788757862,
+              "95ci": [
+                -0.006025360979186611,
+                0.006337409698273373
+              ]
+            }
+          },
+          "matcher_without_mitigation": {
             "ndcg_at_10": 0.8091670658543632,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.8034881043745203,
               "eod": -0.07754900610567877,
               "eod_low": -0.11975773659833412,
               "eod_high": -0.03814901200516449
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.0623402255639096,
+              "eod": -0.0036496350364964014,
+              "eod_low": -0.1066088784546799,
+              "eod_high": 0.10378948763923629
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.2719920155732287,
+              "eod": 0.045421958863610445,
+              "eod_low": -0.023388032038281655,
+              "eod_high": 0.11383183254058071
+            },
+            "top_10:woman": {
               "ratio": 0.8702783189352644,
               "eod": -0.04717636951489035,
               "eod_low": -0.08806525609304044,
               "eod_high": -0.005146145670496102
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.018131868131868,
+              "eod": -0.087210235020454,
+              "eod_low": -0.17799374947139396,
+              "eod_high": -0.0019398587741623551
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.1861000014486827,
+              "eod": 0.05142048698785706,
+              "eod_low": -0.006649456207694823,
+              "eod_high": 0.10606787077322154
             }
           },
           "fitted_on_relevance": {
             "ndcg_at_10": 0.834067940981041,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9217789636234739,
               "eod": -0.03138915668181613,
               "eod_low": -0.0759394915681657,
               "eod_high": 0.012324249596278699
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.8873711575298732,
+              "eod": -0.09748736664795066,
+              "eod_low": -0.19777047640034925,
+              "eod_high": 0.006837710795172574
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.2145678134869282,
+              "eod": 0.01851264417403664,
+              "eod_low": -0.05862936555081387,
+              "eod_high": 0.09176510832615518
+            },
+            "top_10:woman": {
               "ratio": 0.9239932635585668,
               "eod": -0.016210216354824558,
               "eod_low": -0.05423372069920634,
               "eod_high": 0.024039123118296264
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0613947302582198,
+              "eod": -0.05709071949947864,
+              "eod_low": -0.14257568433971463,
+              "eod_high": 0.02298750491941276
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.2088613038083122,
+              "eod": 0.037317125781934024,
+              "eod_low": -0.024354551484152383,
+              "eod_high": 0.09320497989296916
             }
           },
           "trained_without_historical_bias": {
             "ndcg_at_10": 0.8079219163733263,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.8811652706649423,
               "eod": -0.03200070828496665,
               "eod_low": -0.07524732631849541,
               "eod_high": 0.00982660630701874
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.0611112549014532,
+              "eod": -0.02311101307451674,
+              "eod_low": -0.12401351053882143,
+              "eod_high": 0.08150236905370489
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.35349861659676,
+              "eod": 0.05419294260953422,
+              "eod_low": -0.010692146634452568,
+              "eod_high": 0.11965541737594547
+            },
+            "top_10:woman": {
               "ratio": 0.9150060118792324,
               "eod": -0.01632498475219868,
               "eod_low": -0.05989912811185331,
               "eod_high": 0.02716326229040754
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0476578324625863,
+              "eod": -0.04480829389588514,
+              "eod_low": -0.1347912206044885,
+              "eod_high": 0.0406087751380242
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.2202808189079215,
+              "eod": 0.05613746811993248,
+              "eod_low": -0.00231200290914916,
+              "eod_high": 0.11358380977640857
             }
           },
           "drop_proxy_terms": {
             "ndcg_at_10": 0.8101429862002347,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.8307570460294942,
               "eod": -0.06655911228284184,
               "eod_low": -0.10658710994343992,
               "eod_high": -0.028087425760746552
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.0378882813093337,
+              "eod": -0.010136761049169885,
+              "eod_low": -0.11756336342625734,
+              "eod_high": 0.09658575937838938
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.2719920155732287,
+              "eod": 0.04474946390732265,
+              "eod_low": -0.02473723730546567,
+              "eod_high": 0.11299579692627476
+            },
+            "top_10:woman": {
               "ratio": 0.9005011060448738,
               "eod": -0.03357139578045787,
               "eod_low": -0.07542290252487963,
               "eod_high": 0.009247109862796797
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 1.0123839009287925,
+              "eod": -0.09265460816555715,
+              "eod_low": -0.18515794268308586,
+              "eod_high": -0.005613198152092647
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.1917806386295267,
+              "eod": 0.05074799203156921,
+              "eod_low": -0.006890425095105156,
+              "eod_high": 0.10601645514951057
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0009759203458714827,
               "95ci": [
                 -0.0014531274957473995,
@@ -2743,19 +3670,43 @@
           },
           "drop_community_line": {
             "ndcg_at_10": 0.8107838134974176,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9232500110498126,
               "eod": -0.024171864035519186,
               "eod_low": -0.06690497469067384,
               "eod_high": 0.019039607792576206
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.0029819312679604,
+              "eod": -0.026469880484479014,
+              "eod_low": -0.12847418235070115,
+              "eod_high": 0.07374278094543749
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.3067629962624538,
+              "eod": 0.04744896017053457,
+              "eod_low": -0.020940650313061124,
+              "eod_high": 0.11673421217486567
+            },
+            "top_10:woman": {
               "ratio": 0.9347739962319814,
               "eod": -0.024153829001646088,
               "eod_low": -0.06650499384690364,
               "eod_high": 0.01808972069208888
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 0.9982191455852603,
+              "eod": -0.089526349562846,
+              "eod_low": -0.18229364594532876,
+              "eod_high": -0.002517280944934785
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.2088613038083122,
+              "eod": 0.05007549707528136,
+              "eod_low": -0.007063201240748251,
+              "eod_high": 0.10587226893185667
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0016167476430544213,
               "95ci": [
                 -0.0034329132358782333,
@@ -2765,19 +3716,43 @@
           },
           "reweighing": {
             "ndcg_at_10": 0.8047085064621351,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.8479768621269005,
               "eod": -0.05661197132757523,
               "eod_low": -0.09815130299303025,
               "eod_high": -0.015130529800328266
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.9707916327982118,
+              "eod": -0.027282024544798278,
+              "eod_low": -0.13229012944003946,
+              "eod_high": 0.07920432585032695
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.3067629962624538,
+              "eod": 0.0440769689510348,
+              "eod_low": -0.023258943198069534,
+              "eod_high": 0.11186454090676795
+            },
+            "top_10:woman": {
               "ratio": 0.9045264161759757,
               "eod": -0.032545038398226644,
               "eod_low": -0.07337032199677944,
               "eod_high": 0.010321707784509158
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 1.0141384657484265,
+              "eod": -0.08848359669527561,
+              "eod_low": -0.18201635802008137,
+              "eod_high": -0.0015308612013599566
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.2202808189079215,
+              "eod": 0.0547829617692962,
+              "eod_low": -0.003022387953287206,
+              "eod_high": 0.11024780592214763
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": -0.00445855939222812,
               "95ci": [
                 -0.009903638654373688,
@@ -2785,40 +3760,30 @@
               ]
             }
           },
-          "drop_community_line_and_reweighing": {
-            "ndcg_at_10": 0.8090315276754874,
-            "top_5": {
-              "ratio": 0.9257318659182261,
-              "eod": -0.021027209947468872,
-              "eod_low": -0.06241836921733853,
-              "eod_high": 0.021370645985421634
-            },
-            "top_10": {
-              "ratio": 0.9294057928100508,
-              "eod": -0.030972711354201543,
-              "eod_low": -0.07409625637062744,
-              "eod_high": 0.011880893532883994
-            },
-            "ndcg_at_10_minus_matcher": {
-              "mean": -0.0001355381788757862,
-              "95ci": [
-                -0.006025360979186611,
-                0.006337409698273373
-              ]
-            }
-          },
           "lines_swapped": {
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9142089683148776,
               "eod": -0.025760586564883503,
               "eod_low": -0.06755032341167903,
               "eod_high": 0.016510979246587665
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.0376431060228968,
+              "eod": -0.004110852650998642,
+              "eod_low": -0.10771136060448282,
+              "eod_high": 0.09917100213919787
+            },
+            "top_10:woman": {
               "ratio": 0.937663944284716,
               "eod": -0.018410490487339448,
               "eod_low": -0.057397037255197125,
               "eod_high": 0.023561487249517066
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.009145999326675,
+              "eod": -0.09497072270794904,
+              "eod_low": -0.18629362638971692,
+              "eod_high": -0.009036604284433853
             }
           }
         }
@@ -2828,73 +3793,227 @@
         "fold_seed": 0,
         "rows": {
           "historical_decisions": {
-            "decision": {
+            "decision:woman": {
               "ratio": 0.707849671122544,
               "eod": -0.14880417408088786,
               "eod_low": -0.2012168623217768,
               "eod_high": -0.09715177427742701
+            },
+            "decision:nonbinary": {
+              "ratio": 1.0101787860576923,
+              "eod": -0.010382949056321866,
+              "eod_low": -0.1125676398873154,
+              "eod_high": 0.0929397683397679
+            },
+            "decision:40_and_over": {
+              "ratio": 1.1770479864887897,
+              "eod": -0.00037809842869318544,
+              "eod_low": -0.0694300158886008,
+              "eod_high": 0.06987365549304529
             }
           },
           "matcher": {
+            "ndcg_at_10": 0.7893798607256037,
+            "top_5:woman": {
+              "ratio": 1.015203063459504,
+              "eod": 0.004065506529541241,
+              "eod_low": -0.04302402638837743,
+              "eod_high": 0.05363759813374036
+            },
+            "top_5:nonbinary": {
+              "ratio": 0.8381297831632654,
+              "eod": -0.04071012399780888,
+              "eod_low": -0.1499234863861113,
+              "eod_high": 0.06755178241413044
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.3772894610477215,
+              "eod": 0.049774166791233976,
+              "eod_low": -0.01771759371509604,
+              "eod_high": 0.11353459872321013
+            },
+            "top_10:woman": {
+              "ratio": 1.0349702987944704,
+              "eod": 0.002648007962119614,
+              "eod_low": -0.037063566740911116,
+              "eod_high": 0.04515366079439292
+            },
+            "top_10:nonbinary": {
+              "ratio": 0.9174130721830986,
+              "eod": -0.028534435536078928,
+              "eod_low": -0.11953098218325833,
+              "eod_high": 0.06473488193981194
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.283209098941931,
+              "eod": 0.06057781646691929,
+              "eod_low": 0.002788531090960703,
+              "eod_high": 0.11041960421235536
+            },
+            "ndcg_at_10_minus_unmitigated": {
+              "mean": 0.0020567274929035677,
+              "95ci": [
+                -0.005866847605720437,
+                0.00995737946144846
+              ]
+            }
+          },
+          "matcher_without_mitigation": {
             "ndcg_at_10": 0.7873231332327003,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9347191023039442,
               "eod": -0.026697228337907497,
               "eod_low": -0.07380268507155806,
               "eod_high": 0.019427787158257173
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.8880852349370504,
+              "eod": -0.015462377371644853,
+              "eod_low": -0.11951739702390146,
+              "eod_high": 0.08840747803486172
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.3418063325319876,
+              "eod": 0.03655830776039698,
+              "eod_low": -0.03213168104897484,
+              "eod_high": 0.10078593315975726
+            },
+            "top_10:woman": {
               "ratio": 0.972526110871256,
               "eod": -0.031326718340018656,
               "eod_low": -0.0732828403927657,
               "eod_high": 0.013202302070015378
+            },
+            "top_10:nonbinary": {
+              "ratio": 0.9131350783394327,
+              "eod": -0.041382401274836944,
+              "eod_low": -0.13142971964128505,
+              "eod_high": 0.05223586937633828
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.283209098941931,
+              "eod": 0.05750320211266158,
+              "eod_low": 0.0015371456172798173,
+              "eod_high": 0.1060845552108386
             }
           },
           "fitted_on_relevance": {
             "ndcg_at_10": 0.8356922705139792,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 1.0820699521844759,
               "eod": 0.0435021262478511,
               "eod_low": 6.99761257738563e-05,
               "eod_high": 0.08857435277473866
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.0526101878612717,
+              "eod": 0.06394103879288882,
+              "eod_low": -0.03258161039949578,
+              "eod_high": 0.15818214022205188
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.3536067892503536,
+              "eod": 0.020086112649883747,
+              "eod_low": -0.048713970003415326,
+              "eod_high": 0.08389491052133101
+            },
+            "top_10:woman": {
               "ratio": 1.0122235983935888,
               "eod": -0.00445758060138135,
               "eod_low": -0.042160884501056886,
               "eod_high": 0.03496124149173146
+            },
+            "top_10:nonbinary": {
+              "ratio": 0.8982705041821561,
+              "eod": -0.04795577909466664,
+              "eod_low": -0.13870849581504485,
+              "eod_high": 0.04445801855762621
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.2425883614002424,
+              "eod": -0.006187331650941874,
+              "eod_low": -0.0687121545830316,
+              "eod_high": 0.0490087866023745
             }
           },
           "trained_without_historical_bias": {
             "ndcg_at_10": 0.7967868508863727,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 1.0170900580012503,
               "eod": 0.011783333835992393,
               "eod_low": -0.03716725226247035,
               "eod_high": 0.06096047842902152
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.8592152648698884,
+              "eod": -0.04285145162093518,
+              "eod_low": -0.148099794909406,
+              "eod_high": 0.06506458550802091
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.413019285706091,
+              "eod": 0.0640686321922968,
+              "eod_low": -0.007697132616487429,
+              "eod_high": 0.13012806599342475
+            },
+            "top_10:woman": {
               "ratio": 1.0108988399448364,
               "eod": -0.013354646077751275,
               "eod_low": -0.05318065336416553,
               "eod_high": 0.02803605225068238
+            },
+            "top_10:nonbinary": {
+              "ratio": 0.8365776909722222,
+              "eod": -0.07519545839350628,
+              "eod_low": -0.1665491276586907,
+              "eod_high": 0.014467803936857029
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.2715700141442716,
+              "eod": 0.047109891816953464,
+              "eod_low": -0.014514419391010929,
+              "eod_high": 0.1000145180096873
             }
           },
           "drop_proxy_terms": {
             "ndcg_at_10": 0.788634020722657,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9394280146581203,
               "eod": -0.023880326929456797,
               "eod_low": -0.07420607148779954,
               "eod_high": 0.024776662271546714
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.8502943738758993,
+              "eod": -0.03871819132513321,
+              "eod_low": -0.13593815718403426,
+              "eod_high": 0.061566712915112516
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.3065673539831049,
+              "eod": 0.026417063083817693,
+              "eod_low": -0.04031823497584987,
+              "eod_high": 0.0879440027464894
+            },
+            "top_10:woman": {
               "ratio": 0.987232580684631,
               "eod": -0.0235515878999909,
               "eod_low": -0.066379162466698,
               "eod_high": 0.02142522305360239
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 0.9190208477209945,
+              "eod": -0.03924107365171059,
+              "eod_low": -0.1340363814125979,
+              "eod_high": 0.05899612603166934
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.2890386348308558,
+              "eod": 0.06124315246159662,
+              "eod_low": 0.0038440644743194035,
+              "eod_high": 0.11081192079832734
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0013108874899567175,
               "95ci": [
                 -0.0002989585009715975,
@@ -2904,19 +4023,43 @@
           },
           "drop_community_line": {
             "ndcg_at_10": 0.7918746539841147,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 1.0257697881970047,
               "eod": 0.00834816177579395,
               "eod_low": -0.039341425111408736,
               "eod_high": 0.05708333495897501
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.862421291977612,
+              "eod": -0.03642746875155617,
+              "eod_low": -0.14380947277724154,
+              "eod_high": 0.07322718904637116
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.413019285706091,
+              "eod": 0.06257675544652247,
+              "eod_low": -0.003682051864624323,
+              "eod_high": 0.12484627294505463
+            },
+            "top_10:woman": {
               "ratio": 1.0110069834916735,
               "eod": -0.015438670567300972,
               "eod_low": -0.05683115457790439,
               "eod_high": 0.027371221890411572
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 0.908034314010223,
+              "eod": -0.03817040984014741,
+              "eod_low": -0.12922963946321944,
+              "eod_high": 0.05400067185776077
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.259957502599575,
+              "eod": 0.043369941468018425,
+              "eod_low": -0.013003086014735687,
+              "eod_high": 0.09394759756921323
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": 0.004551520751414588,
               "95ci": [
                 -0.003030641664708248,
@@ -2926,19 +4069,43 @@
           },
           "reweighing": {
             "ndcg_at_10": 0.7901851235356219,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9854045929733446,
               "eod": -0.011146967457852042,
               "eod_low": -0.05899460876330168,
               "eod_high": 0.03502473825771882
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.827384529532967,
+              "eod": -0.057691350032368915,
+              "eod_low": -0.1567607356696141,
+              "eod_high": 0.04710761484355399
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.3418063325319876,
+              "eod": 0.03655830776039698,
+              "eod_low": -0.03119256044898865,
+              "eod_high": 0.09886050368255195
+            },
+            "top_10:woman": {
               "ratio": 1.0060504042616478,
               "eod": -0.008339113912597673,
               "eod_low": -0.05015944474129825,
               "eod_high": 0.03451036540287722
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 0.87548828125,
+              "eod": -0.04551566157063891,
+              "eod_low": -0.14086515931152305,
+              "eod_high": 0.05387456293625372
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.3065673539831049,
+              "eod": 0.07071906114349857,
+              "eod_low": 0.015406522039956932,
+              "eod_high": 0.11862296746205
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0028619903029217515,
               "95ci": [
                 -0.0022642534877730957,
@@ -2946,40 +4113,30 @@
               ]
             }
           },
-          "drop_community_line_and_reweighing": {
-            "ndcg_at_10": 0.7893798607256037,
-            "top_5": {
-              "ratio": 1.015203063459504,
-              "eod": 0.004065506529541241,
-              "eod_low": -0.04302402638837743,
-              "eod_high": 0.05363759813374036
-            },
-            "top_10": {
-              "ratio": 1.0349702987944704,
-              "eod": 0.002648007962119614,
-              "eod_low": -0.037063566740911116,
-              "eod_high": 0.04515366079439292
-            },
-            "ndcg_at_10_minus_matcher": {
-              "mean": 0.0020567274929035677,
-              "95ci": [
-                -0.005866847605720437,
-                0.00995737946144846
-              ]
-            }
-          },
           "lines_swapped": {
-            "top_5": {
+            "top_5:woman": {
               "ratio": 1.0189840804556287,
               "eod": 0.007615284856892945,
               "eod_low": -0.041691071680580824,
               "eod_high": 0.05655449527788357
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.8803792772346368,
+              "eod": -0.026940889397938372,
+              "eod_low": -0.12285511840608963,
+              "eod_high": 0.07385427224369183
+            },
+            "top_10:woman": {
               "ratio": 1.0187137229961645,
               "eod": -0.00901468769792202,
               "eod_low": -0.053229723734032335,
               "eod_high": 0.034307148766510365
+            },
+            "top_10:nonbinary": {
+              "ratio": 0.9007819780987885,
+              "eod": -0.043374333947512556,
+              "eod_low": -0.1346086860278321,
+              "eod_high": 0.04889415177477912
             }
           }
         }
@@ -2989,73 +4146,227 @@
         "fold_seed": 0,
         "rows": {
           "historical_decisions": {
-            "decision": {
+            "decision:woman": {
               "ratio": 0.8137994937817009,
               "eod": -0.1371008517169771,
               "eod_low": -0.181168911386459,
               "eod_high": -0.09534242994742524
+            },
+            "decision:nonbinary": {
+              "ratio": 1.107029006091595,
+              "eod": -0.014080717488789252,
+              "eod_low": -0.1184610655671874,
+              "eod_high": 0.09091078358788465
+            },
+            "decision:40_and_over": {
+              "ratio": 1.431110946388608,
+              "eod": 0.051201493322115876,
+              "eod_low": -0.01644705119086702,
+              "eod_high": 0.11761401291118521
             }
           },
           "matcher": {
+            "ndcg_at_10": 0.823037373933194,
+            "top_5:woman": {
+              "ratio": 1.2150569824562105,
+              "eod": 0.024671201131609866,
+              "eod_low": -0.02345085487293333,
+              "eod_high": 0.07507013169419767
+            },
+            "top_5:nonbinary": {
+              "ratio": 1.0654767850998412,
+              "eod": -0.04197309417040357,
+              "eod_low": -0.14482856996739127,
+              "eod_high": 0.06453490573456412
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.7711735569614047,
+              "eod": 0.08039488905247666,
+              "eod_low": 0.01578660505807936,
+              "eod_high": 0.14521885788693417
+            },
+            "top_10:woman": {
+              "ratio": 1.1182029746975635,
+              "eod": 0.004744635386884188,
+              "eod_low": -0.03560951646830686,
+              "eod_high": 0.04521653011204966
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.120265944877661,
+              "eod": 0.010852017937219793,
+              "eod_low": -0.07248218716220943,
+              "eod_high": 0.09306704761638222
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.5389392619052762,
+              "eod": 0.04601167315175092,
+              "eod_low": -0.001912039267526585,
+              "eod_high": 0.09146229690547501
+            },
+            "ndcg_at_10_minus_unmitigated": {
+              "mean": 0.0077799163849560345,
+              "95ci": [
+                0.0017775618639056948,
+                0.013548594652675057
+              ]
+            }
+          },
+          "matcher_without_mitigation": {
             "ndcg_at_10": 0.8152574575482379,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 1.0904285363193045,
               "eod": -0.02077527312125682,
               "eod_low": -0.06943323652289035,
               "eod_high": 0.028726948538359276
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.1391788226031259,
+              "eod": -0.006547085201793756,
+              "eod_low": -0.10717333714782204,
+              "eod_high": 0.10034216414337392
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.7580108521682907,
+              "eod": 0.07007308865285516,
+              "eod_low": 0.0048494221693564715,
+              "eod_high": 0.13619333534883069
+            },
+            "top_10:woman": {
               "ratio": 1.06052925984383,
               "eod": -0.015389592801035246,
               "eod_low": -0.05627168194228649,
               "eod_high": 0.02425445146032142
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.1049713313590825,
+              "eod": -0.009147982062780224,
+              "eod_low": -0.09737198082687114,
+              "eod_high": 0.0759714756908693
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.4949095445218354,
+              "eod": 0.04379798086023767,
+              "eod_low": -0.010847548429202327,
+              "eod_high": 0.0936567982015728
             }
           },
           "fitted_on_relevance": {
             "ndcg_at_10": 0.83929236428714,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 1.1480121795631124,
               "eod": 0.00897613386703583,
               "eod_low": -0.03819235947283109,
               "eod_high": 0.057639025656454804
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.9752663130202268,
+              "eod": -0.047668161434977596,
+              "eod_low": -0.15148468012932328,
+              "eod_high": 0.05945330241503251
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.8374599924764272,
+              "eod": 0.079393206436008,
+              "eod_low": 0.00966641334326477,
+              "eod_high": 0.1461321293308717
+            },
+            "top_10:woman": {
               "ratio": 1.1300045284017368,
               "eod": 0.009862461251392007,
               "eod_low": -0.028595489351882046,
               "eod_high": 0.04766550351286347
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.1466333949076926,
+              "eod": 0.028520179372197307,
+              "eod_low": -0.048728432358089845,
+              "eod_high": 0.09927326666956904
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.50117758791241,
+              "eod": 0.027768429908507697,
+              "eod_low": -0.027066789999786685,
+              "eod_high": 0.0781813718850783
             }
           },
           "trained_without_historical_bias": {
             "ndcg_at_10": 0.8252398035600426,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 1.1899588286287983,
               "eod": 0.01101212869052276,
               "eod_low": -0.040157229362312245,
               "eod_high": 0.06276938535384205
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.0125610224343151,
+              "eod": -0.057578475336322876,
+              "eod_low": -0.16055517908507436,
+              "eod_high": 0.050003008790154034
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.8641973782303858,
+              "eod": 0.09087969292249448,
+              "eod_low": 0.02510085283598039,
+              "eod_high": 0.15892274851043436
+            },
+            "top_10:woman": {
               "ratio": 1.1222204704150396,
               "eod": 0.004302224094862694,
               "eod_low": -0.036022913642993155,
               "eod_high": 0.04337975884662553
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.090524371119847,
+              "eod": 0.013094170403587513,
+              "eod_low": -0.06464432946939097,
+              "eod_high": 0.09211878961536502
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.5515852367430272,
+              "eod": 0.048714375854453595,
+              "eod_low": -0.005024028748712958,
+              "eod_high": 0.09596536973797609
             }
           },
           "drop_proxy_terms": {
             "ndcg_at_10": 0.8195191136335421,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 1.1270414652760112,
               "eod": -0.006894995034158968,
               "eod_low": -0.05575890097376563,
               "eod_high": 0.04133591010979358
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.0926015603981707,
+              "eod": -0.03206278026905829,
+              "eod_low": -0.13637808613012814,
+              "eod_high": 0.07475512834240729
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.7711735569614047,
+              "eod": 0.06550636239352192,
+              "eod_low": -0.003094530609755111,
+              "eod_high": 0.1355043970092172
+            },
+            "top_10:woman": {
               "ratio": 1.076698874100212,
               "eod": -0.0015093147139374485,
               "eod_low": -0.04168034591637522,
               "eod_high": 0.03686963471908572
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 1.1122068779629306,
+              "eod": -0.0046636771300447855,
+              "eod_low": -0.0934853850298677,
+              "eod_high": 0.08056568790043715
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.488648772643315,
+              "eod": 0.037204227573877424,
+              "eod_low": -0.01574145170201652,
+              "eod_high": 0.08617290071898494
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": 0.004261656085304335,
               "95ci": [
                 0.0011046772741756569,
@@ -3065,19 +4376,43 @@
           },
           "drop_community_line": {
             "ndcg_at_10": 0.8253180037279801,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 1.2122891988970848,
               "eod": 0.02847684112318294,
               "eod_low": -0.019850433378992408,
               "eod_high": 0.07944219213463088
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.0859667232748382,
+              "eod": -0.040852017937219764,
+              "eod_low": -0.14499789138310618,
+              "eod_high": 0.0657120233651289
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.7580108521682907,
+              "eod": 0.07058576085813434,
+              "eod_low": 0.0020448197393198126,
+              "eod_high": 0.13968686019981832
+            },
+            "top_10:woman": {
               "ratio": 1.1110171790398593,
               "eod": -0.00018208083787274454,
               "eod_low": -0.03991892612398519,
               "eod_high": 0.03961979319505992
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 1.11708035451308,
+              "eod": -0.011390134529147944,
+              "eod_low": -0.09724130411663147,
+              "eod_high": 0.07452306724077604
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.5452585624510211,
+              "eod": 0.04736302450310226,
+              "eod_low": -0.0018949394768829897,
+              "eod_high": 0.09497227725200735
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": 0.010060546179742346,
               "95ci": [
                 0.004435754160179636,
@@ -3087,19 +4422,43 @@
           },
           "reweighing": {
             "ndcg_at_10": 0.8201121946157072,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 1.1585899232808416,
               "eod": 0.006764077406928137,
               "eod_low": -0.04069572755221705,
               "eod_high": 0.05604325431425741
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.1275003817376699,
+              "eod": -0.01645739910313898,
+              "eod_low": -0.12341816330942634,
+              "eod_high": 0.09124315108151623
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.7580108521682907,
+              "eod": 0.07328846356083707,
+              "eod_low": 0.007366516630094636,
+              "eod_high": 0.14089540371780515
+            },
+            "top_10:woman": {
               "ratio": 1.1028297624100722,
               "eod": 0.006544376561230414,
               "eod_low": -0.030949476526600097,
               "eod_high": 0.04422885690231526
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 1.1030126491786836,
+              "eod": -0.0046636771300447855,
+              "eod_low": -0.090969478644757,
+              "eod_high": 0.08060667076374771
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.507452915490539,
+              "eod": 0.0377168997791566,
+              "eod_low": -0.014069823807634484,
+              "eod_high": 0.08259304585809923
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": 0.00485473706746938,
               "95ci": [
                 0.0006604894915886178,
@@ -3107,40 +4466,30 @@
               ]
             }
           },
-          "drop_community_line_and_reweighing": {
-            "ndcg_at_10": 0.823037373933194,
-            "top_5": {
-              "ratio": 1.2150569824562105,
-              "eod": 0.024671201131609866,
-              "eod_low": -0.02345085487293333,
-              "eod_high": 0.07507013169419767
-            },
-            "top_10": {
-              "ratio": 1.1182029746975635,
-              "eod": 0.004744635386884188,
-              "eod_low": -0.03560951646830686,
-              "eod_high": 0.04521653011204966
-            },
-            "ndcg_at_10_minus_matcher": {
-              "mean": 0.0077799163849560345,
-              "95ci": [
-                0.0017775618639056948,
-                0.013548594652675057
-              ]
-            }
-          },
           "lines_swapped": {
-            "top_5": {
+            "top_5:woman": {
               "ratio": 1.2122891988970848,
               "eod": 0.02534986607277212,
               "eod_low": -0.024324865954639507,
               "eod_high": 0.07445744430005925
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.0859667232748382,
+              "eod": -0.028609865470852036,
+              "eod_low": -0.13333502843621572,
+              "eod_high": 0.07600329123876337
+            },
+            "top_10:woman": {
               "ratio": 1.1232882348968807,
               "eod": 0.018639961477111888,
               "eod_low": -0.02176558029343826,
               "eod_high": 0.058028665671294444
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.1014852682675094,
+              "eod": -0.007937219730941747,
+              "eod_low": -0.09525928388687659,
+              "eod_high": 0.0804796871269743
             }
           }
         }
@@ -3150,73 +4499,227 @@
         "fold_seed": 0,
         "rows": {
           "historical_decisions": {
-            "decision": {
+            "decision:woman": {
               "ratio": 0.7920458310231487,
               "eod": -0.12625168091441746,
               "eod_low": -0.17670686072955694,
               "eod_high": -0.07445367774173084
+            },
+            "decision:nonbinary": {
+              "ratio": 0.9762583564587216,
+              "eod": -0.05293928833455619,
+              "eod_low": -0.1523123241264377,
+              "eod_high": 0.04768935777031633
+            },
+            "decision:40_and_over": {
+              "ratio": 1.199215849348026,
+              "eod": 0.0322688748594655,
+              "eod_low": -0.03302330639037964,
+              "eod_high": 0.09733669148815215
             }
           },
           "matcher": {
+            "ndcg_at_10": 0.8144934048477285,
+            "top_5:woman": {
+              "ratio": 1.0119176718346923,
+              "eod": 0.005468975122466635,
+              "eod_low": -0.03890206983536197,
+              "eod_high": 0.04791990953939569
+            },
+            "top_5:nonbinary": {
+              "ratio": 0.9020103913413716,
+              "eod": 0.03003484959647834,
+              "eod_low": -0.06677148124278814,
+              "eod_high": 0.14169672255873986
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.6009255635116155,
+              "eod": 0.06982400761048169,
+              "eod_low": 0.003719458657304572,
+              "eod_high": 0.13174755603120944
+            },
+            "top_10:woman": {
+              "ratio": 0.9856349871532404,
+              "eod": -0.021200533090001028,
+              "eod_low": -0.060695379456300984,
+              "eod_high": 0.018708668349408583
+            },
+            "top_10:nonbinary": {
+              "ratio": 0.9094851941784639,
+              "eod": -0.006946991929567159,
+              "eod_low": -0.09987006005498641,
+              "eod_high": 0.07973590600490506
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.327242733418207,
+              "eod": 0.06257026723168735,
+              "eod_low": 0.011589449736390579,
+              "eod_high": 0.11058134181756651
+            },
+            "ndcg_at_10_minus_unmitigated": {
+              "mean": 0.004063201997070676,
+              "95ci": [
+                -0.0031884287477549856,
+                0.010960723416570759
+              ]
+            }
+          },
+          "matcher_without_mitigation": {
             "ndcg_at_10": 0.8104302028506579,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9456700442440427,
               "eod": -0.01726239074056285,
               "eod_low": -0.06071450959652697,
               "eod_high": 0.02574808993185855
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.8939733282095313,
+              "eod": 0.0055254952311078465,
+              "eod_low": -0.09281475627492886,
+              "eod_high": 0.11716932482571216
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.5281038101203894,
+              "eod": 0.05502464758280723,
+              "eod_low": -0.010216675769600067,
+              "eod_high": 0.11658651028435621
+            },
+            "top_10:woman": {
               "ratio": 0.9456700442440427,
               "eod": -0.043565699740658936,
               "eod_low": -0.08532043264954323,
               "eod_high": -0.003332593210210272
+            },
+            "top_10:nonbinary": {
+              "ratio": 0.8939733282095313,
+              "eod": -0.04223220836390318,
+              "eod_low": -0.14476859880934456,
+              "eod_high": 0.05392782436176435
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.2983660269490451,
+              "eod": 0.04040906339185335,
+              "eod_low": -0.014485369843967612,
+              "eod_high": 0.09069329651326936
             }
           },
           "fitted_on_relevance": {
             "ndcg_at_10": 0.8434141844273455,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 1.0590087932971848,
               "eod": 0.008488617808087628,
               "eod_low": -0.0376097597274432,
               "eod_high": 0.055419422697203416
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.9019475947393568,
+              "eod": 0.02558694057226707,
+              "eod_low": -0.09303130476145115,
+              "eod_high": 0.14170278301008174
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.63772563010065,
+              "eod": 0.06986724898382768,
+              "eod_low": 0.0013606667357828036,
+              "eod_high": 0.13683852793201723
+            },
+            "top_10:woman": {
               "ratio": 1.0050538355397685,
               "eod": 0.00015908654307938974,
               "eod_low": -0.03529891076611618,
               "eod_high": 0.03524979980677058
+            },
+            "top_10:nonbinary": {
+              "ratio": 0.9170223642959651,
+              "eod": -0.0264811078503302,
+              "eod_low": -0.12902722738616498,
+              "eod_high": 0.06208309479677311
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.444432351047137,
+              "eod": 0.08887183256940234,
+              "eod_low": 0.04741484883515878,
+              "eod_high": 0.12748459971572149
             }
           },
           "trained_without_historical_bias": {
             "ndcg_at_10": 0.8139260233325794,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 1.048572957679007,
               "eod": 0.012432763423302295,
               "eod_low": -0.0297667018066739,
               "eod_high": 0.05324676775342675
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.8445440023960465,
+              "eod": -0.0018800440205428703,
+              "eod_low": -0.10150277145639687,
+              "eod_high": 0.10366859403922914
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.613163184391539,
+              "eod": 0.08259102309089333,
+              "eod_low": 0.02055635051548912,
+              "eod_high": 0.1440282574228995
+            },
+            "top_10:woman": {
               "ratio": 1.0436022486936465,
               "eod": 0.014777038709057777,
               "eod_low": -0.023856763494837785,
               "eod_high": 0.05306717070366939
+            },
+            "top_10:nonbinary": {
+              "ratio": 0.9409548682875502,
+              "eod": 0.01877751283932505,
+              "eod_low": -0.06854124924265957,
+              "eod_high": 0.10392351406664542
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.3562862608375088,
+              "eod": 0.0706347833607196,
+              "eod_low": 0.019723483556121295,
+              "eod_high": 0.11746368155997314
             }
           },
           "drop_proxy_terms": {
             "ndcg_at_10": 0.8100372538799047,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9564160951322437,
               "eod": -0.00922101623283067,
               "eod_low": -0.05397682482647252,
               "eod_high": 0.03454083134671412
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.8808822200126548,
+              "eod": 0.006603081438004366,
+              "eod_low": -0.09041823797707318,
+              "eod_high": 0.1189714928107683
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.5281038101203894,
+              "eod": 0.06174868113811294,
+              "eod_low": -0.0016100967971033413,
+              "eod_high": 0.12223274493961993
+            },
+            "top_10:woman": {
               "ratio": 0.9635574898293434,
               "eod": -0.038177768706176174,
               "eod_low": -0.07788651702432949,
               "eod_high": 0.0010962616140103162
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 0.8922538661118737,
+              "eod": -0.036844277329420416,
+              "eod_low": -0.13508379062936768,
+              "eod_high": 0.054480217615441535
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.3098967831147648,
+              "eod": 0.0578677678803079,
+              "eod_low": 0.004158656377658296,
+              "eod_high": 0.10783734237314295
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": -0.00039294897075317636,
               "95ci": [
                 -0.0035281209718598743,
@@ -3226,19 +4729,43 @@
           },
           "drop_community_line": {
             "ndcg_at_10": 0.8134589903354251,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.997553433782009,
               "eod": 0.0012907021419652498,
               "eod_low": -0.042694956674338515,
               "eod_high": 0.04256258532499264
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.9670417659848359,
+              "eod": 0.06194974321349961,
+              "eod_low": -0.03574306494899101,
+              "eod_high": 0.16471758549564774
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.6009255635116155,
+              "eod": 0.07452650696186108,
+              "eod_low": 0.008318640114458395,
+              "eod_high": 0.13609925506514375
+            },
+            "top_10:woman": {
               "ratio": 0.9711014275828391,
               "eod": -0.03076673710498501,
               "eod_low": -0.07052791555073779,
               "eod_high": 0.008586495431511224
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 0.886472587682726,
+              "eod": -0.03361151870873069,
+              "eod_low": -0.12979989306247391,
+              "eod_high": 0.057902622380143945
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.3330380470738625,
+              "eod": 0.06257026723168735,
+              "eod_low": 0.013155048076487949,
+              "eod_high": 0.10909284050658322
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0030287874847670948,
               "95ci": [
                 -0.003956829765150549,
@@ -3248,19 +4775,43 @@
           },
           "reweighing": {
             "ndcg_at_10": 0.8087954842014252,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9988746054677794,
               "eod": 0.0028155316492171623,
               "eod_low": -0.03952476442244441,
               "eod_high": 0.044941670452940896
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.8970451965266484,
+              "eod": 0.013068598679383703,
+              "eod_low": -0.0863962417632814,
+              "eod_high": 0.12440287994840263
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.5281038101203894,
+              "eod": 0.05368416500908069,
+              "eod_low": -0.012669681895810329,
+              "eod_high": 0.11560651868607356
+            },
+            "top_10:woman": {
               "ratio": 0.9926472076780801,
               "eod": -0.016259845355873548,
               "eod_low": -0.055751456052984774,
               "eod_high": 0.02391180632657105
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 0.9385750667362155,
+              "eod": -0.0047918195157740096,
+              "eod_low": -0.08899091877289901,
+              "eod_high": 0.07957560155812217
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.3214540925474172,
+              "eod": 0.0578677678803079,
+              "eod_low": 0.004306589492026267,
+              "eod_high": 0.10793292767803718
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": -0.0016347186492326748,
               "95ci": [
                 -0.006636501338112141,
@@ -3268,40 +4819,30 @@
               ]
             }
           },
-          "drop_community_line_and_reweighing": {
-            "ndcg_at_10": 0.8144934048477285,
-            "top_5": {
-              "ratio": 1.0119176718346923,
-              "eod": 0.005468975122466635,
-              "eod_low": -0.03890206983536197,
-              "eod_high": 0.04791990953939569
-            },
-            "top_10": {
-              "ratio": 0.9856349871532404,
-              "eod": -0.021200533090001028,
-              "eod_low": -0.060695379456300984,
-              "eod_high": 0.018708668349408583
-            },
-            "ndcg_at_10_minus_matcher": {
-              "mean": 0.004063201997070676,
-              "95ci": [
-                -0.0031884287477549856,
-                0.010960723416570759
-              ]
-            }
-          },
           "lines_swapped": {
-            "top_5": {
+            "top_5:woman": {
               "ratio": 1.0013655645836592,
               "eod": 0.007308976082989138,
               "eod_low": -0.03564538482962437,
               "eod_high": 0.049809638460707975
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 0.8804332484428216,
+              "eod": 0.0013527146001467427,
+              "eod_low": -0.09903822434562011,
+              "eod_high": 0.11224916030497539
+            },
+            "top_10:woman": {
               "ratio": 0.9899226499259903,
               "eod": -0.02861156469119197,
               "eod_low": -0.06977142799365688,
               "eod_high": 0.010995491114838002
+            },
+            "top_10:nonbinary": {
+              "ratio": 0.911149393984829,
+              "eod": -0.031456346294937654,
+              "eod_low": -0.13356826893165175,
+              "eod_high": 0.0651095050106269
             }
           }
         }
@@ -3311,73 +4852,227 @@
         "fold_seed": 0,
         "rows": {
           "historical_decisions": {
-            "decision": {
+            "decision:woman": {
               "ratio": 0.8207855855855856,
               "eod": -0.12510027753407726,
               "eod_low": -0.17377905383308118,
               "eod_high": -0.07610251303968942
+            },
+            "decision:nonbinary": {
+              "ratio": 1.152574850299401,
+              "eod": 0.04262302714279065,
+              "eod_low": -0.053633724700069746,
+              "eod_high": 0.1425044805285361
+            },
+            "decision:40_and_over": {
+              "ratio": 1.3031720523659889,
+              "eod": 0.06676052954678913,
+              "eod_low": -0.0012181930687437446,
+              "eod_high": 0.13946046140333673
             }
           },
           "matcher": {
+            "ndcg_at_10": 0.814567316274432,
+            "top_5:woman": {
+              "ratio": 0.9471076760597186,
+              "eod": -0.031211489159785222,
+              "eod_low": -0.08040496430107662,
+              "eod_high": 0.020805450245523292
+            },
+            "top_5:nonbinary": {
+              "ratio": 1.3534281348493067,
+              "eod": 0.058359327715442944,
+              "eod_low": -0.044719842715697164,
+              "eod_high": 0.1653648005466412
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.6204603200242031,
+              "eod": 0.06983665189772059,
+              "eod_low": -0.004699974157980815,
+              "eod_high": 0.1370985112472378
+            },
+            "top_10:woman": {
+              "ratio": 0.9469280303925973,
+              "eod": -0.03583705711466967,
+              "eod_low": -0.07521441659582019,
+              "eod_high": 0.002562460669105485
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.058795794238295,
+              "eod": -0.06494715768890547,
+              "eod_low": -0.15681558804845203,
+              "eod_high": 0.023678068767654777
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.5197868492656261,
+              "eod": 0.10048777558319544,
+              "eod_low": 0.04441240529600463,
+              "eod_high": 0.1497684779416327
+            },
+            "ndcg_at_10_minus_unmitigated": {
+              "mean": 0.0011030521757629593,
+              "95ci": [
+                -0.003584675105770851,
+                0.006053803028528063
+              ]
+            }
+          },
+          "matcher_without_mitigation": {
             "ndcg_at_10": 0.8134642640986689,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9018900018900019,
               "eod": -0.049486749710688616,
               "eod_low": -0.10024386139117776,
               "eod_high": 0.005398972803259053
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.3909035076699747,
+              "eod": 0.05696261464686447,
+              "eod_low": -0.04813684295435881,
+              "eod_high": 0.16504981939904106
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.6748733324575436,
+              "eod": 0.09729488069182729,
+              "eod_low": 0.026863559175681707,
+              "eod_high": 0.16540913452661812
+            },
+            "top_10:woman": {
               "ratio": 0.9114132251319482,
               "eod": -0.062378600176829835,
               "eod_low": -0.10288869881354903,
               "eod_high": -0.02096211452084473
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0635157639854027,
+              "eod": -0.07588807672610465,
+              "eod_low": -0.17340456264843793,
+              "eod_high": 0.018593909154282134
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.5397822029733852,
+              "eod": 0.11149108525062723,
+              "eod_low": 0.06155426964811761,
+              "eod_high": 0.1572337587023376
             }
           },
           "fitted_on_relevance": {
             "ndcg_at_10": 0.8401610096080789,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9403041339211553,
               "eod": -0.031090302693070504,
               "eod_low": -0.0818998556695987,
               "eod_high": 0.022584788789607433
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.3708965048626154,
+              "eod": 0.07167465896922576,
+              "eod_low": -0.025848741654165435,
+              "eod_high": 0.17458776224759168
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.5665505493243503,
+              "eod": 0.05863316073239733,
+              "eod_low": -0.0077665652010398545,
+              "eod_high": 0.1251371798157076
+            },
+            "top_10:woman": {
               "ratio": 0.948548900394243,
               "eod": -0.03417629046518533,
               "eod_low": -0.0711672628074165,
               "eod_high": 0.004012671087256246
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.1323749688671865,
+              "eod": -0.06257274547232183,
+              "eod_low": -0.14655405033950944,
+              "eod_high": 0.026432165254378748
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.4273811369851097,
+              "eod": 0.0547863396145839,
+              "eod_low": -0.001175642453629047,
+              "eod_high": 0.10496808311108871
             }
           },
           "trained_without_historical_bias": {
             "ndcg_at_10": 0.8212126649601492,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9693951554416671,
               "eod": -0.025903180547353133,
               "eod_low": -0.07641743651167206,
               "eod_high": 0.02630231632951268
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.3230212205285317,
+              "eod": 0.07118580939522334,
+              "eod_low": -0.030338300675633475,
+              "eod_high": 0.17673467577004112
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.6885560438200162,
+              "eod": 0.10765427320770832,
+              "eod_low": 0.03314660740448858,
+              "eod_high": 0.1786241522854018
+            },
+            "top_10:woman": {
               "ratio": 0.9452740076320862,
               "eod": -0.05271440616924461,
               "eod_low": -0.09280315537874712,
               "eod_high": -0.010515454255028124
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0373732883577824,
+              "eod": -0.08026444434098423,
+              "eod_low": -0.1709861186244047,
+              "eod_high": 0.01011780402153069
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.4998604450534117,
+              "eod": 0.10246957241232046,
+              "eod_low": 0.04733334591086963,
+              "eod_high": 0.14899124102794467
             }
           },
           "drop_proxy_terms": {
             "ndcg_at_10": 0.8143980114620045,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.918417713488136,
               "eod": -0.04261837869576052,
               "eod_low": -0.09501693551705642,
               "eod_high": 0.012652738003103405
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.400698602794411,
+              "eod": 0.059150798454304265,
+              "eod_low": -0.046687335152648,
+              "eod_high": 0.16758340804429542
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.6748733324575436,
+              "eod": 0.09660091816580368,
+              "eod_low": 0.025373529933683477,
+              "eod_high": 0.16540922104701355
+            },
+            "top_10:woman": {
               "ratio": 0.9175286012656256,
               "eod": -0.05348419626062939,
               "eod_low": -0.09360558122805288,
               "eod_high": -0.01342787821951669
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 1.0662757529922855,
+              "eod": -0.07479398482238464,
+              "eod_low": -0.17340456264843793,
+              "eod_high": 0.02043218048262981
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.53310940193777,
+              "eod": 0.10871523514653281,
+              "eod_low": 0.058021193832763586,
+              "eod_high": 0.15471459530755297
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0009337473633354365,
               "95ci": [
                 -0.0005276891209826019,
@@ -3387,19 +5082,43 @@
           },
           "drop_community_line": {
             "ndcg_at_10": 0.8146169702760993,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.93863987881687,
               "eod": -0.03416946305860985,
               "eod_low": -0.08531734382879148,
               "eod_high": 0.01992191347204681
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.348637238796743,
+              "eod": 0.06164160342660274,
+              "eod_low": -0.03976335930301938,
+              "eod_high": 0.1738122476412768
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.6204603200242031,
+              "eod": 0.07469438957988578,
+              "eod_low": -0.0013117992878181534,
+              "eod_high": 0.14331036716358359
+            },
+            "top_10:woman": {
               "ratio": 0.9381444271496627,
               "eod": -0.045521733341981396,
               "eod_low": -0.0848539146883116,
               "eod_high": -0.004382940776400724
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 1.0755800789346264,
+              "eod": -0.07151170911122495,
+              "eod_low": -0.16993308343794344,
+              "eod_high": 0.025327231427286927
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.5264442884609515,
+              "eod": 0.10321358031281691,
+              "eod_low": 0.0509432475969524,
+              "eod_high": 0.15005382512021267
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0011527061774302342,
               "95ci": [
                 -0.0033271893091799272,
@@ -3409,19 +5128,43 @@
           },
           "reweighing": {
             "ndcg_at_10": 0.8153928931041554,
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9564698867024448,
               "eod": -0.026065331453520746,
               "eod_low": -0.07683971578815545,
               "eod_high": 0.028356127465351152
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.423250100871602,
+              "eod": 0.08918012942874431,
+              "eod_low": -0.012420106984001698,
+              "eod_high": 0.1975011851577714
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.6748733324575436,
+              "eod": 0.09729488069182729,
+              "eod_low": 0.024267386282617057,
+              "eod_high": 0.16661257991153433
+            },
+            "top_10:woman": {
               "ratio": 0.9456637740102307,
               "eod": -0.039585303324605636,
               "eod_low": -0.07896991078032044,
               "eod_high": -0.0008862379032927775
             },
-            "ndcg_at_10_minus_matcher": {
+            "top_10:nonbinary": {
+              "ratio": 1.0685994589997607,
+              "eod": -0.06713534149634526,
+              "eod_low": -0.16503075065659215,
+              "eod_high": 0.028046501819114132
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.53310940193777,
+              "eod": 0.09979381305717183,
+              "eod_low": 0.04751939214181066,
+              "eod_high": 0.14873478216974526
+            },
+            "ndcg_at_10_minus_unmitigated": {
               "mean": 0.001928629005486286,
               "95ci": [
                 -0.0024453539814063866,
@@ -3429,40 +5172,30 @@
               ]
             }
           },
-          "drop_community_line_and_reweighing": {
-            "ndcg_at_10": 0.814567316274432,
-            "top_5": {
-              "ratio": 0.9471076760597186,
-              "eod": -0.031211489159785222,
-              "eod_low": -0.08040496430107662,
-              "eod_high": 0.020805450245523292
-            },
-            "top_10": {
-              "ratio": 0.9469280303925973,
-              "eod": -0.03583705711466967,
-              "eod_low": -0.07521441659582019,
-              "eod_high": 0.002562460669105485
-            },
-            "ndcg_at_10_minus_matcher": {
-              "mean": 0.0011030521757629593,
-              "95ci": [
-                -0.003584675105770851,
-                0.006053803028528063
-              ]
-            }
-          },
           "lines_swapped": {
-            "top_5": {
+            "top_5:woman": {
               "ratio": 0.9471076760597186,
               "eod": -0.03777604058210471,
               "eod_low": -0.08779136166782138,
               "eod_high": 0.017594717893545216
             },
-            "top_10": {
+            "top_5:nonbinary": {
+              "ratio": 1.3534281348493067,
+              "eod": 0.04115647842078307,
+              "eod_low": -0.06348238399740697,
+              "eod_high": 0.1511944075132767
+            },
+            "top_10:woman": {
               "ratio": 0.9381444271496627,
               "eod": -0.04910782864574981,
               "eod_low": -0.08817809094433741,
               "eod_high": -0.0066678459226987945
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0755800789346264,
+              "eod": -0.07041761720750506,
+              "eod_low": -0.16890070873061633,
+              "eod_high": 0.024595050232027037
             }
           }
         }
@@ -3470,7 +5203,7 @@
     ],
     "summary": {
       "historical_decisions": {
-        "decision": {
+        "decision:woman": {
           "ratio": {
             "runs": 9,
             "mean": 0.7647731305584751,
@@ -3485,280 +5218,48 @@
           },
           "eod_interval_below_zero": 9,
           "eod_interval_above_zero": 0
+        },
+        "decision:nonbinary": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.1406351718302195,
+            "min": 0.9762583564587216,
+            "max": 1.2039351095129127
+          },
+          "eod": {
+            "runs": 9,
+            "mean": 0.0027920255332242678,
+            "min": -0.05293928833455619,
+            "max": 0.04262302714279065
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 0
+        },
+        "decision:40_and_over": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.2140641539770416,
+            "min": 1.163206110240392,
+            "max": 1.431110946388608
+          },
+          "eod": {
+            "runs": 9,
+            "mean": 0.030334596503881855,
+            "min": -0.00037809842869318544,
+            "max": 0.06676052954678913
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 0
         }
       },
       "matcher": {
-        "ndcg_at_10": {
-          "runs": 9,
-          "mean": 0.8035895734822854,
-          "min": 0.7873231332327003,
-          "max": 0.8152574575482379
-        },
-        "top_5": {
-          "ratio": {
-            "runs": 9,
-            "mean": 0.8880831331821867,
-            "min": 0.8034881043745203,
-            "max": 1.0904285363193045
-          },
-          "eod": {
-            "runs": 9,
-            "mean": -0.049843281152072226,
-            "min": -0.07754900610567877,
-            "max": -0.01726239074056285
-          },
-          "eod_interval_below_zero": 5,
-          "eod_interval_above_zero": 0
-        },
-        "top_10": {
-          "ratio": {
-            "runs": 9,
-            "mean": 0.9137342535873815,
-            "min": 0.8542282987237477,
-            "max": 1.06052925984383
-          },
-          "eod": {
-            "runs": 9,
-            "mean": -0.045981206135567824,
-            "min": -0.06710344239610189,
-            "max": -0.015389592801035246
-          },
-          "eod_interval_below_zero": 6,
-          "eod_interval_above_zero": 0
-        }
-      },
-      "fitted_on_relevance": {
-        "ndcg_at_10": {
-          "runs": 9,
-          "mean": 0.8351764844801987,
-          "min": 0.8288763256995125,
-          "max": 0.8434141844273455
-        },
-        "top_5": {
-          "ratio": {
-            "runs": 9,
-            "mean": 0.9846565542262063,
-            "min": 0.9184414172422615,
-            "max": 1.1480121795631124
-          },
-          "eod": {
-            "runs": 9,
-            "mean": -0.012954721449717254,
-            "min": -0.03296148372584129,
-            "max": 0.0435021262478511
-          },
-          "eod_interval_below_zero": 0,
-          "eod_interval_above_zero": 1
-        },
-        "top_10": {
-          "ratio": {
-            "runs": 9,
-            "mean": 0.9778734929488425,
-            "min": 0.9239932635585668,
-            "max": 1.1300045284017368
-          },
-          "eod": {
-            "runs": 9,
-            "mean": -0.0055127711101728245,
-            "min": -0.03417629046518533,
-            "max": 0.009862461251392007
-          },
-          "eod_interval_below_zero": 0,
-          "eod_interval_above_zero": 0
-        }
-      },
-      "trained_without_historical_bias": {
-        "ndcg_at_10": {
-          "runs": 9,
-          "mean": 0.8094722982133072,
-          "min": 0.7967868508863727,
-          "max": 0.8252398035600426
-        },
-        "top_5": {
-          "ratio": {
-            "runs": 9,
-            "mean": 0.9684665889184352,
-            "min": 0.8702783189352644,
-            "max": 1.1899588286287983
-          },
-          "eod": {
-            "runs": 9,
-            "mean": -0.016578282432264304,
-            "min": -0.05293774306307014,
-            "max": 0.012432763423302295
-          },
-          "eod_interval_below_zero": 1,
-          "eod_interval_above_zero": 0
-        },
-        "top_10": {
-          "ratio": {
-            "runs": 9,
-            "mean": 0.9684775611304014,
-            "min": 0.9045264161759757,
-            "max": 1.1222204704150396
-          },
-          "eod": {
-            "runs": 9,
-            "mean": -0.014636286257937855,
-            "min": -0.05271440616924461,
-            "max": 0.014777038709057777
-          },
-          "eod_interval_below_zero": 1,
-          "eod_interval_above_zero": 0
-        }
-      },
-      "drop_proxy_terms": {
-        "ndcg_at_10": {
-          "runs": 9,
-          "mean": 0.8049085036410214,
-          "min": 0.788634020722657,
-          "max": 0.8195191136335421
-        },
-        "top_5": {
-          "ratio": {
-            "runs": 9,
-            "mean": 0.9038042570270721,
-            "min": 0.8307570460294942,
-            "max": 1.1270414652760112
-          },
-          "eod": {
-            "runs": 9,
-            "mean": -0.04301750866333118,
-            "min": -0.07437156104695014,
-            "max": -0.006894995034158968
-          },
-          "eod_interval_below_zero": 5,
-          "eod_interval_above_zero": 0
-        },
-        "top_10": {
-          "ratio": {
-            "runs": 9,
-            "mean": 0.9344995377665727,
-            "min": 0.8781424052424212,
-            "max": 1.076698874100212
-          },
-          "eod": {
-            "runs": 9,
-            "mean": -0.03454748793589432,
-            "min": -0.05348419626062939,
-            "max": -0.0015093147139374485
-          },
-          "eod_interval_below_zero": 4,
-          "eod_interval_above_zero": 0
-        },
-        "ndcg_at_10_minus_matcher": {
-          "runs": 9,
-          "mean": 0.001318930158735924,
-          "min": -0.0018776149270896664,
-          "max": 0.004261656085304335,
-          "interval_below_zero": 0,
-          "interval_above_zero": 3
-        }
-      },
-      "drop_community_line": {
-        "ndcg_at_10": {
-          "runs": 9,
-          "mean": 0.8067818659193684,
-          "min": 0.7918746539841147,
-          "max": 0.8253180037279801
-        },
-        "top_5": {
-          "ratio": {
-            "runs": 9,
-            "mean": 0.9752359259920598,
-            "min": 0.8918686193373473,
-            "max": 1.2122891988970848
-          },
-          "eod": {
-            "runs": 9,
-            "mean": -0.013685510600076216,
-            "min": -0.03459939271122303,
-            "max": 0.02847684112318294
-          },
-          "eod_interval_below_zero": 0,
-          "eod_interval_above_zero": 0
-        },
-        "top_10": {
-          "ratio": {
-            "runs": 9,
-            "mean": 0.9662685219604222,
-            "min": 0.9170453738787789,
-            "max": 1.1110171790398593
-          },
-          "eod": {
-            "runs": 9,
-            "mean": -0.02132827482129736,
-            "min": -0.045521733341981396,
-            "max": -0.00018208083787274454
-          },
-          "eod_interval_below_zero": 1,
-          "eod_interval_above_zero": 0
-        },
-        "ndcg_at_10_minus_matcher": {
-          "runs": 9,
-          "mean": 0.003192292437082833,
-          "min": -0.0009989164106214523,
-          "max": 0.010060546179742346,
-          "interval_below_zero": 0,
-          "interval_above_zero": 2
-        }
-      },
-      "reweighing": {
-        "ndcg_at_10": {
-          "runs": 9,
-          "mean": 0.8039680959143838,
-          "min": 0.7901851235356219,
-          "max": 0.8201121946157072
-        },
-        "top_5": {
-          "ratio": {
-            "runs": 9,
-            "mean": 0.940978920580224,
-            "min": 0.8479768621269005,
-            "max": 1.1585899232808416
-          },
-          "eod": {
-            "runs": 9,
-            "mean": -0.027603045757843017,
-            "min": -0.05661197132757523,
-            "max": 0.006764077406928137
-          },
-          "eod_interval_below_zero": 3,
-          "eod_interval_above_zero": 0
-        },
-        "top_10": {
-          "ratio": {
-            "runs": 9,
-            "mean": 0.955279139538884,
-            "min": 0.8988182449425735,
-            "max": 1.1028297624100722
-          },
-          "eod": {
-            "runs": 9,
-            "mean": -0.023215998103969238,
-            "min": -0.044080901882857626,
-            "max": 0.006544376561230414
-          },
-          "eod_interval_below_zero": 2,
-          "eod_interval_above_zero": 0
-        },
-        "ndcg_at_10_minus_matcher": {
-          "runs": 9,
-          "mean": 0.000378522432098369,
-          "min": -0.00445855939222812,
-          "max": 0.00485473706746938,
-          "interval_below_zero": 0,
-          "interval_above_zero": 1
-        }
-      },
-      "drop_community_line_and_reweighing": {
         "ndcg_at_10": {
           "runs": 9,
           "mean": 0.805922482362563,
           "min": 0.7893798607256037,
           "max": 0.823037373933194
         },
-        "top_5": {
+        "top_5:woman": {
           "ratio": {
             "runs": 9,
             "mean": 0.9820794632897437,
@@ -3774,7 +5275,39 @@
           "eod_interval_below_zero": 0,
           "eod_interval_above_zero": 0
         },
-        "top_10": {
+        "top_5:nonbinary": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.0101988040076157,
+            "min": 0.8381297831632654,
+            "max": 1.3534281348493067
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.02227036239989468,
+            "min": -0.061572551536055176,
+            "max": 0.058359327715442944
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 0
+        },
+        "top_5:40_and_over": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.4298740523913456,
+            "min": 1.283555789601604,
+            "max": 1.7711735569614047
+          },
+          "eod": {
+            "runs": 9,
+            "mean": 0.05327273786738686,
+            "min": 0.020501579728718078,
+            "max": 0.08039488905247666
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 2
+        },
+        "top_10:woman": {
           "ratio": {
             "runs": 9,
             "mean": 0.9738048600872111,
@@ -3790,7 +5323,39 @@
           "eod_interval_below_zero": 0,
           "eod_interval_above_zero": 0
         },
-        "ndcg_at_10_minus_matcher": {
+        "top_10:nonbinary": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.0247907378911554,
+            "min": 0.9094851941784639,
+            "max": 1.120265944877661
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.03805157672699017,
+            "min": -0.08848359669527561,
+            "max": 0.010852017937219793
+          },
+          "eod_interval_below_zero": 1,
+          "eod_interval_above_zero": 0
+        },
+        "top_10:40_and_over": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.2952266757045485,
+            "min": 1.1521510493424743,
+            "max": 1.5389392619052762
+          },
+          "eod": {
+            "runs": 9,
+            "mean": 0.0572532763737447,
+            "min": 0.030544594028752314,
+            "max": 0.10048777558319544
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 5
+        },
+        "ndcg_at_10_minus_unmitigated": {
           "runs": 9,
           "mean": 0.0023329088802775725,
           "min": -0.0002604663372896654,
@@ -3799,8 +5364,656 @@
           "interval_above_zero": 1
         }
       },
+      "matcher_without_mitigation": {
+        "ndcg_at_10": {
+          "runs": 9,
+          "mean": 0.8035895734822854,
+          "min": 0.7873231332327003,
+          "max": 0.8152574575482379
+        },
+        "top_5:woman": {
+          "ratio": {
+            "runs": 9,
+            "mean": 0.8880831331821867,
+            "min": 0.8034881043745203,
+            "max": 1.0904285363193045
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.049843281152072226,
+            "min": -0.07754900610567877,
+            "max": -0.01726239074056285
+          },
+          "eod_interval_below_zero": 5,
+          "eod_interval_above_zero": 0
+        },
+        "top_5:nonbinary": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.0540465100021323,
+            "min": 0.8880852349370504,
+            "max": 1.3909035076699747
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.002202282506300008,
+            "min": -0.04941044357102753,
+            "max": 0.05696261464686447
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 0
+        },
+        "top_5:40_and_over": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.408345471722785,
+            "min": 1.2031612787997856,
+            "max": 1.7580108521682907
+          },
+          "eod": {
+            "runs": 9,
+            "mean": 0.047794274805938036,
+            "min": -0.007118295669386265,
+            "max": 0.09729488069182729
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 2
+        },
+        "top_10:woman": {
+          "ratio": {
+            "runs": 9,
+            "mean": 0.9137342535873815,
+            "min": 0.8542282987237477,
+            "max": 1.06052925984383
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.045981206135567824,
+            "min": -0.06710344239610189,
+            "max": -0.015389592801035246
+          },
+          "eod_interval_below_zero": 6,
+          "eod_interval_above_zero": 0
+        },
+        "top_10:nonbinary": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.0307825361252623,
+            "min": 0.8939733282095313,
+            "max": 1.127941291051463
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.04517765018125364,
+            "min": -0.087210235020454,
+            "max": -0.0073895083019170915
+          },
+          "eod_interval_below_zero": 1,
+          "eod_interval_above_zero": 0
+        },
+        "top_10:40_and_over": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.274197312902673,
+            "min": 1.118431611278674,
+            "max": 1.5397822029733852
+          },
+          "eod": {
+            "runs": 9,
+            "mean": 0.05055738150757256,
+            "min": 0.013021659413026132,
+            "max": 0.11149108525062723
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 2
+        }
+      },
+      "fitted_on_relevance": {
+        "ndcg_at_10": {
+          "runs": 9,
+          "mean": 0.8351764844801987,
+          "min": 0.8288763256995125,
+          "max": 0.8434141844273455
+        },
+        "top_5:woman": {
+          "ratio": {
+            "runs": 9,
+            "mean": 0.9846565542262063,
+            "min": 0.9184414172422615,
+            "max": 1.1480121795631124
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.012954721449717254,
+            "min": -0.03296148372584129,
+            "max": 0.0435021262478511
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 1
+        },
+        "top_5:nonbinary": {
+          "ratio": {
+            "runs": 9,
+            "mean": 0.9760855296493691,
+            "min": 0.8344885651629073,
+            "max": 1.3708965048626154
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.03929209269355661,
+            "min": -0.12529076762653407,
+            "max": 0.07167465896922576
+          },
+          "eod_interval_below_zero": 1,
+          "eod_interval_above_zero": 0
+        },
+        "top_5:40_and_over": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.4019311055283956,
+            "min": 1.2145678134869282,
+            "max": 1.8374599924764272
+          },
+          "eod": {
+            "runs": 9,
+            "mean": 0.03569166234073871,
+            "min": 0.007733691997309999,
+            "max": 0.079393206436008
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 2
+        },
+        "top_10:woman": {
+          "ratio": {
+            "runs": 9,
+            "mean": 0.9778734929488425,
+            "min": 0.9239932635585668,
+            "max": 1.1300045284017368
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.0055127711101728245,
+            "min": -0.03417629046518533,
+            "max": 0.009862461251392007
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 0
+        },
+        "top_10:nonbinary": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.0488745920743507,
+            "min": 0.8982705041821561,
+            "max": 1.1466333949076926
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.04222625964647586,
+            "min": -0.06797946578968483,
+            "max": 0.028520179372197307
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 0
+        },
+        "top_10:40_and_over": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.2911195891086158,
+            "min": 1.180425804899563,
+            "max": 1.50117758791241
+          },
+          "eod": {
+            "runs": 9,
+            "mean": 0.039760978293736704,
+            "min": -0.006187331650941874,
+            "max": 0.08887183256940234
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 1
+        }
+      },
+      "trained_without_historical_bias": {
+        "ndcg_at_10": {
+          "runs": 9,
+          "mean": 0.8094722982133072,
+          "min": 0.7967868508863727,
+          "max": 0.8252398035600426
+        },
+        "top_5:woman": {
+          "ratio": {
+            "runs": 9,
+            "mean": 0.9684665889184352,
+            "min": 0.8702783189352644,
+            "max": 1.1899588286287983
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.016578282432264304,
+            "min": -0.05293774306307014,
+            "max": 0.012432763423302295
+          },
+          "eod_interval_below_zero": 1,
+          "eod_interval_above_zero": 0
+        },
+        "top_5:nonbinary": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.0321507798836624,
+            "min": 0.8445440023960465,
+            "max": 1.3230212205285317
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.012075434012013898,
+            "min": -0.057578475336322876,
+            "max": 0.07118580939522334
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 0
+        },
+        "top_5:40_and_over": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.476501075915722,
+            "min": 1.2951460860474757,
+            "max": 1.8641973782303858
+          },
+          "eod": {
+            "runs": 9,
+            "mean": 0.07107835270768875,
+            "min": 0.036670007993807985,
+            "max": 0.10765427320770832
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 5
+        },
+        "top_10:woman": {
+          "ratio": {
+            "runs": 9,
+            "mean": 0.9684775611304014,
+            "min": 0.9045264161759757,
+            "max": 1.1222204704150396
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.014636286257937855,
+            "min": -0.05271440616924461,
+            "max": 0.014777038709057777
+          },
+          "eod_interval_below_zero": 1,
+          "eod_interval_above_zero": 0
+        },
+        "top_10:nonbinary": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.009403868429151,
+            "min": 0.8365776909722222,
+            "max": 1.090524371119847
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.03825231350678239,
+            "min": -0.08026444434098423,
+            "max": 0.01877751283932505
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 0
+        },
+        "top_10:40_and_over": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.3007497157773036,
+            "min": 1.1634417496939637,
+            "max": 1.5515852367430272
+          },
+          "eod": {
+            "runs": 9,
+            "mean": 0.060395945493057684,
+            "min": 0.037269543591630594,
+            "max": 0.10246957241232046
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 4
+        }
+      },
+      "drop_proxy_terms": {
+        "ndcg_at_10": {
+          "runs": 9,
+          "mean": 0.8049085036410214,
+          "min": 0.788634020722657,
+          "max": 0.8195191136335421
+        },
+        "top_5:woman": {
+          "ratio": {
+            "runs": 9,
+            "mean": 0.9038042570270721,
+            "min": 0.8307570460294942,
+            "max": 1.1270414652760112
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.04301750866333118,
+            "min": -0.07437156104695014,
+            "max": -0.006894995034158968
+          },
+          "eod_interval_below_zero": 5,
+          "eod_interval_above_zero": 0
+        },
+        "top_5:nonbinary": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.043872660410296,
+            "min": 0.8502943738758993,
+            "max": 1.400698602794411
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.007284098930040863,
+            "min": -0.04755554664313788,
+            "max": 0.059150798454304265
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 0
+        },
+        "top_5:40_and_over": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.4046428225027359,
+            "min": 1.1917806386295267,
+            "max": 1.7711735569614047
+          },
+          "eod": {
+            "runs": 9,
+            "mean": 0.045408237366802426,
+            "min": -0.011835276801461736,
+            "max": 0.09660091816580368
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 1
+        },
+        "top_10:woman": {
+          "ratio": {
+            "runs": 9,
+            "mean": 0.9344995377665727,
+            "min": 0.8781424052424212,
+            "max": 1.076698874100212
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.03454748793589432,
+            "min": -0.05348419626062939,
+            "max": -0.0015093147139374485
+          },
+          "eod_interval_below_zero": 4,
+          "eod_interval_above_zero": 0
+        },
+        "top_10:nonbinary": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.0327267555914874,
+            "min": 0.8922538661118737,
+            "max": 1.1348010556364847
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.043309044697937664,
+            "min": -0.09265460816555715,
+            "max": -0.0046636771300447855
+          },
+          "eod_interval_below_zero": 1,
+          "eod_interval_above_zero": 0
+        },
+        "top_10:40_and_over": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.2778188400003965,
+            "min": 1.14088585029048,
+            "max": 1.53310940193777
+          },
+          "eod": {
+            "runs": 9,
+            "mean": 0.05157283390999295,
+            "min": 0.019083630457677248,
+            "max": 0.10871523514653281
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 3
+        },
+        "ndcg_at_10_minus_unmitigated": {
+          "runs": 9,
+          "mean": 0.001318930158735924,
+          "min": -0.0018776149270896664,
+          "max": 0.004261656085304335,
+          "interval_below_zero": 0,
+          "interval_above_zero": 3
+        }
+      },
+      "drop_community_line": {
+        "ndcg_at_10": {
+          "runs": 9,
+          "mean": 0.8067818659193684,
+          "min": 0.7918746539841147,
+          "max": 0.8253180037279801
+        },
+        "top_5:woman": {
+          "ratio": {
+            "runs": 9,
+            "mean": 0.9752359259920598,
+            "min": 0.8918686193373473,
+            "max": 1.2122891988970848
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.013685510600076216,
+            "min": -0.03459939271122303,
+            "max": 0.02847684112318294
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 0
+        },
+        "top_5:nonbinary": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.0390877077639242,
+            "min": 0.862421291977612,
+            "max": 1.348637238796743
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.010254895519610126,
+            "min": -0.05612817839095213,
+            "max": 0.06194974321349961
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 0
+        },
+        "top_5:40_and_over": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.423399150621383,
+            "min": 1.2374589207268034,
+            "max": 1.7580108521682907
+          },
+          "eod": {
+            "runs": 9,
+            "mean": 0.051299831453079626,
+            "min": 0.010395122508279286,
+            "max": 0.07469438957988578
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 2
+        },
+        "top_10:woman": {
+          "ratio": {
+            "runs": 9,
+            "mean": 0.9662685219604222,
+            "min": 0.9170453738787789,
+            "max": 1.1110171790398593
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.02132827482129736,
+            "min": -0.045521733341981396,
+            "max": -0.00018208083787274454
+          },
+          "eod_interval_below_zero": 1,
+          "eod_interval_above_zero": 0
+        },
+        "top_10:nonbinary": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.0263203533163399,
+            "min": 0.886472587682726,
+            "max": 1.11708035451308
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.04152689845978625,
+            "min": -0.089526349562846,
+            "max": -0.011390134529147944
+          },
+          "eod_interval_below_zero": 1,
+          "eod_interval_above_zero": 0
+        },
+        "top_10:40_and_over": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.2902912248195104,
+            "min": 1.1577932064468526,
+            "max": 1.5452585624510211
+          },
+          "eod": {
+            "runs": 9,
+            "mean": 0.051600378105678885,
+            "min": 0.019756125413965098,
+            "max": 0.10321358031281691
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 3
+        },
+        "ndcg_at_10_minus_unmitigated": {
+          "runs": 9,
+          "mean": 0.003192292437082833,
+          "min": -0.0009989164106214523,
+          "max": 0.010060546179742346,
+          "interval_below_zero": 0,
+          "interval_above_zero": 2
+        }
+      },
+      "reweighing": {
+        "ndcg_at_10": {
+          "runs": 9,
+          "mean": 0.8039680959143838,
+          "min": 0.7901851235356219,
+          "max": 0.8201121946157072
+        },
+        "top_5:woman": {
+          "ratio": {
+            "runs": 9,
+            "mean": 0.940978920580224,
+            "min": 0.8479768621269005,
+            "max": 1.1585899232808416
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.027603045757843017,
+            "min": -0.05661197132757523,
+            "max": 0.006764077406928137
+          },
+          "eod_interval_below_zero": 3,
+          "eod_interval_above_zero": 0
+        },
+        "top_5:nonbinary": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.0331469367144603,
+            "min": 0.827384529532967,
+            "max": 1.423250100871602
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.01196984538870036,
+            "min": -0.057691350032368915,
+            "max": 0.08918012942874431
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 0
+        },
+        "top_5:40_and_over": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.4173282838691774,
+            "min": 1.2374589207268034,
+            "max": 1.7580108521682907
+          },
+          "eod": {
+            "runs": 9,
+            "mean": 0.049426537278823235,
+            "min": 0.016457093552930457,
+            "max": 0.09729488069182729
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 2
+        },
+        "top_10:woman": {
+          "ratio": {
+            "runs": 9,
+            "mean": 0.955279139538884,
+            "min": 0.8988182449425735,
+            "max": 1.1028297624100722
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.023215998103969238,
+            "min": -0.044080901882857626,
+            "max": 0.006544376561230414
+          },
+          "eod_interval_below_zero": 2,
+          "eod_interval_above_zero": 0
+        },
+        "top_10:nonbinary": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.0312795017633836,
+            "min": 0.87548828125,
+            "max": 1.139583787965957
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.04224532081958163,
+            "min": -0.08848359669527561,
+            "max": -0.0046636771300447855
+          },
+          "eod_interval_below_zero": 1,
+          "eod_interval_above_zero": 0
+        },
+        "top_10:40_and_over": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.2919723860677184,
+            "min": 1.1634417496939637,
+            "max": 1.53310940193777
+          },
+          "eod": {
+            "runs": 9,
+            "mean": 0.055883221845144444,
+            "min": 0.03726002715357002,
+            "max": 0.09979381305717183
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 3
+        },
+        "ndcg_at_10_minus_unmitigated": {
+          "runs": 9,
+          "mean": 0.000378522432098369,
+          "min": -0.00445855939222812,
+          "max": 0.00485473706746938,
+          "interval_below_zero": 0,
+          "interval_above_zero": 1
+        }
+      },
       "lines_swapped": {
-        "top_5": {
+        "top_5:woman": {
           "ratio": {
             "runs": 9,
             "mean": 0.9785273887635975,
@@ -3816,7 +6029,23 @@
           "eod_interval_below_zero": 0,
           "eod_interval_above_zero": 0
         },
-        "top_10": {
+        "top_5:nonbinary": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.0375674613777415,
+            "min": 0.8803792772346368,
+            "max": 1.3534281348493067
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.009911403006668977,
+            "min": -0.042572391112537133,
+            "max": 0.04115647842078307
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 0
+        },
+        "top_10:woman": {
           "ratio": {
             "runs": 9,
             "mean": 0.9696921030458628,
@@ -3828,6 +6057,22 @@
             "mean": -0.019557489089194784,
             "min": -0.04910782864574981,
             "max": 0.018639961477111888
+          },
+          "eod_interval_below_zero": 1,
+          "eod_interval_above_zero": 0
+        },
+        "top_10:nonbinary": {
+          "ratio": {
+            "runs": 9,
+            "mean": 1.0293827098669288,
+            "min": 0.9007819780987885,
+            "max": 1.1139727070981418
+          },
+          "eod": {
+            "runs": 9,
+            "mean": -0.042081217460266176,
+            "min": -0.09497072270794904,
+            "max": -0.007937219730941747
           },
           "eod_interval_below_zero": 1,
           "eod_interval_above_zero": 0
