@@ -93,6 +93,12 @@ PROXY_TERMS = ("women", "bootcamp", "member")
 #: The heading every generated community line starts with.
 COMMUNITY_HEADING = "Community:"
 
+#: CalibratedClassifierCV's default number of folds. A training set with fewer
+#: pairs than this in a label's minority class only draws a warning from
+#: scikit-learn and is calibrated on folds too thin to trust; with none, the
+#: solver fails with a message that does not say which fold or label.
+MIN_CLASS_FOR_CALIBRATION = 5
+
 #: Shortlist lengths audited.
 CUTOFFS = (5, 10)
 
@@ -142,6 +148,26 @@ def job_folds(job_refs: Sequence[str], folds: int, *, seed: int) -> dict[str, in
         raise AuditRefused(f"--folds must be between 2 and the number of jobs ({len(refs)})")
     random.Random(seed).shuffle(refs)
     return {ref: index % folds for index, ref in enumerate(refs)}
+
+
+def untrainable_reason(
+    job_refs: Sequence[str], fold_of: dict[str, int], labels: dict[str, np.ndarray]
+) -> str | None:
+    """Why some fold's training set cannot be trained on, or ``None`` if every one can."""
+    folds = np.array([fold_of[ref] for ref in job_refs])
+    for fold in sorted(set(fold_of.values())):
+        training = folds != fold
+        for name, label in labels.items():
+            positives = int(np.asarray(label, dtype=bool)[training].sum())
+            minority = min(positives, int(training.sum()) - positives)
+            if minority < MIN_CLASS_FOR_CALIBRATION:
+                return (
+                    f"the matcher trained without fold {fold} would see only {minority} pairs "
+                    f"in the minority class of {name}, fewer than the "
+                    f"{MIN_CLASS_FOR_CALIBRATION} calibration folds need. Use a larger corpus "
+                    "or more folds."
+                )
+    return None
 
 
 def out_of_fold_scores(
@@ -333,6 +359,17 @@ def audit(config: CorpusConfig, *, folds: int, fold_seed: int, resamples: int) -
         raise AuditRefused("the corpus with proxy_share=0 does not hold the same labelled pairs")
     if not _same_pairs(data, unbiased, compare_advanced=False):
         raise AuditRefused("the corpus with historical_bias=0 does not hold the same pairs")
+    reason = untrainable_reason(
+        data.job_refs,
+        fold_of,
+        {
+            "advanced": data.advanced,
+            "relevance >= 1": data.relevance >= QUALIFIED_GRADE,
+            "advanced without the historical bias": unbiased.advanced,
+        },
+    )
+    if reason is not None:
+        raise AuditRefused(reason)
 
     swapped = np.array(
         [

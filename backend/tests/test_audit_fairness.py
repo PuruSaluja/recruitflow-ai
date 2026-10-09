@@ -435,6 +435,43 @@ def test_an_unbiased_corpus_with_other_ground_truth_is_refused(monkeypatch) -> N
         script.audit(CONFIG, folds=2, fold_seed=0, resamples=10)
 
 
+def test_a_fold_too_thin_to_calibrate_is_refused_at_the_boundary() -> None:
+    refs = ["J1"] * 10 + ["J2"] * 10
+    fold_of = {"J1": 0, "J2": 1}
+    # Training without fold 0 sees only J2: 5 positives of 10 pass, 4 do not.
+    enough = np.array(([True] * 5 + [False] * 5) * 2)
+    short = np.array([True] * 5 + [False] * 5 + [True] * 4 + [False] * 6)
+
+    assert script.untrainable_reason(refs, fold_of, {"advanced": enough}) is None
+    reason = script.untrainable_reason(refs, fold_of, {"advanced": enough, "other": short})
+    assert reason is not None
+    assert "without fold 0" in reason and "4 pairs" in reason and "other" in reason
+
+
+def test_a_fold_with_every_pair_in_one_class_is_refused() -> None:
+    refs = ["J1"] * 10 + ["J2"] * 10
+    labels = np.array([True] * 10 + [False] * 10)
+
+    reason = script.untrainable_reason(refs, {"J1": 0, "J2": 1}, {"advanced": labels})
+
+    assert "without fold 0" in reason and "only 0 pairs" in reason
+
+
+@pytest.mark.parametrize("seed", ["2", "11"])
+def test_a_corpus_too_small_to_train_every_fold_exits_2_by_name(
+    seed: str, tmp_path: Path, capsys
+) -> None:
+    # Seed 2 used to finish with exit 0 after scikit-learn warned that a class
+    # had fewer members than the calibration folds; seed 11 died on the
+    # solver's "only one class" error.
+    out = tmp_path / "audit.json"
+    arguments = ["--seed", seed, "--jobs", "2", "--candidates", "300", "--folds", "2"]
+
+    assert script.main([*arguments, *FAST, "--out", str(out)]) == 2
+    assert "calibration folds need" in capsys.readouterr().err
+    assert not out.exists()
+
+
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
