@@ -11,9 +11,10 @@ descriptions.
 > classifier, endpoints that score a job's candidate pool and cache the
 > ranking, a held-out evaluation, sentence-transformer embeddings of every
 > candidate and job, cached in PostgreSQL, a measured comparison of lexical,
-> dense and hybrid retrieval, and a measured cross-encoder re-rank of the
-> hybrid's shortlist. The fairness audit, PDF reporting and the frontend are
-> landing incrementally.
+> dense and hybrid retrieval, a measured cross-encoder re-rank of the
+> hybrid's shortlist, and a fairness audit of the matcher's shortlists with
+> four mitigations measured. PDF reporting and the frontend are landing
+> incrementally.
 
 ## Tech stack
 
@@ -464,9 +465,10 @@ would be a mitigation nobody measured, and it relies on knowing which terms
 stand in for gender: deleting `women` alone would leave the other two, and real
 resumes carry stand-ins this corpus never generates, such as names and email
 addresses, since its resumes contain no contact details. It would also hide
-exactly what the fairness audit is built to find. Mitigations are tried in
-that audit, with before-and-after numbers. Until then, expect a model trained
-on `advanced` to score some women lower for this reason alone.
+exactly what the fairness audit is built to find. That audit (see *Fairness
+audit* below) measures it: a model trained on `advanced` scores every pair
+carrying the planted line lower, and deleting the three words closes only a
+small part of the resulting gap.
 
 ### Measured on the default corpus
 
@@ -584,9 +586,9 @@ corpus, `--test-share 0.25 --split-seed 0`, both scikit-learn's defaults):
 
 `relevance`'s ROC-AUC is higher because it is the easier, unbiased target the
 generator itself defines; the matcher is not trained on it. These numbers are
-for reference; the ranking task they stand in for is measured below, and the
-fairness audit is where the planted bias in `advanced` gets measured properly
-rather than assumed.
+for reference; the ranking task they stand in for is measured below, and so
+is what the planted bias in `advanced` does to the matcher's shortlists
+(*Fairness audit*).
 
 ### Ranking quality on held-out jobs
 
@@ -663,6 +665,43 @@ family over all 200 jobs, and 96% of the relevant candidates are in the
 family. So the re-rank orders candidates almost entirely within one family,
 and the corpus barely tests finding a good candidate from another
 (`first_stage.same_family` in the JSON).
+
+### Fairness audit
+
+`scripts/audit_fairness.py` measures who reaches the top 5 and top 10 of each
+slate, by gender (against men) and by age band (against under 40). For each
+group it reports the selection rate, the disparate impact ratio with the
+four-fifths rule, and the equal-opportunity difference among qualified
+candidates, each with a bootstrap interval over jobs. Every job is scored by a
+matcher trained without it (four job folds), so all 200 jobs count. From one
+run, written to [`docs/fairness_audit.json`](docs/fairness_audit.json):
+
+| Women against men | Ratio | Equal-opportunity difference | NDCG@10 |
+| --- | --- | --- | --- |
+| Past decisions the matcher learns from | 0.750 (0.679–0.827) | −0.145 (−0.198 to −0.092) | |
+| Matcher, top 5 | 0.828 (0.734–0.929) | −0.063 (−0.107 to −0.021) | 0.8039 |
+| Top 5, every planted line swapped for a neutral one | 0.932 | −0.010 (−0.057 to 0.034) | |
+| Top 5, the three proxy words dropped | 0.848 (0.753–0.955) | −0.051 (−0.095 to −0.008) | 0.8021 |
+| Top 5, the community line dropped | 0.938 (0.833–1.052) | −0.012 (−0.058 to 0.031) | 0.8029 |
+| Top 5, training pairs reweighed | 0.896 (0.793–1.009) | −0.023 (−0.066 to 0.021) | 0.8010 |
+| Top 5, line dropped and pairs reweighed | 0.939 (0.827–1.054) | −0.005 (−0.051 to 0.040) | 0.8037 |
+
+The record fails the four-fifths rule, as planted. The matcher's top 5
+passes it at 0.828, but its interval reaches below 0.8. Qualified women make
+the top 5 6.3 points less often than qualified men. Most of that runs through
+the planted proxy: swapping the lines alone takes the gap to −0.010.
+
+Deleting the proxy words barely helps, because the line's other words carry
+the signal once they are gone. Dropping the whole line, or reweighing the
+training pairs, brings the gap within noise of zero at no measurable cost in
+ranking: every mitigation's per-job NDCG@10 difference from the matcher has
+an interval that includes zero. The served matcher uses none of them. In the
+matcher's shortlists, no group other than women shows a gap whose interval
+excludes zero.
+
+The definitions, the age-band and nonbinary results, and what an audit on
+generated data can and cannot establish are in
+[`docs/fairness_audit.md`](docs/fairness_audit.md).
 
 ## Embeddings
 
