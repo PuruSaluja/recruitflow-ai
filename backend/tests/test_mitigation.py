@@ -8,16 +8,19 @@ import warnings
 
 import numpy as np
 import pytest
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
 
 from app.ml.corpus import CorpusConfig, generate_corpus
 from app.ml.matrix import PairFeaturiser
 from app.ml.mitigation import (
     LineDroppingFeaturiser,
     TermDroppingFeaturiser,
-    make_mitigated_matcher,
+    WeightedPipeline,
     reweighing_weights,
 )
-from app.ml.train import make_matcher, training_data
+from app.ml.train import CALIBRATION_METHOD, make_matcher, training_data
 
 
 @pytest.fixture(scope="module")
@@ -136,17 +139,20 @@ def test_a_fitted_line_dropper_survives_pickling(data) -> None:
     assert (restored.transform(pairs) != featuriser.transform(pairs)).nnz == 0
 
 
-# --- the mitigated matcher ---------------------------------------------
+# --- the weighted pipeline ---------------------------------------------
 
 
-def test_unweighted_with_the_plain_featuriser_it_is_the_shipped_matcher(data) -> None:
+def test_without_weights_the_weighted_pipeline_is_a_plain_one(data) -> None:
     train, test = data.pairs[:1500], data.pairs[1500:]
     labels = data.advanced[:1500]
+    steps = [("features", PairFeaturiser()), ("classifier", LogisticRegression())]
+    plain = CalibratedClassifierCV(Pipeline(steps), method=CALIBRATION_METHOD)
 
-    shipped = make_matcher().fit(train, labels).predict_proba(test)[:, 1]
-    mitigated = make_mitigated_matcher().fit(train, labels).predict_proba(test)[:, 1]
+    expected = plain.fit(train, labels).predict_proba(test)[:, 1]
+    weighted = make_matcher(PairFeaturiser()).fit(train, labels).predict_proba(test)[:, 1]
 
-    assert mitigated.tolist() == shipped.tolist()
+    assert isinstance(make_matcher().estimator, WeightedPipeline)
+    assert weighted.tolist() == expected.tolist()
 
 
 def test_weights_reach_the_classifier_without_a_warning(data) -> None:
@@ -156,9 +162,9 @@ def test_weights_reach_the_classifier_without_a_warning(data) -> None:
 
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        weighted = make_mitigated_matcher().fit(train, labels, sample_weight=weights)
+        weighted = make_matcher(PairFeaturiser()).fit(train, labels, sample_weight=weights)
     model = weighted.calibrated_classifiers_[0].estimator
-    unweighted = make_mitigated_matcher().fit(train, labels)
+    unweighted = make_matcher(PairFeaturiser()).fit(train, labels)
 
     # The fitted classifier differs from an unweighted one, so it saw the weights.
     coefficients = model.named_steps["classifier"].coef_
@@ -171,6 +177,6 @@ def test_uniform_weights_change_nothing(data) -> None:
     train, test = data.pairs[:1500], data.pairs[1500:]
     labels = data.advanced[:1500]
 
-    plain = make_mitigated_matcher().fit(train, labels).predict_proba(test)[:, 1]
-    ones = make_mitigated_matcher().fit(train, labels, sample_weight=np.ones(1500))
+    plain = make_matcher(PairFeaturiser()).fit(train, labels).predict_proba(test)[:, 1]
+    ones = make_matcher(PairFeaturiser()).fit(train, labels, sample_weight=np.ones(1500))
     assert ones.predict_proba(test)[:, 1] == pytest.approx(plain, abs=1e-6)

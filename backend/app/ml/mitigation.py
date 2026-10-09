@@ -1,12 +1,12 @@
 """Bias mitigations for the matcher, measured by ``scripts/audit_fairness.py``.
 
-None of these is used by the matcher the app serves; they exist so the
-fairness audit can measure what each one changes, beside what it costs in
-ranking quality. Two act on the input and one on the training data:
+The matcher the app serves uses two of these (see :func:`app.ml.train.make_matcher`
+and ``docs/fairness_audit.md`` for why those two); the audit measures the
+others beside them. Two act on the input and one on the training data:
 
 * :class:`TermDroppingFeaturiser` leaves named terms out of the vocabulary --
   the "delete the proxy words" fix. It only works for the words someone thought
-  to list.
+  to list, and on the synthetic corpus it barely helps.
 * :class:`LineDroppingFeaturiser` removes every line that starts with a named
   heading before vectorising, so nothing written on that line can become a
   column. On the synthetic corpus every community line starts
@@ -17,10 +17,8 @@ ranking quality. Two act on the input and one on the training data:
   if they were, over the count it has. It needs each training candidate's
   group, but the model never sees it as a feature and scoring does not need it.
 
-:func:`make_mitigated_matcher` builds the matcher of :mod:`app.ml.train` around
-any featuriser, with a pipeline that passes training weights to the
-classifier. Without weights and with the default featuriser it is the same
-model ``make_matcher`` builds.
+:class:`WeightedPipeline` is the pipeline that lets training weights reach the
+classifier through calibration.
 """
 
 from __future__ import annotations
@@ -29,13 +27,10 @@ from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
-from sklearn.calibration import CalibratedClassifierCV
-from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 
 from app.ml.matrix import Pair, PairFeaturiser
 from app.ml.text import candidate_text, fold_text, make_vectoriser
-from app.ml.train import CALIBRATION_METHOD
 
 
 class TermDroppingFeaturiser(PairFeaturiser):
@@ -116,7 +111,7 @@ def reweighing_weights(groups: Sequence[str], labels: Sequence[bool]) -> np.ndar
     return weights
 
 
-class _WeightedPipeline(Pipeline):
+class WeightedPipeline(Pipeline):
     """A pipeline whose ``fit`` takes ``sample_weight`` and gives it to the last step.
 
     ``CalibratedClassifierCV`` passes weights on only to an estimator whose
@@ -128,15 +123,3 @@ class _WeightedPipeline(Pipeline):
         if sample_weight is not None:
             params[f"{self.steps[-1][0]}__sample_weight"] = sample_weight
         return super().fit(X, y, **params)
-
-
-def make_mitigated_matcher(featuriser: PairFeaturiser | None = None) -> CalibratedClassifierCV:
-    """The matcher of :func:`app.ml.train.make_matcher`, around ``featuriser``.
-
-    Its ``fit`` accepts ``sample_weight``, used by the classifier and by the
-    calibration alike.
-    """
-    pipeline = _WeightedPipeline(
-        [("features", featuriser or PairFeaturiser()), ("classifier", LogisticRegression())]
-    )
-    return CalibratedClassifierCV(pipeline, method=CALIBRATION_METHOD)

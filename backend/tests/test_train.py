@@ -12,15 +12,19 @@ from sklearn.linear_model import LogisticRegression
 
 from app.ml.corpus import CorpusConfig, generate_corpus
 from app.ml.matrix import PairFeaturiser
+from app.ml.mitigation import LineDroppingFeaturiser, reweighing_weights
 from app.ml.train import (
     CALIBRATION_METHOD,
     DEFAULT_TEST_SHARE,
+    EXCLUDED_HEADINGS,
+    REWEIGHED_ATTRIBUTE,
     TRAINING_LABEL,
     TrainingData,
     make_matcher,
     split_by_job,
     train_matcher,
     training_data,
+    training_weights,
 )
 
 
@@ -222,10 +226,57 @@ def test_training_fits_the_advanced_label_and_repeats_exactly(train_set, test_se
     must give the same probabilities to the last bit -- which is what lets a
     persisted artifact be regenerated rather than kept.
     """
-    again = make_matcher().fit(train_set.pairs, train_set.advanced)
+    again = make_matcher().fit(
+        train_set.pairs, train_set.advanced, sample_weight=training_weights(train_set)
+    )
 
     assert TRAINING_LABEL == "advanced"
     assert np.array_equal(again.predict_proba(test_set.pairs)[:, 1], scores)
+    assert np.array_equal(train_matcher(train_set).predict_proba(test_set.pairs)[:, 1], scores)
+
+
+def test_the_served_matcher_skips_community_lines_by_default() -> None:
+    features = make_matcher().estimator.named_steps["features"]
+
+    assert type(features) is LineDroppingFeaturiser
+    assert features.dropped_headings == EXCLUDED_HEADINGS == ("Community:",)
+
+
+def test_training_reweighs_the_pairs_against_gender(train_set) -> None:
+    weights = training_weights(train_set)
+    genders = [candidate.gender for _, candidate in train_set.pairs]
+
+    assert REWEIGHED_ATTRIBUTE == "gender"
+    assert weights.tolist() == reweighing_weights(genders, train_set.advanced).tolist()
+    # The planted bias makes gender and the label dependent, so the weights vary.
+    assert weights.min() < 1.0 < weights.max()
+
+
+def test_the_weights_change_the_served_matcher(train_set, test_set, scores) -> None:
+    unweighted = make_matcher().fit(train_set.pairs, train_set.advanced)
+
+    assert not np.array_equal(unweighted.predict_proba(test_set.pairs)[:, 1], scores)
+
+
+def test_a_community_line_never_moves_a_served_score(fitted, test_set) -> None:
+    # Give every resume the planted women's line in place of its own: no score may move.
+    swapped = []
+    for job, candidate in test_set.pairs:
+        lines = candidate.resume_text.split("\n")
+        kept = [line for line in lines if not line.startswith("Community:")]
+        other = "\n".join([*kept, "Community: Member of a women in engineering network."])
+        swapped.append((job, dataclasses.replace(candidate, resume_text=other)))
+
+    before = fitted.predict_proba(test_set.pairs)[:, 1]
+    after = fitted.predict_proba(swapped)[:, 1]
+
+    changed = [
+        old.resume_text != new.resume_text
+        for (_, old), (_, new) in zip(test_set.pairs, swapped, strict=True)
+    ]
+    # A few resumes already end with exactly that line.
+    assert sum(changed) > 0.9 * len(changed)
+    assert np.array_equal(before, after)
 
 
 def test_the_relevance_grade_is_carried_but_never_fitted(train_set, test_set, scores) -> None:

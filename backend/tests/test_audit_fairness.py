@@ -23,13 +23,14 @@ from app.ml.corpus import (
     corpus_summary,
     generate_corpus,
 )
+from app.ml.matrix import PairFeaturiser
 from app.ml.mitigation import (
     LineDroppingFeaturiser,
     TermDroppingFeaturiser,
     reweighing_weights,
 )
 from app.ml.text import TOKEN_PATTERN, candidate_text, fold_text
-from app.ml.train import TrainingData, train_matcher, training_data
+from app.ml.train import EXCLUDED_HEADINGS, TrainingData, make_matcher, train_matcher, training_data
 
 SCRIPT = REPO_ROOT / "scripts" / "audit_fairness.py"
 #: A small corpus, as the other script tests use, and few resamples, to stay fast.
@@ -75,9 +76,12 @@ def test_it_audits_every_job_and_says_the_data_is_synthetic(results: dict) -> No
     assert results["training_label"] == "advanced"
     assert set(results["scorers"]) == {
         "matcher",
+        "matcher_without_mitigation",
         "fitted_on_relevance",
         "trained_without_historical_bias",
     }
+    assert results["excluded_headings"] == ["Community:"]
+    assert results["reweighed_attribute"] == "gender"
     for counts in results["group_pairs"].values():
         assert sum(counts.values()) == 2000
 
@@ -116,6 +120,9 @@ def test_the_proxy_line_is_the_only_thing_that_moves_a_score(results: dict, data
 
     assert proxy["pairs_with_line"] == planted > 0
     assert proxy["max_abs_change_elsewhere"] == 0.0
+    # The unmitigated matcher reads the line; the served one never does.
+    assert proxy["mean_score_change"] < 0
+    assert proxy["served_max_abs_score_change"] == 0.0
 
 
 def test_the_proxy_report_compares_the_same_pairs_scored_both_ways(monkeypatch) -> None:
@@ -244,14 +251,24 @@ def test_each_version_of_the_pairs_is_scored_as_itself(data) -> None:
     assert first.tolist() != second.tolist()
 
 
-def test_the_matcher_is_fitted_on_the_past_decisions(data) -> None:
-    train, test = data.pairs[:1500], data.pairs[1500:]
+def test_the_audited_matcher_is_the_served_one(data) -> None:
+    test = data.pairs[1500:]
     subset = script._subset(data, np.arange(len(data)) < 1500)
-    ours = script.fit_on_advanced(subset).predict_proba(test)[:, 1]
+    ours = script.fit_served(subset).predict_proba(test)[:, 1]
     shipped = train_matcher(subset).predict_proba(test)[:, 1]
 
-    assert len(train) == len(subset)
     assert ours.tolist() == shipped.tolist()
+
+
+def test_the_unmitigated_matcher_reads_every_line_and_is_not_weighted(data) -> None:
+    test = data.pairs[1500:]
+    subset = script._subset(data, np.arange(len(data)) < 1500)
+    plain = make_matcher(PairFeaturiser()).fit(subset.pairs, subset.advanced)
+
+    ours = script.fit_unmitigated(subset).predict_proba(test)[:, 1]
+
+    assert ours.tolist() == plain.predict_proba(test)[:, 1].tolist()
+    assert ours.tolist() != train_matcher(subset).predict_proba(test)[:, 1].tolist()
 
 
 def test_the_reference_is_fitted_on_ground_truth(data, monkeypatch) -> None:
@@ -276,7 +293,8 @@ def test_the_unbiased_reference_learns_from_the_unbiased_record(monkeypatch) -> 
         labels.append(int(subset.advanced.sum()))
         return _SpyModel(0)
 
-    monkeypatch.setattr(script, "fit_on_advanced", spy)
+    monkeypatch.setattr(script, "fit_unmitigated", spy)
+    monkeypatch.setattr(script, "fit_served", lambda _: _SpyModel(0))
     monkeypatch.setattr(script, "fit_on_relevance", lambda _: _SpyModel(0))
     monkeypatch.setattr(script, "MITIGATIONS", {})
     script.audit(CONFIG, folds=2, fold_seed=0, resamples=10)
@@ -287,7 +305,7 @@ def test_the_unbiased_reference_learns_from_the_unbiased_record(monkeypatch) -> 
     folds = np.array([fold_of[ref] for ref in biased.job_refs])
     expected = [int(d.advanced[folds != fold].sum()) for d in (biased, unbiased) for fold in (0, 1)]
 
-    # Two folds for the matcher, then two for the unbiased reference.
+    # Two folds for the unmitigated matcher, then two for the unbiased reference.
     assert labels == expected
     assert sum(labels[2:]) > sum(labels[:2])
 
@@ -295,25 +313,22 @@ def test_the_unbiased_reference_learns_from_the_unbiased_record(monkeypatch) -> 
 # --- mitigations -------------------------------------------------------
 
 
-def test_every_mitigation_is_audited_and_compared_with_the_matcher(results: dict) -> None:
-    assert set(results["mitigations"]) == {
-        "drop_proxy_terms",
-        "drop_community_line",
-        "reweighing",
-        "drop_community_line_and_reweighing",
-    }
-    for report in results["mitigations"].values():
+def test_the_served_matcher_and_each_alternative_are_compared_with_the_unmitigated(
+    results: dict,
+) -> None:
+    assert set(results["mitigations"]) == {"drop_proxy_terms", "drop_community_line", "reweighing"}
+    unmitigated = results["scorers"]["matcher_without_mitigation"]["ndcg_at_10"]
+    for report in [results["scorers"]["matcher"], *results["mitigations"].values()]:
         assert set(report["at_k"]) == {"5", "10"}
-        compared = report["ndcg_at_10_minus_matcher"]
+        compared = report["ndcg_at_10_minus_unmitigated"]
         jobs = compared["jobs_better"] + compared["jobs_equal"] + compared["jobs_worse"]
         assert 0 < jobs <= 40
         low, high = compared["95ci"]
         assert low <= compared["mean"] <= high
         # Both are averaged over the jobs with a relevant candidate, so the mean
         # paired difference is the difference of the two NDCG@10s.
-        matcher = results["scorers"]["matcher"]["ndcg_at_10"]
-        assert compared["mean"] == pytest.approx(report["ndcg_at_10"] - matcher)
-        assert report["ndcg_at_10"] != matcher
+        assert compared["mean"] == pytest.approx(report["ndcg_at_10"] - unmitigated)
+        assert report["ndcg_at_10"] != unmitigated
 
 
 def test_the_proxy_terms_occur_only_on_the_planted_lines() -> None:
@@ -334,7 +349,7 @@ def test_every_community_line_starts_with_the_heading() -> None:
     corpus = generate_corpus(CorpusConfig())
     lines = [line for c in corpus.candidates for line in c.resume_text.split("\n")]
     community = [line for line in lines if any(phrase in line for phrase in phrases)]
-    headed = [line for line in lines if line.startswith(script.COMMUNITY_HEADING)]
+    headed = [line for line in lines if line.startswith(EXCLUDED_HEADINGS)]
 
     assert len(community) > 1000
     assert community == headed
@@ -364,7 +379,7 @@ def test_paired_ndcg_matches_a_hand_computation() -> None:
 
 
 class _RecordingMatcher:
-    """Stands in for make_mitigated_matcher's model and notes how it was built and fitted."""
+    """Stands in for make_matcher's model and notes how it was built and fitted."""
 
     built: list[Any] = []
 
@@ -383,15 +398,14 @@ class _RecordingMatcher:
     [
         ("drop_proxy_terms", TermDroppingFeaturiser, ("women", "bootcamp", "member"), False),
         ("drop_community_line", LineDroppingFeaturiser, ("Community:",), False),
-        ("reweighing", type(None), None, True),
-        ("drop_community_line_and_reweighing", LineDroppingFeaturiser, ("Community:",), True),
+        ("reweighing", PairFeaturiser, None, True),
     ],
 )
 def test_each_mitigation_trains_on_the_past_decisions_as_named(
     data, monkeypatch, name: str, featuriser: type, argument: Any, weighted: bool
 ) -> None:
     _RecordingMatcher.built = []
-    monkeypatch.setattr(script, "make_mitigated_matcher", _RecordingMatcher)
+    monkeypatch.setattr(script, "make_matcher", _RecordingMatcher)
 
     script.MITIGATIONS[name](data)
     (model,) = _RecordingMatcher.built
@@ -425,8 +439,10 @@ def test_the_spread_holds_the_main_run_first_and_matches_its_sections(results: d
     )
     record = results["historical_decisions"]["gender"]["groups"]["woman"]
     assert first["historical_decisions"]["decision"]["ratio"] == record["disparate_impact"]["value"]
-    reweighed = results["mitigations"]["reweighing"]["ndcg_at_10_minus_matcher"]
-    assert first["reweighing"]["ndcg_at_10_minus_matcher"]["mean"] == reweighed["mean"]
+    reweighed = results["mitigations"]["reweighing"]["ndcg_at_10_minus_unmitigated"]
+    assert first["reweighing"]["ndcg_at_10_minus_unmitigated"]["mean"] == reweighed["mean"]
+    served = results["scorers"]["matcher"]["ndcg_at_10_minus_unmitigated"]
+    assert first["matcher"]["ndcg_at_10_minus_unmitigated"]["95ci"] == served["95ci"]
 
 
 def test_another_fold_seed_moves_the_figures_but_not_the_record(results: dict) -> None:
@@ -459,7 +475,7 @@ def test_aggregate_matches_a_hand_count() -> None:
                 "m": {
                     "ndcg_at_10": 0.8,
                     "top_5": _cell(-0.06, -0.1, -0.02),
-                    "ndcg_at_10_minus_matcher": {"mean": -0.01, "95ci": [-0.02, -0.001]},
+                    "ndcg_at_10_minus_unmitigated": {"mean": -0.01, "95ci": [-0.02, -0.001]},
                 }
             }
         },
@@ -468,7 +484,7 @@ def test_aggregate_matches_a_hand_count() -> None:
                 "m": {
                     "ndcg_at_10": 0.7,
                     "top_5": _cell(0.03, 0.01, 0.05),
-                    "ndcg_at_10_minus_matcher": {"mean": 0.02, "95ci": [0.001, 0.03]},
+                    "ndcg_at_10_minus_unmitigated": {"mean": 0.02, "95ci": [0.001, 0.03]},
                 }
             }
         },
@@ -477,7 +493,7 @@ def test_aggregate_matches_a_hand_count() -> None:
                 "m": {
                     "ndcg_at_10": 0.9,
                     "top_5": _cell(None, None, None),
-                    "ndcg_at_10_minus_matcher": {"mean": 0.0, "95ci": [-0.01, 0.01]},
+                    "ndcg_at_10_minus_unmitigated": {"mean": 0.0, "95ci": [-0.01, 0.01]},
                 }
             }
         },
@@ -487,7 +503,7 @@ def test_aggregate_matches_a_hand_count() -> None:
                 "m": {
                     "ndcg_at_10": 0.8,
                     "top_5": _cell(-0.01, -0.05, 0.03),
-                    "ndcg_at_10_minus_matcher": {"mean": -0.004, "95ci": [-0.01, 0.002]},
+                    "ndcg_at_10_minus_unmitigated": {"mean": -0.004, "95ci": [-0.01, 0.002]},
                 }
             }
         },
@@ -504,7 +520,7 @@ def test_aggregate_matches_a_hand_count() -> None:
     }
     assert entry["top_5"]["eod_interval_below_zero"] == 1
     assert entry["top_5"]["eod_interval_above_zero"] == 1
-    compared = entry["ndcg_at_10_minus_matcher"]
+    compared = entry["ndcg_at_10_minus_unmitigated"]
     assert compared["mean"] == pytest.approx(0.006 / 4)
     assert (compared["interval_below_zero"], compared["interval_above_zero"]) == (1, 1)
 

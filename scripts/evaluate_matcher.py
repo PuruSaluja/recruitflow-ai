@@ -119,7 +119,14 @@ from app.ml.retrieval import (
     recall_at_n,
     rerank_per_group,
 )
-from app.ml.train import TRAINING_LABEL, TrainingData, make_matcher, split_by_job, training_data
+from app.ml.train import (
+    TRAINING_LABEL,
+    TrainingData,
+    make_matcher,
+    split_by_job,
+    train_matcher,
+    training_data,
+)
 
 DEFAULT_OUT = REPO_ROOT / "docs" / "model_evaluation.json"
 
@@ -672,7 +679,8 @@ def evaluate(
     per_split = []
     for seed in split_seeds:
         other_train, other_test = split_by_job(data, test_share=test_share, seed=seed)
-        fitted = make_matcher().fit(other_train.pairs, getattr(other_train, TRAINING_LABEL))
+        # The same procedure as the persisted matcher, reweighing included.
+        fitted = train_matcher(other_train)
         result = evaluate_scores(other_test, fitted.predict_proba(other_test.pairs)[:, 1])
         per_split.append(
             {

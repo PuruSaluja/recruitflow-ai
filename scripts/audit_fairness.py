@@ -17,35 +17,41 @@ What is audited:
 
 * ``historical_decisions`` -- the ``advanced`` label itself, the past
   recruiter's decisions the matcher learns from. Not a top k: a decision.
-* ``matcher`` -- the matcher as trained, on ``advanced``.
-* ``fitted_on_relevance`` -- the same pipeline fitted on ``relevance >= 1``.
+* ``matcher`` -- the matcher the app serves, trained by
+  :func:`app.ml.train.train_matcher`: community lines never read, and the
+  training pairs reweighed against gender.
+* ``matcher_without_mitigation`` -- the same classifier on ``advanced`` with
+  neither: a plain featuriser and no weights. What the bias does unchecked.
+* ``fitted_on_relevance`` -- that plain pipeline fitted on ``relevance >= 1``.
   A reference: no real system has ground-truth labels.
-* ``trained_without_historical_bias`` -- the matcher trained on the same
-  corpus generated with ``historical_bias=0``: the same people, slates and
-  ground truth, only the past decisions unbiased. Also a reference; it shows
-  what the matcher does when the record it learns from is fair.
+* ``trained_without_historical_bias`` -- the plain pipeline trained on the
+  same corpus generated with ``historical_bias=0``: the same people, slates
+  and ground truth, only the past decisions unbiased. Also a reference; it
+  shows what a matcher does when the record it learns from is fair.
 
 Each comes with its NDCG@10 against ground truth, so any fairness gain can be
-read beside what it costs in ranking quality.
+read beside what it costs in ranking quality; the served matcher is also
+compared with the unmitigated one job by job.
 
 ``proxy`` measures the planted text proxy directly. Regenerating the corpus
 with ``proxy_share=0`` gives the same people, slates and labels, with each
 women-in-tech line replaced by the neutral line the same person would
 otherwise have written (the script checks the pairs and labels match). The
-same out-of-fold matchers score both, so the difference in a pair's score is
-what that line alone does to it.
+same out-of-fold unmitigated matchers score both, so the difference in a
+pair's score is what that line alone does to it. The served matchers score
+both as well, which shows the line never reaches them.
 
-``mitigations`` are the matcher trained four other ways
-(:mod:`app.ml.mitigation`), each audited the same way and compared with the
-matcher job by job on NDCG@10, with a bootstrap interval over jobs:
+``mitigations`` are the alternatives to the served combination, each one
+change to the unmitigated matcher (:mod:`app.ml.mitigation`), audited the same
+way and compared with the unmitigated matcher job by job on NDCG@10, with a
+bootstrap interval over jobs:
 
 * ``drop_proxy_terms`` -- :data:`PROXY_TERMS`, the words only the planted
   lines use, left out of the vocabulary;
 * ``drop_community_line`` -- every line headed ``Community:`` removed before
-  vectorising, whatever it says;
+  vectorising, without reweighing;
 * ``reweighing`` -- training pairs reweighed so gender and the past decision
-  are independent;
-* ``drop_community_line_and_reweighing`` -- both.
+  are independent, with every line read.
 
 ``spread`` repeats the whole audit on other fold seeds of the same corpus
 (``--fold-seeds``) and on other corpora (``--corpus-seeds``) and records the
@@ -84,22 +90,24 @@ from app.ml.fairness import (
     audit_selection,
     top_k_selection,
 )
-from app.ml.mitigation import (
-    LineDroppingFeaturiser,
-    TermDroppingFeaturiser,
-    make_mitigated_matcher,
-    reweighing_weights,
+from app.ml.matrix import PairFeaturiser
+from app.ml.mitigation import LineDroppingFeaturiser, TermDroppingFeaturiser
+from app.ml.train import (
+    EXCLUDED_HEADINGS,
+    REWEIGHED_ATTRIBUTE,
+    TRAINING_LABEL,
+    TrainingData,
+    make_matcher,
+    train_matcher,
+    training_data,
+    training_weights,
 )
-from app.ml.train import TRAINING_LABEL, TrainingData, make_matcher, training_data
 
 DEFAULT_OUT = REPO_ROOT / "docs" / "fairness_audit.json"
 
 #: The words only the corpus's planted women-in-tech lines use. ``women`` is in
 #: every such line; ``bootcamp`` and ``member`` in one wording each.
 PROXY_TERMS = ("women", "bootcamp", "member")
-
-#: The heading every generated community line starts with.
-COMMUNITY_HEADING = "Community:"
 
 #: CalibratedClassifierCV's default number of folds. A training set with fewer
 #: pairs than this in a label's minority class only draws a warning from
@@ -232,40 +240,46 @@ def _subset(data: TrainingData, mask: np.ndarray) -> TrainingData:
     )
 
 
-def fit_on_advanced(data: TrainingData) -> Any:
-    return make_matcher().fit(data.pairs, getattr(data, TRAINING_LABEL))
+def fit_served(data: TrainingData) -> Any:
+    """The matcher the app serves, by its own training procedure."""
+    return train_matcher(data)
+
+
+def fit_unmitigated(data: TrainingData) -> Any:
+    """The same classifier on ``advanced`` with a plain featuriser and no weights."""
+    return make_matcher(PairFeaturiser()).fit(data.pairs, getattr(data, TRAINING_LABEL))
 
 
 def fit_on_relevance(data: TrainingData) -> Any:
-    return make_matcher().fit(data.pairs, data.relevance >= QUALIFIED_GRADE)
+    return make_matcher(PairFeaturiser()).fit(data.pairs, data.relevance >= QUALIFIED_GRADE)
 
 
 def groups_of(data: TrainingData, attribute: str) -> list[str]:
     return [str(getattr(candidate, attribute)) for _, candidate in data.pairs]
 
 
-def _mitigated(featuriser: Callable[[], Any] | None, *, reweigh: bool) -> Fitter:
-    """A fitter for the matcher trained on ``advanced`` with one mitigation or two."""
+def _mitigated(featuriser: Callable[[], PairFeaturiser], *, reweigh: bool) -> Fitter:
+    """A fitter for the matcher on ``advanced`` with one change from the unmitigated one."""
 
     def fit(data: TrainingData) -> Any:
-        weights = reweighing_weights(groups_of(data, "gender"), data.advanced) if reweigh else None
-        model = make_mitigated_matcher(featuriser() if featuriser else None)
-        return model.fit(data.pairs, data.advanced, sample_weight=weights)
+        weights = training_weights(data) if reweigh else None
+        model = make_matcher(featuriser())
+        return model.fit(data.pairs, getattr(data, TRAINING_LABEL), sample_weight=weights)
 
     return fit
 
 
-def _without_community_line() -> LineDroppingFeaturiser:
-    return LineDroppingFeaturiser((COMMUNITY_HEADING,))
-
-
-#: Each mitigation the audit measures, by name.
+#: Each alternative mitigation the audit measures, by name.
 MITIGATIONS: dict[str, Fitter] = {
     "drop_proxy_terms": _mitigated(lambda: TermDroppingFeaturiser(PROXY_TERMS), reweigh=False),
-    "drop_community_line": _mitigated(_without_community_line, reweigh=False),
-    "reweighing": _mitigated(None, reweigh=True),
-    "drop_community_line_and_reweighing": _mitigated(_without_community_line, reweigh=True),
+    "drop_community_line": _mitigated(
+        lambda: LineDroppingFeaturiser(EXCLUDED_HEADINGS), reweigh=False
+    ),
+    "reweighing": _mitigated(PairFeaturiser, reweigh=True),
 }
+
+#: The key each comparison with the unmitigated matcher is recorded under.
+COMPARED_KEY = f"ndcg_at_{NDCG_K}_minus_unmitigated"
 
 
 def paired_ndcg(
@@ -406,21 +420,26 @@ def audit(config: CorpusConfig, *, folds: int, fold_seed: int, resamples: int) -
             for (_, a), (_, b) in zip(data.pairs, without_proxy.pairs, strict=True)
         ]
     )
-    matcher, matcher_no_line = out_of_fold_scores(
-        data, fold_of, fit_on_advanced, also_score=[without_proxy]
+    served, served_no_line = out_of_fold_scores(
+        data, fold_of, fit_served, also_score=[without_proxy]
+    )
+    unmitigated, unmitigated_no_line = out_of_fold_scores(
+        data, fold_of, fit_unmitigated, also_score=[without_proxy]
     )
     (relevance_scores,) = out_of_fold_scores(data, fold_of, fit_on_relevance)
     # Trained on the unbiased record, scored on the same pairs as everything else.
-    (unbiased_scores,) = out_of_fold_scores(unbiased, fold_of, fit_on_advanced)
+    (unbiased_scores,) = out_of_fold_scores(unbiased, fold_of, fit_unmitigated)
 
+    matcher = scorer_report(data, served, resamples=resamples)
+    matcher[COMPARED_KEY] = paired_ndcg(data, served, unmitigated, resamples=resamples)
     mitigations = {}
     for name, fit in MITIGATIONS.items():
         (scores,) = out_of_fold_scores(data, fold_of, fit)
         report = scorer_report(data, scores, resamples=resamples)
-        report[f"ndcg_at_{NDCG_K}_minus_matcher"] = paired_ndcg(
-            data, scores, matcher, resamples=resamples
-        )
+        report[COMPARED_KEY] = paired_ndcg(data, scores, unmitigated, resamples=resamples)
         mitigations[name] = report
+    proxy = proxy_report(data, unmitigated, unmitigated_no_line, swapped, resamples=resamples)
+    proxy["served_max_abs_score_change"] = float(np.abs(served - served_no_line).max())
 
     return {
         "synthetic": True,
@@ -442,13 +461,16 @@ def audit(config: CorpusConfig, *, folds: int, fold_seed: int, resamples: int) -
         },
         "historical_decisions": audit_all(data, data.advanced.astype(float), resamples=resamples),
         "scorers": {
-            "matcher": scorer_report(data, matcher, resamples=resamples),
+            "matcher": matcher,
+            "matcher_without_mitigation": scorer_report(data, unmitigated, resamples=resamples),
             "fitted_on_relevance": scorer_report(data, relevance_scores, resamples=resamples),
             "trained_without_historical_bias": scorer_report(
                 data, unbiased_scores, resamples=resamples
             ),
         },
-        "proxy": proxy_report(data, matcher, matcher_no_line, swapped, resamples=resamples),
+        "excluded_headings": list(EXCLUDED_HEADINGS),
+        "reweighed_attribute": REWEIGHED_ATTRIBUTE,
+        "proxy": proxy,
         "proxy_terms": list(PROXY_TERMS),
         "mitigations": mitigations,
         "python": platform.python_version(),
@@ -481,9 +503,9 @@ def run_summary(results: dict[str, Any]) -> dict[str, Any]:
             f"ndcg_at_{NDCG_K}": report[f"ndcg_at_{NDCG_K}"],
             **{f"top_{k}": _women(report["at_k"][str(k)]["gender"]) for k in CUTOFFS},
         }
-        compared = report.get(f"ndcg_at_{NDCG_K}_minus_matcher")
+        compared = report.get(COMPARED_KEY)
         if compared is not None:
-            rows[name][f"ndcg_at_{NDCG_K}_minus_matcher"] = {
+            rows[name][COMPARED_KEY] = {
                 "mean": compared["mean"],
                 "95ci": compared["95ci"],
             }
