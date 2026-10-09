@@ -14,7 +14,14 @@ import numpy as np
 import pytest
 
 from app.config import REPO_ROOT
-from app.ml.corpus import CorpusConfig, _names_womens_group, corpus_summary, generate_corpus
+from app.ml.corpus import (
+    _NEUTRAL_COMMUNITY,
+    _WOMEN_COMMUNITY,
+    CorpusConfig,
+    _names_womens_group,
+    corpus_summary,
+    generate_corpus,
+)
 from app.ml.mitigation import (
     LineDroppingFeaturiser,
     TermDroppingFeaturiser,
@@ -319,16 +326,15 @@ def test_the_proxy_terms_occur_only_on_the_planted_lines() -> None:
 
 
 def test_every_community_line_starts_with_the_heading() -> None:
+    # Every phrase the generator writes on a community line, planted or neutral.
+    phrases = (*_NEUTRAL_COMMUNITY, *_WOMEN_COMMUNITY)
     corpus = generate_corpus(CorpusConfig())
-    lines = [
-        line
-        for candidate in corpus.candidates
-        for line in candidate.resume_text.split("\n")
-        if "community" in line.lower() or any(t in line.lower() for t in script.PROXY_TERMS)
-    ]
+    lines = [line for c in corpus.candidates for line in c.resume_text.split("\n")]
+    community = [line for line in lines if any(phrase in line for phrase in phrases)]
+    headed = [line for line in lines if line.startswith(script.COMMUNITY_HEADING)]
 
-    assert len(lines) > 1000
-    assert all(line.startswith(script.COMMUNITY_HEADING) for line in lines)
+    assert len(community) > 1000
+    assert community == headed
 
 
 def test_paired_ndcg_matches_a_hand_computation() -> None:
@@ -455,6 +461,35 @@ def test_a_fold_with_every_pair_in_one_class_is_refused() -> None:
     reason = script.untrainable_reason(refs, {"J1": 0, "J2": 1}, {"advanced": labels})
 
     assert "without fold 0" in reason and "only 0 pairs" in reason
+
+
+def test_too_few_negatives_is_refused_as_well_as_too_few_positives() -> None:
+    refs = ["J1"] * 10 + ["J2"] * 10
+    # Training without fold 0 sees J2: 8 advanced, only 2 not.
+    labels = np.array([True] * 5 + [False] * 5 + [True] * 8 + [False] * 2)
+
+    reason = script.untrainable_reason(refs, {"J1": 0, "J2": 1}, {"advanced": labels})
+
+    assert reason is not None and "only 2 pairs" in reason
+
+
+def test_every_label_a_model_is_trained_on_is_checked(monkeypatch) -> None:
+    checked: dict[str, np.ndarray] = {}
+
+    def spy(job_refs, fold_of, labels):
+        checked.update(labels)
+        return "stop here"
+
+    monkeypatch.setattr(script, "untrainable_reason", spy)
+    with pytest.raises(script.AuditRefused, match="stop here"):
+        script.audit(CONFIG, folds=2, fold_seed=0, resamples=10)
+
+    biased = training_data(generate_corpus(CONFIG))
+    unbiased = training_data(generate_corpus(dataclasses.replace(CONFIG, historical_bias=0.0)))
+    assert checked["advanced"].tolist() == biased.advanced.tolist()
+    assert checked["relevance >= 1"].tolist() == (biased.relevance >= 1).tolist()
+    assert checked["advanced without the historical bias"].tolist() == unbiased.advanced.tolist()
+    assert unbiased.advanced.tolist() != biased.advanced.tolist()
 
 
 @pytest.mark.parametrize("seed", ["2", "11"])
