@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import dataclasses
 import importlib.util
 import json
@@ -34,7 +35,8 @@ SCRIPT = REPO_ROOT / "scripts" / "audit_fairness.py"
 #: A small corpus, as the other script tests use, and few resamples, to stay fast.
 CORPUS = ["--seed", "5", "--jobs", "40", "--candidates", "1200"]
 CONFIG = CorpusConfig(seed=5, n_jobs=40, n_candidates=1200)
-FAST = ["--resamples", "50"]
+#: No repeat runs unless a test asks for them; each one is a whole audit.
+FAST = ["--resamples", "50", "--fold-seeds", "--corpus-seeds"]
 TOKEN = re.compile(TOKEN_PATTERN)
 
 
@@ -57,7 +59,8 @@ def data() -> TrainingData:
 @pytest.fixture(scope="module")
 def results(tmp_path_factory: pytest.TempPathFactory) -> dict:
     out = tmp_path_factory.mktemp("audit") / "audit.json"
-    assert script.main([*CORPUS, *FAST, "--out", str(out)]) == 0
+    # One repeat on another fold seed, so the spread holds two runs.
+    assert script.main([*CORPUS, *FAST, "--fold-seeds", "1", "--out", str(out)]) == 0
     return json.loads(out.read_text(encoding="utf-8"))
 
 
@@ -402,6 +405,163 @@ def test_each_mitigation_trains_on_the_past_decisions_as_named(
         assert model.sample_weight.tolist() == expected.tolist()
     else:
         assert model.sample_weight is None
+
+
+# --- the spread over runs ------------------------------------------------
+
+
+def test_the_spread_holds_the_main_run_first_and_matches_its_sections(results: dict) -> None:
+    runs = results["spread"]["runs"]
+
+    assert [(run["corpus_seed"], run["fold_seed"]) for run in runs] == [(5, 0), (5, 1)]
+    first = runs[0]["rows"]
+    matcher = results["scorers"]["matcher"]["at_k"]["5"]["gender"]["groups"]["woman"]
+    assert first["matcher"]["top_5"]["eod"] == matcher["equal_opportunity_difference"]["value"]
+    assert first["matcher"]["top_5"]["ratio"] == matcher["disparate_impact"]["value"]
+    swapped = results["proxy"]["at_k"]["10"]["gender_without_line"]["groups"]["woman"]
+    assert (
+        first["lines_swapped"]["top_10"]["eod_low"]
+        == swapped["equal_opportunity_difference"]["low"]
+    )
+    record = results["historical_decisions"]["gender"]["groups"]["woman"]
+    assert first["historical_decisions"]["decision"]["ratio"] == record["disparate_impact"]["value"]
+    reweighed = results["mitigations"]["reweighing"]["ndcg_at_10_minus_matcher"]
+    assert first["reweighing"]["ndcg_at_10_minus_matcher"]["mean"] == reweighed["mean"]
+
+
+def test_another_fold_seed_moves_the_figures_but_not_the_record(results: dict) -> None:
+    first, second = (run["rows"] for run in results["spread"]["runs"])
+
+    # The record is a label, not a model, so no split changes it.
+    assert first["historical_decisions"] == second["historical_decisions"]
+    assert first["matcher"]["top_5"]["eod"] != second["matcher"]["top_5"]["eod"]
+
+
+def test_the_summary_is_the_mean_and_range_of_the_runs(results: dict) -> None:
+    runs = [run["rows"]["matcher"] for run in results["spread"]["runs"]]
+    summary = results["spread"]["summary"]["matcher"]
+    values = [row["top_5"]["eod"] for row in runs]
+
+    assert summary["top_5"]["eod"]["mean"] == pytest.approx(np.mean(values))
+    assert summary["top_5"]["eod"]["min"] == min(values)
+    assert summary["top_5"]["eod"]["max"] == max(values)
+    assert summary["top_5"]["eod"]["runs"] == 2
+
+
+def _cell(eod: float | None, low: float | None, high: float | None) -> dict:
+    return {"ratio": None if eod is None else 1 + eod, "eod": eod, "eod_low": low, "eod_high": high}
+
+
+def test_aggregate_matches_a_hand_count() -> None:
+    summaries = [
+        {
+            "rows": {
+                "m": {
+                    "ndcg_at_10": 0.8,
+                    "top_5": _cell(-0.06, -0.1, -0.02),
+                    "ndcg_at_10_minus_matcher": {"mean": -0.01, "95ci": [-0.02, -0.001]},
+                }
+            }
+        },
+        {
+            "rows": {
+                "m": {
+                    "ndcg_at_10": 0.7,
+                    "top_5": _cell(0.03, 0.01, 0.05),
+                    "ndcg_at_10_minus_matcher": {"mean": 0.02, "95ci": [0.001, 0.03]},
+                }
+            }
+        },
+        {
+            "rows": {
+                "m": {
+                    "ndcg_at_10": 0.9,
+                    "top_5": _cell(None, None, None),
+                    "ndcg_at_10_minus_matcher": {"mean": 0.0, "95ci": [-0.01, 0.01]},
+                }
+            }
+        },
+        # Negative, but its interval reaches past zero, so it counts as neither.
+        {
+            "rows": {
+                "m": {
+                    "ndcg_at_10": 0.8,
+                    "top_5": _cell(-0.01, -0.05, 0.03),
+                    "ndcg_at_10_minus_matcher": {"mean": -0.004, "95ci": [-0.01, 0.002]},
+                }
+            }
+        },
+    ]
+
+    entry = script.aggregate(summaries)["m"]
+
+    assert entry["ndcg_at_10"] == {"runs": 4, "mean": pytest.approx(0.8), "min": 0.7, "max": 0.9}
+    assert entry["top_5"]["eod"] == {
+        "runs": 3,
+        "mean": pytest.approx(-0.04 / 3),
+        "min": -0.06,
+        "max": 0.03,
+    }
+    assert entry["top_5"]["eod_interval_below_zero"] == 1
+    assert entry["top_5"]["eod_interval_above_zero"] == 1
+    compared = entry["ndcg_at_10_minus_matcher"]
+    assert compared["mean"] == pytest.approx(0.006 / 4)
+    assert (compared["interval_below_zero"], compared["interval_above_zero"]) == (1, 1)
+
+
+def test_a_run_with_no_women_reports_nothing_for_them() -> None:
+    assert script._women({"groups": {"man": {}}}) == dict.fromkeys(
+        ("ratio", "eod", "eod_low", "eod_high")
+    )
+
+
+def test_the_spread_repeats_on_each_fold_seed_and_each_corpus(results: dict, monkeypatch) -> None:
+    calls: list[tuple[int, int, int]] = []
+
+    def fake_audit(config: CorpusConfig, *, folds: int, fold_seed: int, resamples: int):
+        calls.append((config.seed, fold_seed, folds))
+        copied = copy.deepcopy(results)
+        copied["corpus_config"]["seed"] = config.seed
+        copied["fold_seed"] = fold_seed
+        return copied
+
+    # A main run on fold seed 3, so the other corpora must take 3 from it.
+    first = copy.deepcopy(results)
+    first["fold_seed"] = 3
+    monkeypatch.setattr(script, "audit", fake_audit)
+    spread = script.spread(
+        CONFIG, first, folds=4, fold_seeds=[7, 8], corpus_seeds=[11, 12], resamples=10
+    )
+
+    # Other fold seeds on the main corpus; other corpora on the main fold seed.
+    assert calls == [(5, 7, 4), (5, 8, 4), (11, 3, 4), (12, 3, 4)]
+    assert [(run["corpus_seed"], run["fold_seed"]) for run in spread["runs"]] == [
+        (5, 3),
+        (5, 7),
+        (5, 8),
+        (11, 3),
+        (12, 3),
+    ]
+    assert spread["summary"]["matcher"]["top_5"]["eod"]["runs"] == 5
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--fold-seeds", "1", "1"],
+        ["--fold-seeds", "0"],
+        ["--corpus-seeds", "3", "3"],
+        ["--corpus-seeds", "5"],
+    ],
+)
+def test_a_repeated_seed_is_refused_before_anything_runs(
+    arguments: list[str], tmp_path: Path, capsys, monkeypatch
+) -> None:
+    monkeypatch.setattr(script, "audit", lambda *a, **k: pytest.fail("the audit ran"))
+    out = tmp_path / "audit.json"
+
+    assert script.main([*CORPUS, *FAST, *arguments, "--out", str(out)]) == 2
+    assert "must be distinct and must not repeat" in capsys.readouterr().err
 
 
 # --- refusals ----------------------------------------------------------

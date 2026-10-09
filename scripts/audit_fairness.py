@@ -47,6 +47,13 @@ matcher job by job on NDCG@10, with a bootstrap interval over jobs:
   are independent;
 * ``drop_community_line_and_reweighing`` -- both.
 
+``spread`` repeats the whole audit on other fold seeds of the same corpus
+(``--fold-seeds``) and on other corpora (``--corpus-seeds``) and records the
+women's figures of every run, with their mean and range and how many runs'
+intervals exclude zero. The intervals above cover which jobs were sampled;
+which jobs each model was trained on moves the figures too, and only the
+spread shows by how much.
+
 Writes JSON (default ``docs/fairness_audit.json``):
 
     python scripts/audit_fairness.py
@@ -103,6 +110,13 @@ MIN_CLASS_FOR_CALIBRATION = 5
 #: Shortlist lengths audited.
 CUTOFFS = (5, 10)
 
+#: Other ways to deal the same corpus's jobs into folds, and other corpora, the
+#: whole audit is repeated on. One split of one corpus moved women's top-5
+#: equal-opportunity difference for the matcher from -0.057 to -0.075 between
+#: fold seeds alone, which no interval over jobs captures.
+DEFAULT_FOLD_SEEDS = (1, 2, 3, 4)
+DEFAULT_CORPUS_SEEDS = (1, 2, 3, 4)
+
 #: Each audited attribute, and the group the others are compared with.
 REFERENCES = {"gender": "man", "age_band": "under_40"}
 
@@ -134,6 +148,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fold-seed", type=int, default=0, help="seed for dealing jobs into folds")
     parser.add_argument(
         "--resamples", type=int, default=2000, help="bootstrap resamples (default: %(default)s)"
+    )
+    parser.add_argument(
+        "--fold-seeds",
+        type=int,
+        nargs="*",
+        default=list(DEFAULT_FOLD_SEEDS),
+        help="other fold seeds to repeat the audit with on the same corpus (default: 1 to 4)",
+    )
+    parser.add_argument(
+        "--corpus-seeds",
+        type=int,
+        nargs="*",
+        default=list(DEFAULT_CORPUS_SEEDS),
+        help="other corpus seeds to repeat the audit on (default: 1 to 4)",
     )
     return parser
 
@@ -429,6 +457,114 @@ def audit(config: CorpusConfig, *, folds: int, fold_seed: int, resamples: int) -
     }
 
 
+def _women(audit: dict[str, Any]) -> dict[str, float | None]:
+    """Women against the reference group, from one audit by gender."""
+    group = audit["groups"].get("woman")
+    if group is None:
+        return dict.fromkeys(("ratio", "eod", "eod_low", "eod_high"))
+    difference = group["equal_opportunity_difference"]
+    return {
+        "ratio": group["disparate_impact"]["value"],
+        "eod": difference["value"],
+        "eod_low": difference["low"],
+        "eod_high": difference["high"],
+    }
+
+
+def run_summary(results: dict[str, Any]) -> dict[str, Any]:
+    """The women's figures of one whole audit, the ones the spread compares."""
+    rows: dict[str, Any] = {
+        "historical_decisions": {"decision": _women(results["historical_decisions"]["gender"])}
+    }
+    for name, report in {**results["scorers"], **results["mitigations"]}.items():
+        rows[name] = {
+            f"ndcg_at_{NDCG_K}": report[f"ndcg_at_{NDCG_K}"],
+            **{f"top_{k}": _women(report["at_k"][str(k)]["gender"]) for k in CUTOFFS},
+        }
+        compared = report.get(f"ndcg_at_{NDCG_K}_minus_matcher")
+        if compared is not None:
+            rows[name][f"ndcg_at_{NDCG_K}_minus_matcher"] = {
+                "mean": compared["mean"],
+                "95ci": compared["95ci"],
+            }
+    rows["lines_swapped"] = {
+        f"top_{k}": _women(results["proxy"]["at_k"][str(k)]["gender_without_line"]) for k in CUTOFFS
+    }
+    return {
+        "corpus_seed": results["corpus_config"]["seed"],
+        "fold_seed": results["fold_seed"],
+        "rows": rows,
+    }
+
+
+def _stats(values: Sequence[float | None]) -> dict[str, Any]:
+    known = [value for value in values if value is not None]
+    if not known:
+        return {"runs": 0, "mean": None, "min": None, "max": None}
+    return {
+        "runs": len(known),
+        "mean": float(np.mean(known)),
+        "min": float(min(known)),
+        "max": float(max(known)),
+    }
+
+
+def aggregate(summaries: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """Mean and range of every figure over the runs, and how often an interval excludes zero."""
+    totals: dict[str, Any] = {}
+    for name in summaries[0]["rows"]:
+        rows = [summary["rows"][name] for summary in summaries]
+        entry: dict[str, Any] = {}
+        for key, first in rows[0].items():
+            cells = [row[key] for row in rows]
+            if isinstance(first, dict) and "eod" in first:
+                entry[key] = {
+                    "ratio": _stats([cell["ratio"] for cell in cells]),
+                    "eod": _stats([cell["eod"] for cell in cells]),
+                    "eod_interval_below_zero": sum(
+                        cell["eod_high"] is not None and cell["eod_high"] < 0 for cell in cells
+                    ),
+                    "eod_interval_above_zero": sum(
+                        cell["eod_low"] is not None and cell["eod_low"] > 0 for cell in cells
+                    ),
+                }
+            elif isinstance(first, dict):
+                entry[key] = {
+                    **_stats([cell["mean"] for cell in cells]),
+                    "interval_below_zero": sum(cell["95ci"][1] < 0 for cell in cells),
+                    "interval_above_zero": sum(cell["95ci"][0] > 0 for cell in cells),
+                }
+            else:
+                entry[key] = _stats(cells)
+        totals[name] = entry
+    return totals
+
+
+def spread(
+    config: CorpusConfig,
+    first: dict[str, Any],
+    *,
+    folds: int,
+    fold_seeds: Sequence[int],
+    corpus_seeds: Sequence[int],
+    resamples: int,
+) -> dict[str, Any]:
+    """The audit repeated on other fold seeds and other corpora, beside ``first``."""
+    summaries = [run_summary(first)]
+    for seed in fold_seeds:
+        summaries.append(
+            run_summary(audit(config, folds=folds, fold_seed=seed, resamples=resamples))
+        )
+    for seed in corpus_seeds:
+        other = dataclasses.replace(config, seed=seed)
+        summaries.append(
+            run_summary(
+                audit(other, folds=folds, fold_seed=first["fold_seed"], resamples=resamples)
+            )
+        )
+    return {"runs": summaries, "summary": aggregate(summaries)}
+
+
 def _count(values: Sequence[str]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for value in values:
@@ -445,6 +581,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.resamples < 1:
         print(f"error: --resamples must be at least 1, got {args.resamples}", file=sys.stderr)
         return 2
+    # A repeated seed, or the main run's own, would count one run twice in the spread.
+    for flag, seeds, own in (
+        ("--fold-seeds", args.fold_seeds, args.fold_seed),
+        ("--corpus-seeds", args.corpus_seeds, args.seed),
+    ):
+        if len(set(seeds)) != len(seeds) or own in seeds:
+            print(
+                f"error: {flag} must be distinct and must not repeat the main run's ({own}); "
+                f"got {seeds}",
+                file=sys.stderr,
+            )
+            return 2
     # The audit takes minutes; a folder that cannot be made should not wait for it.
     try:
         args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -455,6 +603,14 @@ def main(argv: list[str] | None = None) -> int:
         config = CorpusConfig(seed=args.seed, n_jobs=args.n_jobs, n_candidates=args.n_candidates)
         results = audit(
             config, folds=args.folds, fold_seed=args.fold_seed, resamples=args.resamples
+        )
+        results["spread"] = spread(
+            config,
+            results,
+            folds=args.folds,
+            fold_seeds=args.fold_seeds,
+            corpus_seeds=args.corpus_seeds,
+            resamples=args.resamples,
         )
     except (AuditRefused, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
@@ -488,6 +644,15 @@ def main(argv: list[str] | None = None) -> int:
         f"  proxy: {proxy['pairs_with_line']} pairs, mean score change "
         f"{proxy['mean_score_change']:+.4f}"
     )
+    runs = results["spread"]["runs"]
+    print(f"  women's top-5 EOD over {len(runs)} runs: mean [min, max], intervals below zero")
+    for name, entry in results["spread"]["summary"].items():
+        cell = entry.get("top_5") or entry["decision"]
+        eod = cell["eod"]
+        print(
+            f"    {name:<36} {_fmt(eod['mean'], 4)} [{_fmt(eod['min'], 4)}, "
+            f"{_fmt(eod['max'], 4)}]  {cell['eod_interval_below_zero']} of {eod['runs']}"
+        )
     return 0
 
 
