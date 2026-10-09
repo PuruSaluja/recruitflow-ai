@@ -479,9 +479,13 @@ def audit(config: CorpusConfig, *, folds: int, fold_seed: int, resamples: int) -
     }
 
 
-def _women(audit: dict[str, Any]) -> dict[str, float | None]:
-    """Women against the reference group, from one audit by gender."""
-    group = audit["groups"].get("woman")
+#: Every group the spread follows, by attribute: all but each reference group.
+SPREAD_GROUPS = (("gender", "woman"), ("gender", "nonbinary"), ("age_band", "40_and_over"))
+
+
+def _group(audit: dict[str, Any], name: str) -> dict[str, float | None]:
+    """One group against its reference, from one audit of that group's attribute."""
+    group = audit["groups"].get(name)
     if group is None:
         return dict.fromkeys(("ratio", "eod", "eod_low", "eod_high"))
     difference = group["equal_opportunity_difference"]
@@ -493,25 +497,34 @@ def _women(audit: dict[str, Any]) -> dict[str, float | None]:
     }
 
 
+def _cells(audits: dict[str, Any], prefix: str) -> dict[str, Any]:
+    """``prefix:group`` for every group of :data:`SPREAD_GROUPS` the audits hold."""
+    return {
+        f"{prefix}:{group}": _group(audits[attribute], group)
+        for attribute, group in SPREAD_GROUPS
+        if attribute in audits
+    }
+
+
 def run_summary(results: dict[str, Any]) -> dict[str, Any]:
-    """The women's figures of one whole audit, the ones the spread compares."""
+    """The figures of one whole audit that the spread compares, for every group."""
     rows: dict[str, Any] = {
-        "historical_decisions": {"decision": _women(results["historical_decisions"]["gender"])}
+        "historical_decisions": _cells(results["historical_decisions"], "decision")
     }
     for name, report in {**results["scorers"], **results["mitigations"]}.items():
-        rows[name] = {
-            f"ndcg_at_{NDCG_K}": report[f"ndcg_at_{NDCG_K}"],
-            **{f"top_{k}": _women(report["at_k"][str(k)]["gender"]) for k in CUTOFFS},
-        }
+        rows[name] = {f"ndcg_at_{NDCG_K}": report[f"ndcg_at_{NDCG_K}"]}
+        for k in CUTOFFS:
+            rows[name].update(_cells(report["at_k"][str(k)], f"top_{k}"))
         compared = report.get(COMPARED_KEY)
         if compared is not None:
             rows[name][COMPARED_KEY] = {
                 "mean": compared["mean"],
                 "95ci": compared["95ci"],
             }
-    rows["lines_swapped"] = {
-        f"top_{k}": _women(results["proxy"]["at_k"][str(k)]["gender_without_line"]) for k in CUTOFFS
-    }
+    rows["lines_swapped"] = {}
+    for k in CUTOFFS:
+        swapped = {"gender": results["proxy"]["at_k"][str(k)]["gender_without_line"]}
+        rows["lines_swapped"].update(_cells(swapped, f"top_{k}"))
     return {
         "corpus_seed": results["corpus_config"]["seed"],
         "fold_seed": results["fold_seed"],
@@ -669,7 +682,7 @@ def main(argv: list[str] | None = None) -> int:
     runs = results["spread"]["runs"]
     print(f"  women's top-5 EOD over {len(runs)} runs: mean [min, max], intervals below zero")
     for name, entry in results["spread"]["summary"].items():
-        cell = entry.get("top_5") or entry["decision"]
+        cell = entry.get("top_5:woman") or entry["decision:woman"]
         eod = cell["eod"]
         print(
             f"    {name:<36} {_fmt(eod['mean'], 4)} [{_fmt(eod['min'], 4)}, "
