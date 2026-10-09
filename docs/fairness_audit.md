@@ -5,9 +5,10 @@ Who reaches the top of a slate, by gender and by age band, measured by
 in [`backend/app/ml/fairness.py`](../backend/app/ml/fairness.py) and the
 mitigations in [`backend/app/ml/mitigation.py`](../backend/app/ml/mitigation.py).
 Every number below is copied from [`fairness_audit.json`](fairness_audit.json),
-which that script wrote in one run (a second run wrote the same JSON). The
-one exception, the word weights in *Mitigations*, is marked as a separate
-check. To regenerate the JSON:
+which that script wrote in one run (later runs wrote the same JSON). There
+are three exceptions, each marked where it appears: the single-split figure
+in *Why out of fold*, the share of women's resumes carrying the planted line,
+and the word weights in *Mitigations*. To regenerate the JSON:
 
 ```
 python scripts/audit_fairness.py
@@ -58,11 +59,12 @@ landed on which slates. Age band is not independent: it follows years of
 experience. So a ratio somewhat off 1 is expected even from a fair ranker, and
 the equal-opportunity difference is the fairer read.
 
-**Why out of fold.** One train/test split holds out only 50 jobs. On those,
-women's ratio at k = 5 came out at 0.991 with an interval of 0.79 to 1.25, too
-wide to say anything. Scoring every job with a matcher that never saw its
-labels quadruples the pairs. It audits the training procedure, of which the
-persisted matcher is one run.
+**Why out of fold.** One train/test split holds out only 50 jobs. On those
+(the persisted matcher's split), a separate check found women's ratio at
+k = 5 to be 0.991 with an interval of 0.78 to 1.26, too wide to say anything.
+Scoring every job with a matcher that never saw its labels quadruples the
+pairs. It audits the training procedure, of which the persisted matcher is
+one run.
 
 ## The record the matcher learns from
 
@@ -96,8 +98,8 @@ Qualified women were advanced 14.5 points less often than qualified men.
 Its NDCG@10 over all 200 jobs is 0.8039 (0.7869–0.8213).
 
 The gap is smaller than the record's, though a decision on every pair and a
-place in a top k are not directly comparable, and it is not closed. Women's ratio
-passes the four-fifths rule at both cut-offs. At k = 5, though, the interval
+place in a top k are not directly comparable, and it is not closed. Women's
+ratio passes the four-fifths rule at both cut-offs. At k = 5, though, the interval
 reaches down to 0.734, so this corpus cannot rule out a ratio below 0.8. The
 clearer finding is the equal-opportunity difference: at k = 5, qualified
 women make the shortlist 6.3 points less often than qualified men (44.0%
@@ -137,8 +139,9 @@ difference goes from −0.063 to −0.010.
 
 The two references bracket what is left. Trained without the historical bias,
 the same pipeline still shows −0.030, and fitted on ground truth it shows
-−0.026. Neither interval excludes zero. A residual of that size is what chance
-in the slates produces on this corpus, not a second mechanism.
+−0.026. Neither interval excludes zero, so this corpus cannot tell a residual
+of that size from no gap at all. Whether it is noise or a smaller second
+effect was not tested.
 
 ## Mitigations
 
@@ -179,12 +182,12 @@ women's lines use them, they carry a little of the signal.
 
 A separate check, not in the JSON, shows this. It fits the classifier on all
 10,000 pairs with the three words dropped, once on this corpus and once on
-the same corpus with no planted lines, and compares the weights. Every other
-word of the planted lines gets a lower weight: `coding` −0.25 against +0.17,
-`network` −0.85 against −0.27, `organiser` −0.05 against +0.10. Every word
-that only the neutral lines use gets a higher one: `club` +0.41 against
-−0.03, `chess` +0.17 against −0.21. A word list fixes only the words someone
-thought to list.
+the same corpus with no planted lines, and compares the weights. All 12 other
+words of the planted lines get a lower weight, for example `coding` −0.25
+against +0.17, `network` −0.85 against −0.27 and `organiser` −0.05 against
++0.10. All 12 words that only the neutral lines use get a higher one, for
+example `club` +0.41 against −0.03 and `chess` +0.17 against −0.21. A word
+list fixes only the words someone thought to list.
 
 **Dropping the whole line does about as well as never having planted it.** It
 gives 0.938 and −0.012, against 0.932 and −0.010 for the swap, at no
@@ -201,9 +204,8 @@ with dropping the line, it gives the smallest gap measured, −0.005.
 
 **No mitigation measurably costs ranking quality.** No mean per-job NDCG@10
 difference from the matcher is larger than 0.003, and every interval includes
-zero.
-Women's ratio passes the four-fifths rule under every mitigation, but every
-interval still reaches below 0.85. On this corpus, 200 jobs cannot pin a
+zero. Women's ratio passes the four-fifths rule under every mitigation, but
+every interval still reaches below 0.85. On this corpus, 200 jobs cannot pin a
 ratio down to better than about ±0.1.
 
 ## What this audit can and cannot establish
@@ -230,7 +232,8 @@ It cannot establish anything about real candidates or real hiring:
   in for a protected attribute, and none is in this corpus.
 - **The groups are coarse and few.** There are three genders and two age
   bands, with no race or ethnicity, no disability, and no intersections. The
-  nonbinary group is 5% of the pool, and its intervals span about 20 points.
+  nonbinary group holds 532 of the 10,000 pairs, and its intervals span
+  about 20 points.
 - **Many comparisons are made.** The run reports 49 equal-opportunity
   intervals for groups other than the reference. If there were no gap at
   all, two or three would exclude zero by chance. Five do. Three are women's

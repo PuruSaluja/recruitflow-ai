@@ -9,8 +9,9 @@ qualified pairs, by gender (against men) and by age band (against under 40).
 folds; for each fold a matcher is trained on the others and scores it. So all
 200 jobs of the default corpus are audited, each by a matcher that never saw
 its labels, rather than the 50 one held-out split leaves -- an audit of the
-training procedure, which is what the persisted matcher is one run of. With
-50 jobs the intervals on women's ratio spanned 0.79 to 1.25.
+training procedure, which is what the persisted matcher is one run of. On
+the persisted matcher's 50 held-out jobs, women's top-5 ratio was 0.991 with
+an interval of 0.78 to 1.26.
 
 What is audited:
 
