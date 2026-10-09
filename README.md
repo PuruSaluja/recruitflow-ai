@@ -673,31 +673,38 @@ slate, by gender (against men) and by age band (against under 40). For each
 group it reports the selection rate, the disparate impact ratio with the
 four-fifths rule, and the equal-opportunity difference among qualified
 candidates, each with a bootstrap interval over jobs. Every job is scored by a
-matcher trained without it (four job folds), so all 200 jobs count. From one
-run, written to [`docs/fairness_audit.json`](docs/fairness_audit.json):
+matcher trained without it (four job folds), so all 200 jobs count. That
+interval covers only which jobs were sampled. Which jobs each model trained
+on, and which corpus was drawn, move the figures too, so the whole audit is
+repeated on four other fold seeds and four other corpora. Over those nine
+runs, written to [`docs/fairness_audit.json`](docs/fairness_audit.json),
+women against men:
 
-| Women against men | Ratio | Equal-opportunity difference | NDCG@10 |
-| --- | --- | --- | --- |
-| Past decisions the matcher learns from | 0.750 (0.679–0.827) | −0.145 (−0.198 to −0.092) | |
-| Matcher, top 5 | 0.828 (0.734–0.929) | −0.063 (−0.107 to −0.021) | 0.8039 |
-| Top 5, every planted line swapped for a neutral one | 0.932 | −0.010 (−0.057 to 0.034) | |
-| Top 5, the three proxy words dropped | 0.848 (0.753–0.955) | −0.051 (−0.095 to −0.008) | 0.8021 |
-| Top 5, the community line dropped | 0.938 (0.833–1.052) | −0.012 (−0.058 to 0.031) | 0.8029 |
-| Top 5, training pairs reweighed | 0.896 (0.793–1.009) | −0.023 (−0.066 to 0.021) | 0.8010 |
-| Top 5, line dropped and pairs reweighed | 0.939 (0.827–1.054) | −0.005 (−0.051 to 0.040) | 0.8037 |
+| Top 5 unless noted | Equal-opportunity difference: mean (range) | Runs whose interval excludes zero |
+| --- | --- | --- |
+| Past decisions the matcher learns from (every pair) | −0.140 (−0.149 to −0.125) | 9 of 9 |
+| Matcher | −0.050 (−0.078 to −0.017) | 5 of 9 |
+| Every planted line swapped for a neutral one | −0.012 (−0.038 to 0.025) | 0 of 9 |
+| The three proxy words dropped | −0.043 (−0.074 to −0.007) | 5 of 9 |
+| The community line dropped | −0.014 (−0.035 to 0.028) | 0 of 9 |
+| Training pairs reweighed | −0.028 (−0.057 to 0.007) | 3 of 9 |
+| Line dropped and pairs reweighed | −0.011 (−0.031 to 0.025) | 0 of 9 |
 
-The record fails the four-fifths rule, as planted. The matcher's top 5
-passes it at 0.828, but its interval reaches below 0.8. Qualified women make
-the top 5 6.3 points less often than qualified men. Most of that runs through
-the planted proxy: swapping the lines alone takes the gap to −0.010.
+The record is biased against qualified women in every run, as planted. Yet
+its four-fifths ratio passes on two of the five corpora, while the
+equal-opportunity difference never misses. The matcher carries part of the
+bias into every run's shortlists. Its interval excludes zero on all five
+splits of the default corpus, but on none of the other four corpora, so that
+corpus is a harsher draw than most. Most of the matcher's gap runs through
+the planted proxy: swapping the lines takes it from −0.050 to −0.012 on
+average.
 
 Deleting the proxy words barely helps, because the line's other words carry
-the signal once they are gone. Dropping the whole line, or reweighing the
-training pairs, brings the gap within noise of zero at no measurable cost in
-ranking: every mitigation's per-job NDCG@10 difference from the matcher has
-an interval that includes zero. The served matcher uses none of them. In the
-matcher's shortlists, no group other than women shows a gap whose interval
-excludes zero.
+the signal once they are gone. Dropping the whole line leaves no gap that can
+be told from zero in any run. Reweighing the training pairs only about halves
+the gap. No mitigation's NDCG@10 is measurably worse than the matcher's in any
+run. The served matcher uses none of them. In the default run's shortlists,
+no group other than women shows a gap whose interval excludes zero.
 
 The definitions, the age-band and nonbinary results, and what an audit on
 generated data can and cannot establish are in
