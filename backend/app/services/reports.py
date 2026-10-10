@@ -10,7 +10,9 @@ as they are on file when the report is made, with the same canonicalisation
 the matcher's features use. If either was edited after the score was cached,
 the breakdown can disagree with the stored features, and the scorecard says
 that the score predates the edit rather than leaving the two to contradict
-each other silently.
+each other silently. That compares the rows' ``updated_at``, stamped by the
+database's clock, with ``scored_at``, stamped by the app's, so on separate
+hosts the two clocks have to agree.
 
 Text is drawn in the PDF's built-in Helvetica, which only covers Windows-1252.
 Characters outside it are drawn without their accents where that leaves a
@@ -28,7 +30,7 @@ import io
 import unicodedata
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
@@ -130,7 +132,8 @@ def _para(text: str, style: ParagraphStyle = _BODY) -> Paragraph:
 
 
 def _stamp(moment: datetime) -> str:
-    return moment.strftime("%Y-%m-%d %H:%M UTC")
+    """``moment`` in UTC, converted rather than relabelled whatever offset it carries."""
+    return moment.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
 
 def _job_line(job: Job) -> str:

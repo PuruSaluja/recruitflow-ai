@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import io
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 from pypdf import PdfReader
@@ -270,3 +270,27 @@ def test_a_scorecard_for_someone_else_s_ranking_is_refused() -> None:
             model_version="v",
             generated_at=GENERATED_AT,
         )
+
+
+def test_times_are_shown_in_utc_whatever_offset_they_carry() -> None:
+    """The label says UTC, so a time given with another offset is converted, not relabelled."""
+    eastern = timezone(timedelta(hours=-4))
+    job = _job()
+    candidate = _candidate()
+    ranked = _ranked(candidate, job, 1, 0.5).model_copy(
+        update={"scored_at": datetime(2026, 10, 10, 2, 30, tzinfo=eastern)}
+    )
+
+    text = _text(
+        scorecard_pdf(
+            job,
+            candidate,
+            ranked,
+            total=1,
+            model_version="v",
+            generated_at=datetime(2026, 10, 10, 3, 0, tzinfo=eastern),
+        )
+    )
+
+    assert "scored 2026-10-10 06:30 UTC" in text
+    assert "generated 2026-10-10 07:00 UTC" in text
