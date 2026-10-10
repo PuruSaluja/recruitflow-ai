@@ -18,10 +18,10 @@ Text is drawn in the PDF's built-in Helvetica, which only covers Windows-1252.
 Characters outside it are drawn without their accents where that leaves a
 character the font has (``"ś"`` as ``"s"``), and as ``"?"`` otherwise
 (``"Ł"``, any CJK). Accents typed as separate combining marks are composed
-onto their letter first; control characters other than whitespace,
-zero-width and direction marks are left out. Every field is also escaped,
-since ReportLab reads ``<`` and ``&`` in a paragraph as markup and fails on
-an unclosed tag.
+onto their letter first. Zero-width spaces, direction marks and control
+characters are left out, except that whitespace controls read as spaces.
+Every field is also escaped, since ReportLab reads ``<`` and ``&`` in a
+paragraph as markup and fails on an unclosed tag.
 """
 
 from __future__ import annotations
