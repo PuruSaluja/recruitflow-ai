@@ -323,6 +323,31 @@ def test_a_scorecard_says_when_the_candidate_changed_after_scoring(
     assert re.search(r"Lists 0 of \d+ required", text)
 
 
+def test_a_score_deleted_while_the_scorecard_is_read_is_not_ranked_past_the_total(
+    client: TestClient, trained: Path, pool: Pool, clean_db: Engine
+) -> None:
+    """The candidate's row, its rank and the total come from one snapshot. Read in two,
+    a row deleted in between was still ranked against a total that no longer counted it."""
+    job, _ = pool
+    last = _scored(client, job["id"])[-1]["candidate"]["id"]
+    fired = []
+
+    def delete_the_score(conn, cursor, statement, parameters, context, executemany) -> None:
+        if not fired and "match_scores" in statement and "count(" in statement:
+            fired.append(True)
+            with clean_db.begin() as other:
+                other.execute(delete(MatchScore).where(MatchScore.candidate_id == last))
+
+    event.listen(Engine, "before_cursor_execute", delete_the_score)
+    try:
+        response = client.get(f"/jobs/{job['id']}/candidates/{last}/scorecard.pdf")
+    finally:
+        event.remove(Engine, "before_cursor_execute", delete_the_score)
+
+    assert fired
+    assert response.status_code == 409, _text(response)
+
+
 def test_a_candidate_with_no_score_for_the_job_is_a_conflict(
     client: TestClient, trained: Path, pool: Pool, make_candidate: Factory
 ) -> None:

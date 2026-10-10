@@ -123,30 +123,46 @@ def scorecard_report(
     _, version = load_versioned_matcher()
     cached = (MatchScore.job_id == job_id, MatchScore.model_version == version)
 
-    row = db.scalars(
-        select(MatchScore).where(*cached, MatchScore.candidate_id == candidate_id)
+    # The row, its rank and the total in one statement, so from one snapshot: read
+    # in two, a score deleted in between was ranked against a total that no longer
+    # counted it ("rank 6 of 5").
+    other, counted = aliased(MatchScore), aliased(MatchScore)
+    ahead = (
+        select(func.count())
+        .select_from(other)
+        .where(
+            other.job_id == job_id,
+            other.model_version == version,
+            or_(
+                other.score > MatchScore.score,
+                and_(other.score == MatchScore.score, other.candidate_id < candidate_id),
+            ),
+        )
+        .correlate(MatchScore)
+        .scalar_subquery()
+    )
+    total = (
+        select(func.count())
+        .select_from(counted)
+        .where(counted.job_id == job_id, counted.model_version == version)
+        .scalar_subquery()
+    )
+    found = db.execute(
+        select(MatchScore, ahead.label("ahead"), total.label("total")).where(
+            *cached, MatchScore.candidate_id == candidate_id
+        )
     ).first()
-    if row is None:
+    if found is None:
         raise _not_scored(
             request, job_id, f"Candidate {candidate_id} has no score for job {job_id}"
         )
-    ahead, total = db.execute(
-        select(
-            func.count().filter(
-                or_(
-                    MatchScore.score > row.score,
-                    and_(MatchScore.score == row.score, MatchScore.candidate_id < candidate_id),
-                )
-            ),
-            func.count(),
-        ).where(*cached)
-    ).one()
+    row, ahead_of_it, total_scored = found
 
     pdf = scorecard_pdf(
         job,
         candidate,
-        _ranked(row, candidate, ahead + 1),
-        total=total,
+        _ranked(row, candidate, ahead_of_it + 1),
+        total=total_scored,
         model_version=version,
         generated_at=datetime.now(UTC),
     )
