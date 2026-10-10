@@ -11,6 +11,7 @@ import importlib.util
 import io
 import re
 from collections.abc import Callable, Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -18,7 +19,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from pypdf import PdfReader
-from sqlalchemy import Engine, update
+from sqlalchemy import Engine, delete, event, insert, update
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -142,6 +143,92 @@ def test_scores_from_another_matcher_do_not_make_a_report(
     assert client.get(f"/jobs/{job['id']}/report.pdf").status_code == 409
     scorecard = client.get(f"/jobs/{job['id']}/candidates/{candidates[0]['id']}/scorecard.pdf")
     assert scorecard.status_code == 409
+
+
+def _before_the_ranking_is_read(action: Callable[[], None]) -> Callable[..., None]:
+    """A cursor hook that runs ``action`` once, just before the shortlist's ranked rows are read."""
+    fired = []
+
+    def hook(conn, cursor, statement, parameters, context, executemany) -> None:
+        if not fired and "FROM match_scores" in statement and "ORDER BY" in statement:
+            fired.append(True)
+            action()
+
+    return hook
+
+
+def test_a_score_committed_while_the_shortlist_is_read_is_counted_in_its_total(
+    client: TestClient, trained: Path, pool: Pool, make_candidate: Factory, clean_db: Engine
+) -> None:
+    """The total and the rows come from one snapshot, so the report never lists more than it
+    says there are."""
+    job, _ = pool
+    _scored(client, job["id"])
+    listed = client.get(f"/jobs/{job['id']}/matches").json()
+    late = make_candidate()
+
+    def commit_a_score() -> None:
+        with clean_db.begin() as conn:
+            conn.execute(
+                insert(MatchScore).values(
+                    job_id=job["id"],
+                    candidate_id=late["id"],
+                    model_version=listed["model_version"],
+                    score=0.999,
+                    rank=1,
+                    features=listed["items"][0]["features"],
+                    scored_at=datetime.now(UTC),
+                )
+            )
+
+    hook = _before_the_ranking_is_read(commit_a_score)
+    event.listen(Engine, "before_cursor_execute", hook)
+    try:
+        text = _text(client.get(f"/jobs/{job['id']}/report.pdf"))
+    finally:
+        event.remove(Engine, "before_cursor_execute", hook)
+
+    assert "top 7 of 7" in text
+
+
+def test_scores_deleted_while_the_shortlist_is_read_are_a_conflict_not_a_server_error(
+    client: TestClient, trained: Path, pool: Pool, clean_db: Engine
+) -> None:
+    job, _ = pool
+    _scored(client, job["id"])
+
+    def delete_the_scores() -> None:
+        with clean_db.begin() as conn:
+            conn.execute(delete(MatchScore).where(MatchScore.job_id == job["id"]))
+
+    hook = _before_the_ranking_is_read(delete_the_scores)
+    event.listen(Engine, "before_cursor_execute", hook)
+    try:
+        response = client.get(f"/jobs/{job['id']}/report.pdf")
+    finally:
+        event.remove(Engine, "before_cursor_execute", hook)
+
+    assert response.status_code == 409
+
+
+def test_both_reports_need_the_matcher_and_say_how_to_regenerate_it(
+    client: TestClient, pool: Pool, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    job, candidates = pool
+    monkeypatch.setenv("RECRUITFLOW_MODEL_PATH", str(tmp_path / "missing.joblib"))
+    get_settings.cache_clear()
+    try:
+        responses = [
+            client.get(f"/jobs/{job['id']}/report.pdf"),
+            client.get(f"/jobs/{job['id']}/candidates/{candidates[0]['id']}/scorecard.pdf"),
+        ]
+    finally:
+        get_settings.cache_clear()
+
+    for response in responses:
+        assert response.status_code == 503
+        assert response.json()["code"] == "matcher_unavailable"
+        assert "scripts/train_matcher.py" in response.json()["detail"]
 
 
 def test_a_shortlist_of_a_missing_job_is_not_found(client: TestClient, trained: Path) -> None:

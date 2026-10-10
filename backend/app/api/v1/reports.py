@@ -56,19 +56,24 @@ def shortlist_report(
     _, version = load_versioned_matcher()
     cached = (MatchScore.job_id == job_id, MatchScore.model_version == version)
 
-    total = db.execute(select(func.count()).select_from(MatchScore).where(*cached)).scalar_one()
-    if total == 0:
-        raise _not_scored(
-            f"Job {job_id} has no scores under the current matcher. "
-            f"Score it with POST /api/v1/jobs/{job_id}/score first."
-        )
-    rows = db.scalars(
-        select(MatchScore)
+    # The total comes with the rows, from the same snapshot: counted first and read
+    # second, a scoring run committed in between made a report of "the top 7 of 6",
+    # and scores deleted in between left nothing to list after a count that said
+    # there was.
+    found = db.execute(
+        select(MatchScore, func.count().over().label("total"))
         .where(*cached)
         .options(joinedload(MatchScore.candidate))
         .order_by(MatchScore.score.desc(), MatchScore.candidate_id)
         .limit(limit)
     ).all()
+    if not found:
+        raise _not_scored(
+            f"Job {job_id} has no scores under the current matcher. "
+            f"Score it with POST /api/v1/jobs/{job_id}/score first."
+        )
+    rows = [row for row, _ in found]
+    total = found[0].total
     ranked = [_ranked(row, row.candidate, rank) for rank, row in enumerate(rows, start=1)]
 
     pdf = shortlist_pdf(
