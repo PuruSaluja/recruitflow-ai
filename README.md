@@ -13,8 +13,9 @@ descriptions.
 > candidate and job, cached in PostgreSQL, a measured comparison of lexical,
 > dense and hybrid retrieval, a measured cross-encoder re-rank of the
 > hybrid's shortlist, and a fairness audit of the matcher's shortlists, whose
-> findings the served matcher is now trained to counter. PDF reporting and the
-> frontend are landing incrementally.
+> findings the served matcher is now trained to counter, and PDF reports of a
+> job's shortlist and a candidate's scorecard. The frontend is landing
+> incrementally.
 
 ## Tech stack
 
@@ -128,6 +129,8 @@ before they were refused. Each pin fails if its fix is reverted.
 | `DELETE` | `/api/v1/applications/{id}` | Delete an application |
 | `POST` | `/api/v1/jobs/{id}/score` | Score a candidate pool against a job and cache the ranking |
 | `GET` | `/api/v1/jobs/{id}/matches` | The cached ranking under the current matcher, paginated |
+| `GET` | `/api/v1/jobs/{id}/report.pdf` | The cached ranking's shortlist as a PDF |
+| `GET` | `/api/v1/jobs/{id}/candidates/{cid}/scorecard.pdf` | One candidate's scorecard for the job as a PDF |
 
 Candidate listings filter on `seniority`, `education_level`,
 `min_years_experience`, `max_years_experience`, `location` (substring), `q`
@@ -1006,6 +1009,50 @@ same 65,534 scored in 54 s and rescored in 44 s, and looking up 1,000 of
 them uses the unique index (2 ms). Since 2026-09-29 there is no separate
 lookup: the write sends each column as one array, and a test scores and
 writes 65,541 candidates in one run.
+
+## PDF reports
+
+Two endpoints turn a job's cached ranking into something to read and pass
+on. Neither scores anything: they read the rows `POST /api/v1/jobs/{id}/score`
+cached under the matcher currently on disk, so the ranks, scores and
+features are the ones `GET /api/v1/jobs/{id}/matches` lists, and each report
+names the matcher version and when its scores were taken.
+
+- `GET /api/v1/jobs/{id}/report.pdf?limit=25` — the shortlist: the best
+  `limit` (1–200) candidates with their current title, years, score and the
+  share of the job's required and preferred skills each lists.
+- `GET /api/v1/jobs/{id}/candidates/{cid}/scorecard.pdf` — one candidate's
+  rank and score, the job's required and preferred skills split into listed
+  and not listed, years, seniority and education against the job's, and
+  the eight features behind the score with what each one means.
+
+The skills are split with the same canonicalisation the features use
+(`postgres` counts for `PostgreSQL`), and a test checks the split's shares
+against the coverage features on 12,000 corpus pairs. The split is worked
+out from the job and candidate as they are now, so when either was edited
+after the score was taken, the scorecard says so instead of showing a score
+and a breakdown that disagree.
+
+A job with nothing cached under the current matcher, or a candidate with
+no score for the job, is a 409 naming the scoring endpoint, rather than an
+empty report that reads as if nobody fitted. A missing job or candidate is
+a 404.
+
+Text is drawn in the PDF's built-in Helvetica, which covers Windows-1252
+only. Other characters are drawn without their accents where that leaves a
+character the font has (`ć` as `c`), and as `?` otherwise (`Ł`, Chinese or
+Cyrillic names). Embedding a Unicode font would lift that.
+
+[`docs/samples/shortlist.pdf`](docs/samples/shortlist.pdf) and
+[`docs/samples/scorecard.pdf`](docs/samples/scorecard.pdf) were made by
+`scripts/sample_reports.py` through a running server: one synthetic job
+from a corpus seed the matcher was not trained on, its 50-candidate slate,
+scored by the served matcher (`cb0b877b6182d568`). Every name, resume and
+skill in them is synthetic.
+
+```bash
+python scripts/sample_reports.py --base-url http://127.0.0.1:8000/api/v1 --out docs/samples
+```
 
 ## License
 
