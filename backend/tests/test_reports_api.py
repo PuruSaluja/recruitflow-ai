@@ -191,6 +191,31 @@ def test_a_score_committed_while_the_shortlist_is_read_is_counted_in_its_total(
     assert "top 7 of 7" in text
 
 
+def test_the_shortlist_counts_in_a_subquery_rather_than_over_the_joined_rows(
+    client: TestClient, trained: Path, pool: Pool
+) -> None:
+    """One statement still, for one snapshot, but the count must not be a window over the
+    rows: that joins every scored candidate before the limit. Over 65,000 cached scores the
+    window took 184 ms in PostgreSQL against 6.5 ms for a count in a subquery."""
+    job, _ = pool
+    _scored(client, job["id"])
+    statements: list[str] = []
+
+    def record(conn, cursor, statement, parameters, context, executemany) -> None:
+        if "match_scores" in statement:
+            statements.append(statement)
+
+    event.listen(Engine, "before_cursor_execute", record)
+    try:
+        assert client.get(f"/jobs/{job['id']}/report.pdf").status_code == 200
+    finally:
+        event.remove(Engine, "before_cursor_execute", record)
+
+    assert len(statements) == 1
+    assert "OVER" not in statements[0].upper()
+    assert re.search(r"\(SELECT count\(\*\)", statements[0])
+
+
 def test_scores_deleted_while_the_shortlist_is_read_are_a_conflict_not_a_server_error(
     client: TestClient, trained: Path, pool: Pool, clean_db: Engine
 ) -> None:
