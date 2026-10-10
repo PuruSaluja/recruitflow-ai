@@ -125,6 +125,11 @@ def test_markup_in_a_field_is_drawn_as_text() -> None:
         ("Šimić", "Šimic"),  # Š is in Windows-1252; ć is folded to c
         ("Łukasz", "?ukasz"),  # no decomposition: drawn as ?
         ("李雷", "??"),
+        ("Jose\u0301 Garci\u0301a", "Jos\u00e9 Garc\u00eda"),  # accents composed first
+        ("q\u0301", "q"),  # an accent with no composed letter is dropped, not drawn as ?
+        ("A\tB\nC", "A B C"),  # whitespace controls become spaces
+        ("bell\x07x", "bellx"),  # other controls have nothing to draw
+        ("zw\u200bsp \u202eabc", "zwsp abc"),  # nor zero-width or direction marks
     ],
 )
 def test_characters_the_font_lacks_are_folded_or_replaced(value: str, drawn: str) -> None:
