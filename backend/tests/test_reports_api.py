@@ -7,10 +7,12 @@ back with pypdf, so what is checked is the text a recruiter would see.
 
 from __future__ import annotations
 
+import importlib.util
 import io
 import re
 from collections.abc import Callable, Iterator
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import pytest
@@ -259,3 +261,44 @@ def test_names_with_markup_and_letters_outside_the_font_still_make_a_report(
     assert "Shortlist: R&D <Lead>" in shortlist
     assert "?ukasz <b>Šimic" in shortlist
     assert "Scorecard: ?ukasz <b>Šimic" in scorecard
+
+
+# --- sample script ---------------------------------------------------------
+
+SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "sample_reports.py"
+
+
+def _load_script() -> ModuleType:
+    """Not on the import path; load it from its file, as the other script tests do."""
+    spec = importlib.util.spec_from_file_location("sample_reports_script", SCRIPT)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_sample_script_writes_both_reports_through_the_api(
+    client: TestClient, trained: Path, tmp_path: Path
+) -> None:
+    written = _load_script().run(client, tmp_path / "samples", limit=5)
+
+    assert [path.name for path in written] == ["shortlist.pdf", "scorecard.pdf"]
+    shortlist, scorecard = (
+        "\n".join(p.extract_text() for p in PdfReader(path).pages) for path in written
+    )
+    assert "top 5 of 50" in shortlist
+    assert "Rank 1 of 50" in scorecard
+
+
+def test_the_sample_script_reports_a_refusal_instead_of_writing_a_file(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No matcher where the app looks: scoring is a 503, and nothing is written."""
+    monkeypatch.setenv("RECRUITFLOW_MODEL_PATH", str(tmp_path / "missing.joblib"))
+    get_settings.cache_clear()
+    try:
+        with pytest.raises(RuntimeError, match="gave 503"):
+            _load_script().run(client, tmp_path / "samples", limit=5)
+    finally:
+        get_settings.cache_clear()
+    assert not (tmp_path / "samples").exists()
