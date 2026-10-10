@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from fastapi import status as http_status
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, joinedload
@@ -30,8 +30,13 @@ def _pdf(content: bytes, filename: str) -> Response:
     )
 
 
-def _not_scored(detail: str) -> HTTPException:
-    return HTTPException(status_code=http_status.HTTP_409_CONFLICT, detail=detail)
+def _not_scored(request: Request, job_id: int, what: str) -> HTTPException:
+    """A 409 naming the scoring path as this app serves it, under whatever prefix it is given."""
+    score = request.app.url_path_for("score_job", job_id=job_id)
+    return HTTPException(
+        status_code=http_status.HTTP_409_CONFLICT,
+        detail=f"{what} under the current matcher. Score it with POST {score} first.",
+    )
 
 
 @router.get(
@@ -41,6 +46,7 @@ def _not_scored(detail: str) -> HTTPException:
     summary="A job's ranked shortlist as a PDF",
 )
 def shortlist_report(
+    request: Request,
     job_id: int = Path(gt=0, le=MAX_ID),
     limit: int = Query(default=25, ge=1, le=MAX_SHORTLIST, description="Candidates to list"),
     db: Session = Depends(get_db),
@@ -68,10 +74,7 @@ def shortlist_report(
         .limit(limit)
     ).all()
     if not found:
-        raise _not_scored(
-            f"Job {job_id} has no scores under the current matcher. "
-            f"Score it with POST /api/v1/jobs/{job_id}/score first."
-        )
+        raise _not_scored(request, job_id, f"Job {job_id} has no scores")
     rows = [row for row, _ in found]
     total = found[0].total
     ranked = [_ranked(row, row.candidate, rank) for rank, row in enumerate(rows, start=1)]
@@ -89,6 +92,7 @@ def shortlist_report(
     summary="One candidate's scorecard for a job as a PDF",
 )
 def scorecard_report(
+    request: Request,
     job_id: int = Path(gt=0, le=MAX_ID),
     candidate_id: int = Path(gt=0, le=MAX_ID),
     db: Session = Depends(get_db),
@@ -115,8 +119,7 @@ def scorecard_report(
     ).first()
     if row is None:
         raise _not_scored(
-            f"Candidate {candidate_id} has no score for job {job_id} under the current "
-            f"matcher. Score it with POST /api/v1/jobs/{job_id}/score first."
+            request, job_id, f"Candidate {candidate_id} has no score for job {job_id}"
         )
     ahead, total = db.execute(
         select(

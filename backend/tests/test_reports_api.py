@@ -404,3 +404,22 @@ def test_the_sample_script_refuses_a_limit_before_creating_anything(
 
     assert status == 2
     assert f"--limit must be 1 to {MAX_SHORTLIST}" in capsys.readouterr().err
+
+
+def test_the_conflict_names_the_scoring_path_under_the_configured_prefix(
+    clean_db: Engine, trained: Path, corpus
+) -> None:
+    from app.main import create_app
+
+    app = create_app(get_settings().model_copy(update={"api_prefix": "/hiring/v2"}))
+    with TestClient(app, base_url="http://testserver/hiring/v2") as client:
+        job = client.post("/jobs", json=corpus.jobs[0].api_payload()).json()
+        candidate = client.post("/candidates", json=corpus.candidates[0].api_payload()).json()
+        responses = [
+            client.get(f"/jobs/{job['id']}/report.pdf"),
+            client.get(f"/jobs/{job['id']}/candidates/{candidate['id']}/scorecard.pdf"),
+        ]
+
+    for response in responses:
+        assert response.status_code == 409
+        assert f"POST /hiring/v2/jobs/{job['id']}/score" in response.json()["detail"]
