@@ -389,3 +389,18 @@ def test_the_sample_script_reports_a_refusal_instead_of_writing_a_file(
     finally:
         get_settings.cache_clear()
     assert not (tmp_path / "samples").exists()
+
+
+@pytest.mark.parametrize("limit", ["0", str(MAX_SHORTLIST + 1)])
+def test_the_sample_script_refuses_a_limit_before_creating_anything(
+    limit: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Checked up front: the report endpoint would refuse it only after the job, its slate
+    and their scores had been written. Nothing listens on the port, so a request would fail
+    differently."""
+    status = _load_script().main(
+        ["--base-url", "http://127.0.0.1:9/api/v1", "--out", str(tmp_path), "--limit", limit]
+    )
+
+    assert status == 2
+    assert f"--limit must be 1 to {MAX_SHORTLIST}" in capsys.readouterr().err

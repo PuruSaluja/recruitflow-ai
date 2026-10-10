@@ -24,6 +24,7 @@ from pathlib import Path
 import httpx2
 
 from app.ml.corpus import CorpusConfig, generate_corpus
+from app.services.reports import MAX_SHORTLIST
 
 #: Not the corpus the served matcher was trained on (seed 42), so the sample
 #: job is one it has never seen.
@@ -80,6 +81,11 @@ def run(client: httpx2.Client, out: Path, limit: int) -> list[Path]:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    # The report endpoint would refuse it too, but only after the job, its slate and
+    # their scores had been written.
+    if not 1 <= args.limit <= MAX_SHORTLIST:
+        print(f"error: --limit must be 1 to {MAX_SHORTLIST}, got {args.limit}", file=sys.stderr)
+        return 2
     try:
         with httpx2.Client(base_url=args.base_url, timeout=120) as client:
             run(client, args.out, args.limit)
