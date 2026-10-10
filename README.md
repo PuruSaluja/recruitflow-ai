@@ -1041,7 +1041,11 @@ a 404.
 Text is drawn in the PDF's built-in Helvetica, which covers Windows-1252
 only. Other characters are drawn without their accents where that leaves a
 character the font has (`ć` as `c`), and as `?` otherwise (`Ł`, Chinese or
-Cyrillic names). Embedding a Unicode font would lift that.
+Cyrillic names). Embedding a Unicode font would lift that. Accents typed as
+separate combining marks are composed onto their letter first, so they are
+drawn when the font has the letter, and control characters other than
+whitespace, zero-width spaces and direction marks are left out. Long skill
+lists run onto further pages.
 
 [`docs/samples/shortlist.pdf`](docs/samples/shortlist.pdf) and
 [`docs/samples/scorecard.pdf`](docs/samples/scorecard.pdf) were made by
