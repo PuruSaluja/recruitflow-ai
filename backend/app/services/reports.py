@@ -194,8 +194,13 @@ def shortlist_pdf(
     return _render(story, f"Shortlist - {job.title}")
 
 
-def _skills_cell(names: Sequence[str]) -> Paragraph:
-    return _para(drawable(", ".join(names)) if names else "-", _CELL)
+def _skill_lines(label: str, breakdown: SkillBreakdown) -> list[Paragraph]:
+    """Paragraphs rather than table cells: a table row cannot break across pages, so a
+    long enough skill list in one cell would not fit on any page and fail the report."""
+    return [
+        _para(f"<b>{label}, {heading}:</b> {drawable(', '.join(names)) if names else '-'}")
+        for heading, names in (("listed", breakdown.met), ("not listed", breakdown.missing))
+    ]
 
 
 def scorecard_pdf(
@@ -212,16 +217,6 @@ def scorecard_pdf(
         raise ValueError(f"the ranking is for candidate {ranked.candidate.id}, not {candidate.id}")
     required = skill_breakdown(job.required_skills, candidate.skills)
     preferred = skill_breakdown(job.preferred_skills, candidate.skills)
-
-    skills = Table(
-        [
-            ["", "Listed by the candidate", "Not listed"],
-            ["Required", _skills_cell(required.met), _skills_cell(required.missing)],
-            ["Preferred", _skills_cell(preferred.met), _skills_cell(preferred.missing)],
-        ],
-        colWidths=[22 * mm, 78 * mm, 78 * mm],
-    )
-    skills.setStyle(_TABLE_STYLE)
 
     profile = Table(
         [
@@ -292,7 +287,8 @@ def scorecard_pdf(
             f"required and {len(preferred.met)} of "
             f"{len(preferred.met) + len(preferred.missing)} preferred skills."
         ),
-        skills,
+        *_skill_lines("Required", required),
+        *_skill_lines("Preferred", preferred),
         _para("Profile", _HEADING),
         profile,
         _para("Features behind the score", _HEADING),

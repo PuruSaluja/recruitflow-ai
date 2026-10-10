@@ -232,6 +232,28 @@ def test_the_scorecard_says_when_the_score_predates_an_edit(
     assert said in _scorecard(job, candidate)
 
 
+def test_a_scorecard_runs_onto_more_pages_for_the_longest_skill_lists_allowed() -> None:
+    """100 skills of 100 characters per list, as the API accepts: no part may need a whole page."""
+    required = [f"required skill {i:03d} " + "x" * 81 for i in range(100)]
+    preferred = [f"preferred skill {i:03d} " + "y" * 80 for i in range(100)]
+    assert {len(name) for name in required + preferred} == {100}
+    job = _job(required_skills=required, preferred_skills=preferred)
+    candidate = _candidate(skills=required[:50])
+
+    pdf = scorecard_pdf(
+        job,
+        candidate,
+        _ranked(candidate, job, 1, 0.5),
+        total=1,
+        model_version="v",
+        generated_at=GENERATED_AT,
+    )
+
+    assert len(PdfReader(io.BytesIO(pdf)).pages) > 1
+    text = "".join(_text(pdf).split())
+    assert all("".join(name.split()) in text for name in required + preferred)
+
+
 def test_a_scorecard_for_someone_else_s_ranking_is_refused() -> None:
     job = _job()
     with pytest.raises(ValueError, match="candidate 3, not 4"):
