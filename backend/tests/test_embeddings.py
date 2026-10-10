@@ -271,6 +271,14 @@ def test_a_vector_that_is_not_finite_is_refused(stored: np.ndarray, query: np.nd
         cosine_scores(stored, query)
 
 
+@pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf], ids=["nan", "inf", "-inf"])
+@pytest.mark.filterwarnings("error::RuntimeWarning")
+def test_a_vector_that_is_not_finite_is_refused_by_name(bad: float) -> None:
+    stored = np.array([[1.0, 0.0], [bad, 1.0]], np.float32)
+    with pytest.raises(ValueError, match="NaN and infinity cannot be compared"):
+        cosine_scores(stored, np.ones(2, np.float32))
+
+
 def test_cosine_scores_are_in_row_order_and_ignore_length() -> None:
     stored = np.array([[1.0, 0.0], [0.0, 3.0], [2.0, 2.0]])
     np.testing.assert_allclose(cosine_scores(stored, np.array([5.0, 0.0])), [1.0, 0.0, 0.5**0.5])

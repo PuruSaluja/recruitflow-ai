@@ -118,7 +118,7 @@ def _validated(
     if k < 1:
         raise ValueError(f"k must be at least 1, got {k}")
     if not np.all(np.isfinite(scores_array)):
-        raise ValueError("scores must be finite; NaN cannot be ranked")
+        raise ValueError("scores must be finite; NaN and infinity cannot be ranked")
     return scores_array, relevance_array
 
 

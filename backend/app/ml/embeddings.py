@@ -97,7 +97,9 @@ def cosine_scores(stored: np.ndarray, query: np.ndarray) -> np.ndarray:
     with np.errstate(invalid="ignore"):  # inf / inf is refused just below
         similarities = (stored @ query) / (row_norms * query_norm)
     if not np.isfinite(similarities).all():
-        raise ValueError("cosine similarity needs finite vectors; NaN cannot be ranked")
+        raise ValueError(
+            "cosine similarity needs finite vectors; NaN and infinity cannot be compared"
+        )
     return similarities
 
 

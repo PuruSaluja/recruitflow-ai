@@ -114,7 +114,7 @@ def reciprocal_rank_fusion(*scores: Sequence[float], k: float = RRF_K) -> np.nda
             f"every ranking must score the same items, got shapes {[a.shape for a in arrays]}"
         )
     if any(not np.isfinite(a).all() for a in arrays):
-        raise ValueError("scores must be finite; NaN cannot be ranked")
+        raise ValueError("scores must be finite; NaN and infinity cannot be ranked")
     return sum(1.0 / (k + rankdata(-a, method="average")) for a in arrays)
 
 
@@ -158,7 +158,7 @@ def _finite_scores(scores: Sequence[float], name: str) -> np.ndarray:
     if array.ndim != 1 or len(array) == 0:
         raise ValueError(f"{name} must be a non-empty flat sequence, got shape {array.shape}")
     if not np.isfinite(array).all():
-        raise ValueError(f"{name} must be finite; NaN cannot be ranked")
+        raise ValueError(f"{name} must be finite; NaN and infinity cannot be ranked")
     return array
 
 

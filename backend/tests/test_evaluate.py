@@ -143,6 +143,12 @@ def test_bad_input_is_refused_with_a_reason(
         ndcg_at_k(scores, relevance, k=k)
 
 
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_a_score_that_is_not_finite_is_refused_by_name(bad: float) -> None:
+    with pytest.raises(ValueError, match="NaN and infinity cannot be ranked"):
+        ndcg_at_k([0.1, bad], [1, 0], k=5)
+
+
 # --- over a split ------------------------------------------------------
 
 

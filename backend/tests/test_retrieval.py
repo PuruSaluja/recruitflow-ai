@@ -206,6 +206,16 @@ def test_fusion_refuses_what_it_cannot_rank(scores: tuple, kwargs: dict, message
         reciprocal_rank_fusion(*scores, **kwargs)
 
 
+@pytest.mark.parametrize("bad", [math.nan, math.inf, -math.inf])
+def test_a_score_that_is_not_finite_is_refused_by_name(bad: float) -> None:
+    with pytest.raises(ValueError, match="scores must be finite; NaN and infinity cannot be"):
+        reciprocal_rank_fusion([1.0, bad])
+    with pytest.raises(ValueError, match="scores must be finite; NaN and infinity cannot be"):
+        recall_at_n([1.0, bad], np.array([True, False]), 1)
+    with pytest.raises(ValueError, match="first-stage scores must be finite; NaN and infinity"):
+        rerank_top_n([1.0, bad], [1.0, 2.0], 2)
+
+
 def test_fusing_per_group_ranks_each_group_on_its_own() -> None:
     groups = ["J2", "J1", "J2", "J1", "J2"]
     a = np.array([3.0, 1.0, 2.0, 5.0, 1.0])
