@@ -11,7 +11,8 @@ shortlist, and the scorecard of the candidate ranked first. Everything goes
 through HTTP, as a client would use it, so point it at a server whose
 database can take the new rows: the job and candidates are left in place.
 
-Every name, resume and skill in the samples is synthetic.
+Every name, resume and skill in the samples is synthetic. Needs the ``dev``
+extra, for its HTTP client (``httpx2``).
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ import argparse
 import sys
 from pathlib import Path
 
-import httpx
+import httpx2
 
 from app.ml.corpus import CorpusConfig, generate_corpus
 
@@ -37,7 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _ok(response: httpx.Response, expected: int = 200) -> httpx.Response:
+def _ok(response: httpx2.Response, expected: int = 200) -> httpx2.Response:
     if response.status_code != expected:
         raise RuntimeError(
             f"{response.request.method} {response.request.url} gave "
@@ -46,7 +47,7 @@ def _ok(response: httpx.Response, expected: int = 200) -> httpx.Response:
     return response
 
 
-def run(client: httpx.Client, out: Path, limit: int) -> list[Path]:
+def run(client: httpx2.Client, out: Path, limit: int) -> list[Path]:
     """Create the sample job and slate through ``client``, score them and save both reports."""
     corpus = generate_corpus(SAMPLE_CORPUS)
     job = corpus.jobs[0]
@@ -80,9 +81,9 @@ def run(client: httpx.Client, out: Path, limit: int) -> list[Path]:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        with httpx.Client(base_url=args.base_url, timeout=120) as client:
+        with httpx2.Client(base_url=args.base_url, timeout=120) as client:
             run(client, args.out, args.limit)
-    except (httpx.HTTPError, RuntimeError) as error:
+    except (httpx2.HTTPError, RuntimeError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
     return 0
