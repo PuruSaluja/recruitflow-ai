@@ -50,7 +50,7 @@ where = ["backend"]
 include = ["app*"]
 
 [tool.setuptools.package-data]
-app = ["assets/fonts/*.ttf", "assets/fonts/LICENSE", "assets/fonts/README.md"]
+app = ["assets/fonts/*.ttf", "assets/fonts/LICENSE-*", "assets/fonts/README.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
