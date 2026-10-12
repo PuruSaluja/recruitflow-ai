@@ -14,8 +14,9 @@ descriptions.
 > dense and hybrid retrieval, a measured cross-encoder re-rank of the
 > hybrid's shortlist, and a fairness audit of the matcher's shortlists, whose
 > findings the served matcher is now trained to counter, and PDF reports of a
-> job's shortlist and a candidate's scorecard. The web client has its
-> scaffold and a typed API client; its views are next.
+> job's shortlist and a candidate's scorecard, and a web client that lists
+> jobs, shows a job's ranked candidates and scores them, and shows a
+> candidate with their applications.
 
 ## Tech stack
 
@@ -25,7 +26,7 @@ descriptions.
 | Database | PostgreSQL 16, SQLAlchemy 2.0, Alembic |
 | ML       | scikit-learn (TF-IDF + engineered features); sentence-transformers (embeddings, optional) |
 | Reports  | ReportLab |
-| Frontend | React 19, Vite 8, TypeScript 5.9; API types generated from the OpenAPI schema |
+| Frontend | React 19, React Router 8, Vite 8, TypeScript 5.9; API types generated from the OpenAPI schema |
 | Tests    | pytest, httpx2; Vitest for the web client |
 
 ## Data model
@@ -68,7 +69,8 @@ uvicorn app.main:app --reload --app-dir backend
 
 Interactive docs are then at `http://localhost:8000/docs`.
 
-Run the web client (Node 20.19 or later) beside it:
+Run the web client (Node 22.22 or later, which React Router 8 needs) beside
+it:
 
 ```bash
 cd frontend
@@ -79,6 +81,17 @@ npm run dev
 It is served at `http://localhost:5173`, and the dev server forwards `/api` to
 the API on `127.0.0.1:8000` (`RECRUITFLOW_API_TARGET` points it elsewhere), so
 the browser talks to one origin.
+
+| Page | Address | Shows |
+| ---- | ------- | ----- |
+| Jobs | `/jobs` | Every requisition, newest first, 20 a page; title search and a status filter, kept in the address |
+| Job | `/jobs/{id}` | The job's facts, skills and requirement notes, then its ranking under the current matcher, 25 a page: score, required skills held, experience, links to each scorecard and to the shortlist PDF. **Score all candidates** scores everyone on file and reloads the ranking |
+| Candidate | `/candidates/{id}` | Contact details, experience, skills, resume text, and their applications, latest first, linked to each job |
+
+An error from the API is shown with its own message (a missing matcher, a
+database that is down, a scoring run that lost a race), with a button to
+load again where a page or its ranking failed to load; an
+id that does not exist, or that no record could have, is a not-found page.
 
 The client's types in `frontend/src/api/schema.ts` are generated from
 `frontend/openapi.json`, the API's schema. After changing the API, refresh
