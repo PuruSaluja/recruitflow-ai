@@ -6,9 +6,9 @@ import time
 
 from fastapi import APIRouter, Depends, HTTPException, Path
 from fastapi import status as http_status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, true
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, aliased, joinedload
 
 from app.api.deps import Pagination, pagination
 from app.db.session import get_db
@@ -175,15 +175,37 @@ def list_matches(
     _, version = load_versioned_matcher()
     cached = (MatchScore.job_id == job_id, MatchScore.model_version == version)
 
-    total = db.execute(select(func.count()).select_from(MatchScore).where(*cached)).scalar_one()
-    rows = db.scalars(
+    # The page and its total are read in one statement, so from one snapshot: counted
+    # first and read second, a scoring run committed in between listed seven
+    # candidates under a total of six, and scores deleted in between left a total of
+    # six above an empty page. The page is outer-joined to the one-row count rather
+    # than the count attached to the page's rows, because a page past the end has no
+    # rows to carry it; it then comes back as a single row with no score.
+    counted = aliased(MatchScore)
+    total_scored = (
+        select(func.count().label("total"))
+        .select_from(counted)
+        .where(counted.job_id == job_id, counted.model_version == version)
+        .subquery()
+    )
+    paged = (
         select(MatchScore)
         .where(*cached)
-        .options(joinedload(MatchScore.candidate))
         .order_by(MatchScore.score.desc(), MatchScore.candidate_id)
         .limit(page.limit)
         .offset(page.offset)
+        .subquery()
+    )
+    on_page = aliased(MatchScore, paged)
+    found = db.execute(
+        select(total_scored.c.total, on_page)
+        .select_from(total_scored)
+        .outerjoin(paged, true())
+        .options(joinedload(on_page.candidate))
+        .order_by(paged.c.score.desc(), paged.c.candidate_id)
     ).all()
+    total = found[0].total
+    rows = [row for _, row in found if row is not None]
 
     return MatchPage(
         items=[

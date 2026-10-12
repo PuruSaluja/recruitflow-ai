@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable, Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -584,6 +584,104 @@ def test_listing_offset_is_bounded_by_what_postgresql_accepts(
     assert at_bound.status_code == 200
     assert at_bound.json()["items"] == []
     assert at_bound.json()["total"] == len(pool[1])
+
+
+def _before_the_listing_is_read(action: Callable[[], None]) -> Callable[..., None]:
+    """A cursor hook that runs ``action`` once, just before the listing's ranked rows are read."""
+    fired = []
+
+    def hook(conn, cursor, statement, parameters, context, executemany) -> None:
+        if not fired and "FROM match_scores" in statement and "ORDER BY" in statement:
+            fired.append(True)
+            action()
+
+    return hook
+
+
+def test_a_score_committed_while_the_listing_is_read_is_counted_in_its_total(
+    client: TestClient, trained: Path, pool: Pool, make_candidate: Factory, clean_db: Engine
+) -> None:
+    """Counted first and read second, a score committed in between gave a page of seven
+    candidates whose total said six."""
+    job, candidates = pool
+    client.post(f"/jobs/{job['id']}/score")
+    before = client.get(f"/jobs/{job['id']}/matches").json()
+    late = make_candidate()
+
+    def commit_a_score() -> None:
+        with clean_db.begin() as conn:
+            conn.execute(
+                insert(MatchScore).values(
+                    job_id=job["id"],
+                    candidate_id=late["id"],
+                    model_version=before["model_version"],
+                    score=0.999,
+                    rank=1,
+                    features=before["items"][0]["features"],
+                    scored_at=datetime.now(UTC),
+                )
+            )
+
+    hook = _before_the_listing_is_read(commit_a_score)
+    event.listen(Engine, "before_cursor_execute", hook)
+    try:
+        body = client.get(f"/jobs/{job['id']}/matches").json()
+    finally:
+        event.remove(Engine, "before_cursor_execute", hook)
+
+    assert len(body["items"]) == len(candidates) + 1
+    assert body["total"] == len(candidates) + 1
+    assert _ids(body["items"])[0] == late["id"]
+
+
+def test_scores_deleted_while_the_listing_is_read_leave_an_empty_page_with_no_total(
+    client: TestClient, trained: Path, pool: Pool, clean_db: Engine
+) -> None:
+    """With nothing on the page the count still has to come from the same snapshot: read
+    separately, it said six candidates were scored above a page listing none of them."""
+    job, _ = pool
+    client.post(f"/jobs/{job['id']}/score")
+
+    def delete_the_scores() -> None:
+        with clean_db.begin() as conn:
+            conn.execute(delete(MatchScore).where(MatchScore.job_id == job["id"]))
+
+    hook = _before_the_listing_is_read(delete_the_scores)
+    event.listen(Engine, "before_cursor_execute", hook)
+    try:
+        body = client.get(f"/jobs/{job['id']}/matches").json()
+    finally:
+        event.remove(Engine, "before_cursor_execute", hook)
+
+    assert body["items"] == []
+    assert body["total"] == 0
+
+
+@pytest.mark.parametrize("offset", [0, 4, 6, 50])
+def test_a_listing_page_and_its_total_are_read_in_one_statement(
+    client: TestClient, trained: Path, pool: Pool, offset: int
+) -> None:
+    """Pages past the end included: they have no rows to carry the count, and still need it."""
+    job, candidates = pool
+    client.post(f"/jobs/{job['id']}/score")
+    statements: list[str] = []
+
+    def record(conn, cursor, statement, parameters, context, executemany) -> None:
+        if "match_scores" in statement:
+            statements.append(statement)
+
+    event.listen(Engine, "before_cursor_execute", record)
+    try:
+        body = client.get(
+            f"/jobs/{job['id']}/matches", params={"limit": 4, "offset": offset}
+        ).json()
+    finally:
+        event.remove(Engine, "before_cursor_execute", record)
+
+    assert len(statements) == 1
+    assert "OVER" not in statements[0].upper()
+    assert body["total"] == len(candidates)
+    assert len(body["items"]) == max(0, min(4, len(candidates) - offset))
 
 
 def test_listing_a_missing_job_is_a_404_even_without_a_matcher(
