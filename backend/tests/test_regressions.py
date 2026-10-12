@@ -2393,3 +2393,146 @@ def test_every_timestamp_the_api_returns_is_utc(
 
     assert len(stamps) == 8
     assert [stamp for stamp in stamps if not stamp.endswith("Z")] == []
+
+
+# --- 12. a listing's total counted apart from its page ------------------------
+#
+# Was: GET /jobs, /candidates and /applications counted the matching rows in
+# one statement and read the page in a second, so a row committed in between
+# was listed but not counted (a page of four under a total of three), and rows
+# deleted in between left a total of three above an empty page. Each page is
+# now read with its total in one statement, so from one snapshot.
+
+Listing = tuple[str, str, Callable[[Factory, Factory, Factory], Callable[[], Base]]]
+
+
+def _jobs(make_job: Factory, make_candidate: Factory, make_application: Factory):
+    for _ in range(3):
+        make_job()
+    return lambda: Job(title="Late Analyst", description="Committed while the page was read.")
+
+
+def _candidates(make_job: Factory, make_candidate: Factory, make_application: Factory):
+    for _ in range(3):
+        make_candidate()
+    return lambda: Candidate(
+        full_name="Late Candidate",
+        email="late@example.com",
+        resume_text="Committed while the page was read.",
+    )
+
+
+def _applications(make_job: Factory, make_candidate: Factory, make_application: Factory):
+    job = make_job()
+    for _ in range(3):
+        make_application(job_id=job["id"], candidate_id=make_candidate()["id"])
+    late = make_candidate()
+    return lambda: Application(job_id=job["id"], candidate_id=late["id"])
+
+
+LISTINGS: list[Listing] = [
+    ("/jobs", "jobs", _jobs),
+    ("/candidates", "candidates", _candidates),
+    ("/applications", "applications", _applications),
+]
+
+
+def _before_the_page_is_read(table: str, action: Callable[[], None]) -> Callable[..., None]:
+    """A cursor hook that runs ``action`` once, just before the listing's rows are read."""
+    fired = []
+
+    def hook(conn, cursor, statement, parameters, context, executemany) -> None:
+        if not fired and f"FROM {table}" in statement and "ORDER BY" in statement:
+            fired.append(True)
+            action()
+
+    return hook
+
+
+def _listed_while(client: TestClient, path: str, table: str, action: Callable[[], None]) -> dict:
+    hook = _before_the_page_is_read(table, action)
+    event.listen(Engine, "before_cursor_execute", hook)
+    try:
+        response = client.get(path)
+    finally:
+        event.remove(Engine, "before_cursor_execute", hook)
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+@pytest.mark.parametrize(("path", "table", "seed"), LISTINGS, ids=[p for p, _, _ in LISTINGS])
+def test_a_row_committed_while_a_listing_is_read_is_counted_in_its_total(
+    client: TestClient,
+    clean_db: Engine,
+    make_job: Factory,
+    make_candidate: Factory,
+    make_application: Factory,
+    path: str,
+    table: str,
+    seed,
+) -> None:
+    late_row = seed(make_job, make_candidate, make_application)
+
+    def commit_a_row() -> None:
+        with Session(clean_db) as db:
+            db.add(late_row())
+            db.commit()
+
+    body = _listed_while(client, path, table, commit_a_row)
+
+    assert len(body["items"]) == 4
+    assert body["total"] == 4
+
+
+@pytest.mark.parametrize(("path", "table", "seed"), LISTINGS, ids=[p for p, _, _ in LISTINGS])
+def test_rows_deleted_while_a_listing_is_read_leave_no_total_above_an_empty_page(
+    client: TestClient,
+    clean_db: Engine,
+    make_job: Factory,
+    make_candidate: Factory,
+    make_application: Factory,
+    path: str,
+    table: str,
+    seed,
+) -> None:
+    seed(make_job, make_candidate, make_application)
+
+    def delete_the_rows() -> None:
+        with clean_db.begin() as conn:
+            conn.execute(text(f"DELETE FROM {table}"))
+
+    body = _listed_while(client, path, table, delete_the_rows)
+
+    assert body["items"] == []
+    assert body["total"] == 0
+
+
+@pytest.mark.parametrize("offset", [0, 2, 3, 50])
+@pytest.mark.parametrize(("path", "table", "seed"), LISTINGS, ids=[p for p, _, _ in LISTINGS])
+def test_a_listing_page_and_its_total_are_read_in_one_statement(
+    client: TestClient,
+    make_job: Factory,
+    make_candidate: Factory,
+    make_application: Factory,
+    path: str,
+    table: str,
+    seed,
+    offset: int,
+) -> None:
+    """Pages past the end included: they have no rows to carry the count, and still need it."""
+    seed(make_job, make_candidate, make_application)
+    statements: list[str] = []
+
+    def record(conn, cursor, statement, parameters, context, executemany) -> None:
+        if f"FROM {table}" in statement:
+            statements.append(statement)
+
+    event.listen(Engine, "before_cursor_execute", record)
+    try:
+        body = client.get(path, params={"limit": 2, "offset": offset}).json()
+    finally:
+        event.remove(Engine, "before_cursor_execute", record)
+
+    assert len(statements) == 1
+    assert body["total"] == 3
+    assert len(body["items"]) == max(0, min(2, 3 - offset))

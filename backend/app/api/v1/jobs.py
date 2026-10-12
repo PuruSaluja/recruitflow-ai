@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi import status as http_status
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import (
@@ -13,6 +13,7 @@ from app.api.deps import (
     commit_row,
     delete_with_applications,
     pagination,
+    read_page,
     refresh_row,
 )
 from app.db.session import get_db
@@ -79,13 +80,13 @@ def list_jobs(
         "q": q,
     }
 
-    total = db.execute(
-        _apply_filters(select(func.count()).select_from(Job), **filters)
-    ).scalar_one()
-
-    stmt = _apply_filters(select(Job), **filters)
-    stmt = stmt.order_by(Job.created_at.desc(), Job.id.desc()).limit(page.limit).offset(page.offset)
-    jobs = db.execute(stmt).scalars().all()
+    jobs, total = read_page(
+        db,
+        _apply_filters(select(Job), **filters),
+        Job,
+        lambda job: (job.created_at.desc(), job.id.desc()),
+        page,
+    )
 
     return Page[JobRead](
         items=[JobRead.model_validate(job) for job in jobs],

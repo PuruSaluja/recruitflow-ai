@@ -4,11 +4,18 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi import status as http_status
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import Pagination, commit_row, pagination, refresh_row, row_exists
+from app.api.deps import (
+    Pagination,
+    commit_row,
+    pagination,
+    read_page,
+    refresh_row,
+    row_exists,
+)
 from app.db.session import get_db
 from app.models.application import Application
 from app.models.candidate import Candidate
@@ -80,17 +87,13 @@ def list_applications(
         "source": source,
     }
 
-    total = db.execute(
-        _apply_filters(select(func.count()).select_from(Application), **filters)
-    ).scalar_one()
-
-    stmt = _apply_filters(select(Application), **filters)
-    stmt = (
-        stmt.order_by(Application.applied_at.desc(), Application.id.desc())
-        .limit(page.limit)
-        .offset(page.offset)
+    applications, total = read_page(
+        db,
+        _apply_filters(select(Application), **filters),
+        Application,
+        lambda application: (application.applied_at.desc(), application.id.desc()),
+        page,
     )
-    applications = db.execute(stmt).scalars().all()
 
     return Page[ApplicationRead](
         items=[ApplicationRead.model_validate(a) for a in applications],

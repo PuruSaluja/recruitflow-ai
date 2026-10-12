@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 from fastapi import HTTPException, Query
 from fastapi import status as http_status
-from sqlalchemy import Integer, any_, bindparam, delete, select
+from sqlalchemy import Integer, Select, any_, bindparam, delete, func, select, true
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.exc import InvalidRequestError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 from sqlalchemy.orm.exc import StaleDataError
 
 from app.models.application import Application
@@ -60,6 +60,42 @@ def pagination(
     offset: int = Query(0, ge=0, le=MAX_OFFSET, description="Rows to skip"),
 ) -> Pagination:
     return Pagination(limit=limit, offset=offset)
+
+
+def read_page(
+    db: Session,
+    rows: Select,
+    entity: Any,
+    order_by: Callable[[Any], Sequence[Any]],
+    page: Pagination,
+    options: Callable[[Any], Sequence[Any]] | None = None,
+) -> tuple[list[Any], int]:
+    """One page of ``rows`` and the number of rows in all, read in one statement.
+
+    ``rows`` selects ``entity`` with the listing's filters; ``order_by`` and
+    ``options`` are given the entity, or the alias the page is read through, and
+    return what to order by and how to load it.
+
+    Counted in one statement and read in a second, a row committed in between
+    was listed but not counted, and rows deleted in between left a total above
+    an empty page. Here the page is a subquery outer-joined to a one-row count,
+    rather than the count attached to the page's rows, because a page past the
+    end has no rows to carry it: it comes back as a single row with no entity.
+    Rows are joined to anything ``options`` loads only after the limit.
+    """
+    counted = select(func.count().label("total")).select_from(rows.subquery()).subquery()
+    paged = rows.order_by(*order_by(entity)).limit(page.limit).offset(page.offset).subquery()
+    on_page = aliased(entity, paged)
+    statement = (
+        select(counted.c.total, on_page)
+        .select_from(counted)
+        .outerjoin(paged, true())
+        .order_by(*order_by(on_page))
+    )
+    if options is not None:
+        statement = statement.options(*options(on_page))
+    found = db.execute(statement).all()
+    return [row for _, row in found if row is not None], found[0].total
 
 
 def row_exists(db: Session, model: Any, row_id: int) -> bool:

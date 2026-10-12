@@ -14,6 +14,7 @@ from app.api.deps import (
     commit_row,
     delete_with_applications,
     pagination,
+    read_page,
     refresh_row,
 )
 from app.db.session import get_db
@@ -122,17 +123,13 @@ def list_candidates(
         "q": q,
     }
 
-    total = db.execute(
-        _apply_filters(select(func.count()).select_from(Candidate), **filters)
-    ).scalar_one()
-
-    stmt = _apply_filters(select(Candidate), **filters)
-    stmt = (
-        stmt.order_by(Candidate.created_at.desc(), Candidate.id.desc())
-        .limit(page.limit)
-        .offset(page.offset)
+    candidates, total = read_page(
+        db,
+        _apply_filters(select(Candidate), **filters),
+        Candidate,
+        lambda candidate: (candidate.created_at.desc(), candidate.id.desc()),
+        page,
     )
-    candidates = db.execute(stmt).scalars().all()
 
     return Page[CandidateRead](
         items=[CandidateRead.model_validate(c) for c in candidates],
