@@ -1,5 +1,5 @@
 # Lint and the full test suite on a clean install, against a real PostgreSQL,
-# and the encoder tests against the real sentence-transformer.
+# the encoder tests against the real sentence-transformer, and the web client.
 #
 # Everything comes from pyproject.toml alone, so a pass here shows it declares
 # enough; the local virtualenv has also shared Anaconda's site-packages.
@@ -67,6 +67,39 @@ jobs:
 
       - name: Test
         run: pytest -W default --cov --cov-report=term-missing:skip-covered
+
+  # The web client: its API types regenerated from the committed schema must
+  # match the committed ones (the test job checks the schema against the API),
+  # then its tests and a production build.
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: API types match the schema
+        run: |
+          npm run gen:api
+          git diff --exit-code -- src/api/schema.ts
+
+      - name: Test
+        run: npm test
+
+      - name: Type-check and build
+        run: npm run build
 
   # The embeddings extra brings torch, which the main job leaves out, so the
   # tests that load the real models skip there. This job installs it (the CPU
