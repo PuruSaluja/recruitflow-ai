@@ -98,8 +98,9 @@ awkward input — explicit nulls on required fields, JSONB storing a JSON `null`
 `%`/`_` in search text acting as wildcards, a stage change overwriting a
 simultaneous one, non-positive ids, ids and offsets past what PostgreSQL can
 hold, writes that lose a race to another request or deadlock with one, values
-the database or the response cannot hold, and oversized bodies read in full
-before they were refused. Each pin fails if its fix is reverted.
+the database or the response cannot hold, oversized bodies read in full
+before they were refused, and a listing's total counted in a separate
+statement from its page. Each pin fails if its fix is reverted.
 
 ### Coverage
 
@@ -111,28 +112,27 @@ Coverage counts lines and branches in `backend/app` and in `scripts`, the
 command-line entry points that train, evaluate and audit the matcher and write
 the sample reports. Scripts the tests run as a subprocess are counted only
 where a test also calls them in-process. Measured on 2026-10-11 over the whole
-suite (1,582 tests, every one passing, with the embeddings extra installed so
+suite (1,600 tests, every one passing, with the embeddings extra installed so
 the real models load):
 
 | Area | Lines | Branches | Covered |
 | ---- | ----- | -------- | ------- |
 | `app/ml` (features, training, ranking, retrieval, fairness) | 1,169 of 1,169 | 264 of 264 | 100% |
 | `app/services` (scoring, reports, resumes, embeddings) | 382 of 383 | 85 of 86 | 99.6% |
-| `app/api` (routes, body limit, errors) | 589 of 589 | 123 of 124 | 99.9% |
+| `app/api` (routes, body limit, errors) | 582 of 582 | 125 of 126 | 99.9% |
 | `app/schemas` | 276 of 279 | 15 of 18 | 98.0% |
 | `app/db`, `app/models` and top level | 346 of 346 | 10 of 10 | 100% |
 | `scripts` | 1,048 of 1,066 | 214 of 222 | 98.0% |
-| **Total** | **3,810 of 3,832** | **711 of 724** | **99.2%** |
+| **Total** | **3,803 of 3,825** | **713 of 726** | **99.2%** |
 
-Of the 22 lines missed, 7 are the scripts' `if __name__ == "__main__"` lines.
-The rest are conditions the tests do not stage (an output file that turns
-unwritable after the checks made before writing it, a server that has
+Of the 22 lines missed, 7 are the calls to `main()` under the scripts'
+`if __name__ == "__main__"`. The rest are conditions the tests do not stage
+(an output file that cannot be written once the run is done, a server that has
 pgvector, a machine without torch), the timing script's loaders of the real
 models, which its tests replace with fakes, and four lines in the schemas and
-the resume decoder. CI's
-main job prints the same report on every push; it leaves the embeddings extra
-out, so the 21 tests that load the real models skip there and it misses 38
-lines rather than 22.
+the resume decoder. CI's main job prints the same report on every push; it
+leaves the embeddings extra out, so the 21 tests that load the real models skip
+there and it misses 38 lines rather than 22.
 
 ## API
 
