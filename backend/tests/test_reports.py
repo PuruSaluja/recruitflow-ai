@@ -194,11 +194,39 @@ def _bold_of(family: str) -> str:
 
 
 @pytest.mark.parametrize(
+    ("name", "drawn"),
+    [
+        # Each right-to-left run reversed into the order it is seen in.
+        ("יעל כהן", "ןהכ לעי"),
+        # Arabic in the joined forms its letters take beside their neighbours.
+        ("محمد علي", "\ufef2\ufee0\ufecb \ufeaa\ufee4\ufea4\ufee3"),
+        # Left-to-right text around it keeps its place and order.
+        ("Anna محمد Lee", "Anna \ufeaa\ufee4\ufea4\ufee3 Lee"),
+        ("Dr. יעל", "Dr. לעי"),
+    ],
+)
+def test_hebrew_and_arabic_are_drawn_in_the_order_they_are_read(name: str, drawn: str) -> None:
+    """What the page holds, read off it by position. ReportLab lays each line out left to
+    right, so the value is put in display order first; copying it out of the PDF can give
+    the right-to-left letters reversed, which the README says."""
+    assert drawable(name) == drawn
+    job = _job()
+    pdf = shortlist_pdf(
+        job,
+        [_ranked(_candidate(full_name=name), job, 1, 0.5)],
+        total=1,
+        model_version="v",
+        generated_at=GENERATED_AT,
+    )
+    page = PdfReader(io.BytesIO(pdf)).pages[0].extract_text(extraction_mode="layout")
+    assert drawn in page
+    assert _fonts(pdf) == {"DejaVuSans", "DejaVuSans-Bold"}
+
+
+@pytest.mark.parametrize(
     ("value", "drawn"),
     [
         ("राम", "???"),  # Devanagari
-        ("יעל", "???"),  # Hebrew: in the font, but would be laid out left to right
-        ("محمد", "????"),  # Arabic: also unjoined
         ("Sam \U0001f600", "Sam ?"),  # in the font, but past U+FFFF it cannot be mapped
         ("\U0001d400lpha", "Alpha"),  # mathematical bold A folds to A
         ("Jose\u0301 Garci\u0301a", "Jos\u00e9 Garc\u00eda"),  # accents composed first

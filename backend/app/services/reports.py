@@ -14,18 +14,19 @@ each other silently. That compares the rows' ``updated_at``, stamped by the
 database's clock, with ``scored_at``, stamped by the app's, so on separate
 hosts the two clocks have to agree.
 
-Text is drawn in DejaVu Sans, embedded in each PDF (``app/assets/fonts``),
-which has Latin with its accents (Polish, Turkish, Vietnamese...), Greek,
-Cyrillic, Armenian and Georgian. A character neither of its two weights has
-is drawn without its accents where that leaves one they have, and as ``"?"``
-otherwise (Chinese, Japanese, Korean, Devanagari, Thai, emoji). So are Hebrew
-and Arabic: the font has their letters, but ReportLab lays text out left to
-right without joining Arabic letters, so drawing them would misspell the name.
-Accents typed as separate combining marks are composed onto their letter
-first. Zero-width spaces, direction marks and control characters are left
-out, except that whitespace controls read as spaces. Every field is also
-escaped, since ReportLab reads ``<`` and ``&`` in a paragraph as markup and
-fails on an unclosed tag.
+Text is drawn in fonts embedded in each PDF (``app/assets/fonts``): DejaVu
+Sans for Latin with its accents (Polish, Turkish, Vietnamese...), Greek,
+Cyrillic, Armenian, Georgian, Hebrew and Arabic; Droid Sans Fallback for
+Chinese characters and Japanese kana; Nanum Square for Korean. A character no
+face has is drawn without its accents where that leaves one a face has, and as
+``"?"`` otherwise (Devanagari, Thai, emoji). ReportLab lays every line out left
+to right and does not join Arabic letters, so a value with Hebrew or Arabic in
+it is put into the order it is seen in, Arabic in its joined forms, before it is
+drawn; copied out of the PDF, those letters can come out reversed. Accents typed
+as separate combining marks are composed onto their letter first. Zero-width
+spaces, direction marks and control characters are left out, except that
+whitespace controls read as spaces. Every field is also escaped, since ReportLab
+reads ``<`` and ``&`` in a paragraph as markup and fails on an unclosed tag.
 """
 
 from __future__ import annotations
@@ -39,6 +40,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from xml.sax.saxutils import escape
 
+import arabic_reshaper
+from bidi import get_display
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -103,7 +106,8 @@ _FACES = (
     _register("DroidSansFallback", "DroidSansFallbackFull.ttf"),
     _register("NanumSquare", "NanumSquareR.ttf", "NanumSquareB.ttf"),
 )
-#: Right-to-left letters, which ReportLab would lay out left to right.
+#: Right-to-left letters. ReportLab lays every line out left to right, so a value
+#: holding any is put into the order it is seen in before it is drawn.
 _RIGHT_TO_LEFT = {"R", "AL"}
 #: ReportLab writes a code point past U+FFFF into the PDF's text map as five hex
 #: digits, which readers reject, so it could not be copied or searched: emoji and
@@ -144,7 +148,13 @@ def drawable(value: object, *, bold: bool = False) -> str:
     runs: list[tuple[_Face, str]] = []
     # Composed first, so a letter typed as "e" plus a combining accent is drawn as
     # the one letter the font has rather than as "e?".
-    for char in unicodedata.normalize("NFC", str(value)):
+    text = unicodedata.normalize("NFC", str(value))
+    if any(unicodedata.bidirectional(char) in _RIGHT_TO_LEFT for char in text):
+        # Arabic letters into the joined forms they take beside their neighbours,
+        # which ReportLab would not choose, then every right-to-left run reversed
+        # into the order it is seen in, around left-to-right text.
+        text = get_display(arabic_reshaper.reshape(text), base_dir="L")
+    for char in text:
         category = unicodedata.category(char)
         if category == "Cc":  # controls: whitespace reads as a space, the rest draw a box
             if char.isspace():
@@ -175,7 +185,7 @@ def drawable(value: object, *, bold: bool = False) -> str:
 
 def _face_for(char: str) -> _Face | None:
     """The first face that can draw ``char``, or ``None``."""
-    if ord(char) > _LAST_MAPPABLE or unicodedata.bidirectional(char) in _RIGHT_TO_LEFT:
+    if ord(char) > _LAST_MAPPABLE:
         return None
     for face in _FACES:
         if ord(char) in face.glyphs:

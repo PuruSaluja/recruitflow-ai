@@ -23,6 +23,10 @@ dependencies = [
     "scipy>=1.13",
     "joblib>=1.4",
     "reportlab>=4.2",
+    # Hebrew and Arabic in the PDF reports: ReportLab lays text out left to right
+    # and does not join Arabic letters, so names are put in display order first.
+    "python-bidi>=0.6",
+    "arabic-reshaper>=3.0",
 ]
 
 [project.optional-dependencies]
