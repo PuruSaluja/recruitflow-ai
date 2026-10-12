@@ -53,10 +53,6 @@ class Page(BaseModel, Generic[T]):
     limit: int
     offset: int
 
-    @property
-    def has_more(self) -> bool:
-        return self.offset + len(self.items) < self.total
-
 
 class ErrorDetail(BaseModel):
     """Uniform error body returned by the API's exception handlers."""
