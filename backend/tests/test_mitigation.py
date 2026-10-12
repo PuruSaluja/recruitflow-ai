@@ -13,6 +13,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 
 from app.ml.corpus import CorpusConfig, generate_corpus
+from app.ml.features import FEATURE_NAMES
 from app.ml.matrix import PairFeaturiser
 from app.ml.mitigation import (
     LineDroppingFeaturiser,
@@ -129,6 +130,53 @@ def test_dropping_no_lines_builds_the_plain_matrix(data) -> None:
     none_dropped = LineDroppingFeaturiser().fit(pairs).transform(pairs)
 
     assert (plain != none_dropped).nnz == 0
+
+
+def test_a_dropped_feature_leaves_the_matrix_and_nothing_else_does(data) -> None:
+    pairs = data.pairs[:300]
+    whole = LineDroppingFeaturiser(("Community:",)).fit(pairs)
+    without = LineDroppingFeaturiser(("Community:",), ("experience_surplus",)).fit(pairs)
+    column = FEATURE_NAMES.index("experience_surplus")
+
+    expected = np.delete(whole.transform(pairs).toarray(), column, axis=1)
+
+    assert without.transform(pairs).toarray().tolist() == expected.tolist()
+    assert "experience_surplus" not in set(without.get_feature_names_out())
+    assert len(without.get_feature_names_out()) == expected.shape[1]
+
+
+def test_an_unknown_feature_to_drop_is_refused_by_name(data) -> None:
+    with pytest.raises(ValueError, match="Unknown features to drop: years"):
+        LineDroppingFeaturiser(dropped_features=("years",)).fit(data.pairs[:50])
+
+
+def test_a_line_dropper_pickled_before_features_could_be_dropped_drops_none(data) -> None:
+    pairs = data.pairs[:200]
+    featuriser = LineDroppingFeaturiser(("Community:",)).fit(pairs)
+    expected = featuriser.transform(pairs)
+    del featuriser.__dict__["dropped_features"]
+    restored = pickle.loads(pickle.dumps(featuriser))
+
+    assert (restored.transform(pairs) != expected).nnz == 0
+
+
+def test_a_matcher_without_the_surplus_scores_years_past_the_minimum_alike(data) -> None:
+    """Only the profile's years change, not the resume, so nothing else can tell them apart."""
+    model = make_matcher(LineDroppingFeaturiser(("Community:",), ("experience_surplus",)))
+    model.fit(data.pairs, data.advanced)
+    job, candidate = next(
+        (j, c) for j, c in data.pairs if c.years_experience >= j.min_years_experience
+    )
+    variants = [
+        (job, dataclasses.replace(candidate, years_experience=job.min_years_experience + extra))
+        for extra in (0, 2, 5, 15)
+    ]
+
+    scores = model.predict_proba(variants)[:, 1]
+
+    assert scores.tolist() == pytest.approx([scores[0]] * 4, abs=1e-12)
+    served = make_matcher(LineDroppingFeaturiser(("Community:",))).fit(data.pairs, data.advanced)
+    assert len(set(served.predict_proba(variants)[:, 1].round(9))) > 1, "premise: surplus is read"
 
 
 def test_a_fitted_line_dropper_survives_pickling(data) -> None:

@@ -27,8 +27,10 @@ from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
+from scipy import sparse
 from sklearn.pipeline import Pipeline
 
+from app.ml.features import FEATURE_NAMES
 from app.ml.matrix import Pair, PairFeaturiser
 from app.ml.text import candidate_text, fold_text, make_vectoriser
 
@@ -71,18 +73,42 @@ class LineDroppingFeaturiser(PairFeaturiser):
     tokenising, so they reach neither the resume columns nor
     ``text_similarity``. Headings are matched after folding, ignoring leading
     spaces.
+
+    ``dropped_features`` names engineered features (:data:`FEATURE_NAMES`) left
+    out of the matrix altogether, so a model fitted on it has no such input.
     """
 
-    def __init__(self, dropped_headings: Sequence[str] = ()) -> None:
+    def __init__(
+        self, dropped_headings: Sequence[str] = (), dropped_features: Sequence[str] = ()
+    ) -> None:
         self.dropped_headings = dropped_headings
+        self.dropped_features = dropped_features
 
     def fit(self, pairs: Sequence[Pair], y: object = None) -> LineDroppingFeaturiser:
+        unknown = sorted(set(self._dropped_features()) - set(FEATURE_NAMES))
+        if unknown:
+            raise ValueError(f"Unknown features to drop: {', '.join(unknown)}")
         candidates = dict.fromkeys(candidate for _, candidate in pairs)
         self.vectoriser_ = make_vectoriser().set_params(
             preprocessor=_WithoutLines(self.dropped_headings)
         )
         self.vectoriser_.fit([candidate_text(c) for c in candidates])
         return self
+
+    def transform(self, pairs: Sequence[Pair]) -> sparse.csr_matrix:
+        return super().transform(pairs)[:, self._kept()]
+
+    def get_feature_names_out(self, input_features: object = None) -> np.ndarray:
+        return super().get_feature_names_out(input_features)[self._kept()]
+
+    def _dropped_features(self) -> Sequence[str]:
+        # A matcher pickled before features could be dropped has no such attribute.
+        return getattr(self, "dropped_features", ())
+
+    def _kept(self) -> np.ndarray:
+        dropped = {FEATURE_NAMES.index(name) for name in self._dropped_features()}
+        width = len(FEATURE_NAMES) + 1 + len(self.vectoriser_.vocabulary_)
+        return np.array([column for column in range(width) if column not in dropped])
 
 
 def reweighing_weights(groups: Sequence[str], labels: Sequence[bool]) -> np.ndarray:
