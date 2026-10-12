@@ -52,6 +52,7 @@ from app.ml.taxonomy import normalise_skills, spelling_key
 from app.models.candidate import Candidate
 from app.models.job import Job
 from app.schemas.match import MatchFeatures, RankedCandidate
+from app.services.requirements import experience_requirement_note
 
 #: Most rows one shortlist report lists.
 MAX_SHORTLIST = 200
@@ -210,6 +211,12 @@ def _para(text: str, style: ParagraphStyle = _BODY) -> Paragraph:
     return Paragraph(text, style)
 
 
+def _requirement_notes(job: Job) -> list[Paragraph]:
+    """The job's requirement note under its line, when it has one (see ``requirements``)."""
+    note = experience_requirement_note(job.seniority, job.min_years_experience)
+    return [_para(f"<b>Check:</b> {drawable(note)}")] if note else []
+
+
 def _stamp(moment: datetime) -> str:
     """``moment`` in UTC, converted rather than relabelled whatever offset it carries."""
     return moment.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
@@ -281,6 +288,7 @@ def shortlist_pdf(
     story = [
         _para(f"Shortlist: {drawable(job.title, bold=True)}", _TITLE),
         _para(f"Job {job.id} · {_job_line(job)}"),
+        *_requirement_notes(job),
         _para(
             f"The top {len(rows)} of {total} candidates scored for this job, best first. "
             f"Required and Preferred are the shares of the job's required and preferred "

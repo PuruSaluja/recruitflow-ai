@@ -246,6 +246,19 @@ def test_the_shortlist_lists_candidates_in_rank_order_with_their_scores() -> Non
     assert "2026-10-10 07:00 UTC" in text
 
 
+def test_the_shortlist_says_when_the_jobs_minimum_is_long_for_its_level() -> None:
+    def shortlist(min_years: int) -> str:
+        job = _job(seniority=SeniorityLevel.MID, min_years_experience=min_years)
+        ranked = [_ranked(_candidate(), job, 1, 0.5)]
+        return _text(
+            shortlist_pdf(job, ranked, total=1, model_version="v", generated_at=GENERATED_AT)
+        )
+
+    flagged = " ".join(shortlist(8).split())
+    assert "Check: The minimum of 8 years' experience is above the 3 a mid role" in flagged
+    assert "Check:" not in shortlist(3)
+
+
 def test_a_long_shortlist_runs_over_pages_and_repeats_its_header() -> None:
     job = _job()
     rows = [_ranked(_candidate(i), job, i, 0.5) for i in range(1, 201)]
