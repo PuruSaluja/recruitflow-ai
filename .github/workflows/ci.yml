@@ -66,7 +66,7 @@ jobs:
           ruff format --check .
 
       - name: Test
-        run: pytest -W default
+        run: pytest -W default --cov --cov-report=term-missing:skip-covered
 
   # The embeddings extra brings torch, which the main job leaves out, so the
   # tests that load the real models skip there. This job installs it (the CPU

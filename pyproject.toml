@@ -71,5 +71,6 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = ["B008"]  # FastAPI Depends() in defaults is idiomatic
 
 [tool.coverage.run]
-source = ["backend/app"]
+source = ["backend/app", "scripts"]
+branch = true
 omit = ["*/tests/*", "*/alembic/*"]
