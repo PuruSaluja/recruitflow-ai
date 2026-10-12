@@ -23,6 +23,7 @@ from app.ml.corpus import (
     corpus_summary,
     generate_corpus,
 )
+from app.ml.fairness import top_k_selection
 from app.ml.matrix import PairFeaturiser
 from app.ml.mitigation import (
     LineDroppingFeaturiser,
@@ -316,7 +317,12 @@ def test_the_unbiased_reference_learns_from_the_unbiased_record(monkeypatch) -> 
 def test_the_served_matcher_and_each_alternative_are_compared_with_the_unmitigated(
     results: dict,
 ) -> None:
-    assert set(results["mitigations"]) == {"drop_proxy_terms", "drop_community_line", "reweighing"}
+    assert set(results["mitigations"]) == {
+        "drop_proxy_terms",
+        "drop_community_line",
+        "reweighing",
+        "served_without_experience_surplus",
+    }
     unmitigated = results["scorers"]["matcher_without_mitigation"]["ndcg_at_10"]
     for report in [results["scorers"]["matcher"], *results["mitigations"].values()]:
         assert set(report["at_k"]) == {"5", "10"}
@@ -421,6 +427,142 @@ def test_each_mitigation_trains_on_the_past_decisions_as_named(
         assert model.sample_weight is None
 
 
+def test_the_served_matcher_without_the_surplus_differs_from_it_by_that_input_alone(
+    data, monkeypatch
+) -> None:
+    _RecordingMatcher.built = []
+    monkeypatch.setattr(script, "make_matcher", _RecordingMatcher)
+
+    script.MITIGATIONS["served_without_experience_surplus"](data)
+    (model,) = _RecordingMatcher.built
+
+    assert type(model.featuriser) is LineDroppingFeaturiser
+    assert tuple(model.featuriser.dropped_headings) == EXCLUDED_HEADINGS
+    assert tuple(model.featuriser.dropped_features) == ("experience_surplus",)
+    expected = reweighing_weights([c.gender for _, c in data.pairs], data.advanced)
+    assert model.sample_weight.tolist() == expected.tolist()
+
+
+# --- experience and the job's minimum --------------------------------------
+
+
+def test_age_is_audited_again_on_the_pairs_that_meet_the_minimum(results: dict, data) -> None:
+    meets = script.meets_minimum(data)
+    assert 0 < meets.sum() < len(data), "premise: some pairs fall short"
+    for report in [*results["scorers"].values(), *results["mitigations"].values()]:
+        assert set(report["at_k_meeting_minimum"]) == {"5", "10"}
+        for at_k in report["at_k_meeting_minimum"].values():
+            assert set(at_k) == {"age_band"}
+            groups = at_k["age_band"]["groups"]
+            assert sum(group["rates"]["pairs"] for group in groups.values()) == meets.sum()
+
+
+def test_meeting_the_minimum_is_years_at_or_past_the_jobs_minimum(data) -> None:
+    meets = script.meets_minimum(data)
+    for (job, candidate), met in zip(data.pairs, meets, strict=True):
+        assert met == (candidate.years_experience >= job.min_years_experience)
+
+
+def test_the_meeting_minimum_audit_uses_the_whole_slates_shortlists(data) -> None:
+    """A top 5 is chosen from the whole slate; the subset only decides who is compared."""
+    scores = np.random.default_rng(3).random(len(data))
+    report = script.scorer_report(data, scores, resamples=20)
+    selected = top_k_selection(data.job_refs, scores, 5)
+    meets = script.meets_minimum(data)
+    old = np.array([c.age_band == "40_and_over" for _, c in data.pairs])
+
+    group = report["at_k_meeting_minimum"]["5"]["age_band"]["groups"]["40_and_over"]
+    assert group["rates"]["selected"] == pytest.approx(selected[meets & old].sum())
+
+
+def test_the_experience_report_matches_a_hand_count(data) -> None:
+    report = script.experience_report(data)
+
+    for group, figures in report.items():
+        rows = [
+            (job.min_years_experience, c.years_experience)
+            for (job, c), grade in zip(data.pairs, data.relevance, strict=True)
+            if c.age_band == group and grade >= 1
+        ]
+        short = [years < minimum for minimum, years in rows]
+        past = [years - minimum for minimum, years in rows if years >= minimum]
+        assert figures["qualified_pairs"] == len(rows)
+        assert figures["short_of_minimum_share"] == pytest.approx(sum(short) / len(rows))
+        assert figures["mean_years_past_minimum"] == pytest.approx(sum(past) / len(past))
+
+
+def test_years_are_rewritten_in_the_profile_and_the_resume_alike(data) -> None:
+    new = [c.years_experience + 4 for _, c in data.pairs]
+    changed = script.with_years(data, new)
+
+    for (_, before), (_, after), years in zip(data.pairs, changed.pairs, new, strict=True):
+        assert after.years_experience == years
+        assert f"with {years} years of experience" in after.resume_text
+        assert after.resume_text.count("of experience") == before.resume_text.count("of experience")
+    assert changed.advanced.tolist() == data.advanced.tolist()
+
+
+def test_a_resume_that_does_not_state_its_years_once_is_refused(data) -> None:
+    job, candidate = data.pairs[0]
+    silent = dataclasses.replace(candidate, resume_text="Analyst.")
+    odd = TrainingData(
+        pairs=((job, silent),),
+        advanced=data.advanced[:1],
+        relevance=data.relevance[:1],
+        job_refs=data.job_refs[:1],
+    )
+
+    with pytest.raises(script.AuditRefused, match="does not state its years once"):
+        script.with_years(odd, [3])
+
+
+def test_the_price_of_years_is_the_mean_log_odds_change_from_the_minimum(data) -> None:
+    rng = np.random.default_rng(7)
+    at_minimum = rng.uniform(0.1, 0.9, len(data))
+    shifted = [
+        np.clip(at_minimum * factor, 0.01, 0.99) for factor in (0.5, 0.7, 0.9, 1, 1, 1.1, 1.2)
+    ]
+    usable = np.array([job.min_years_experience >= 5 for job, _ in data.pairs])
+
+    price = script.price_of_years(data, at_minimum, shifted)
+
+    def log_odds(p):
+        return np.log(p / (1 - p))
+
+    assert price["pairs"] == usable.sum()
+    for shift, scores in zip(script.YEAR_SHIFTS, shifted, strict=True):
+        expected = np.mean(log_odds(scores[usable]) - log_odds(at_minimum[usable]))
+        assert price["matcher"][str(shift)] == pytest.approx(expected)
+    # The generator's shortfall: 2.0 of log-odds per five years short, capped there.
+    assert price["ground_truth"] == {
+        "-5": -2.0,
+        "-3": pytest.approx(-1.2),
+        "-1": pytest.approx(-0.4),
+        "1": 0.0,
+        "3": 0.0,
+        "5": 0.0,
+        "10": 0.0,
+    }
+
+
+def test_the_run_reports_experience_and_the_served_matchers_price_of_years(results: dict) -> None:
+    assert set(results["experience"]) == {"40_and_over", "under_40"}
+    price = results["matcher_price_of_years"]
+    assert set(price["matcher"]) == {str(shift) for shift in script.YEAR_SHIFTS}
+    assert price["pairs"] > 0
+    assert price["matcher"]["-5"] < 0, "a five-year shortfall should cost the served matcher"
+
+
+def test_the_spread_follows_the_meeting_minimum_gap_for_over_40s(results: dict) -> None:
+    for name in ("matcher", "fitted_on_relevance", "served_without_experience_surplus"):
+        row = results["spread"]["runs"][0]["rows"][name]
+        assert {"top_5_meeting_minimum:40_and_over", "top_10_meeting_minimum:40_and_over"} <= set(
+            row
+        )
+        summary = results["spread"]["summary"][name]["top_10_meeting_minimum:40_and_over"]
+        assert summary["eod"]["runs"] == 2
+
+
 # --- the spread over runs ------------------------------------------------
 
 
@@ -492,7 +634,7 @@ def test_the_spread_follows_every_group_but_the_references(results: dict) -> Non
     }
     assert {key for key in first["matcher"] if key.startswith("top_")} == {
         f"top_{k}:{group}" for k in (5, 10) for group in ("woman", "nonbinary", "40_and_over")
-    }
+    } | {f"top_{k}_meeting_minimum:40_and_over" for k in (5, 10)}
     nonbinary = served["5"]["gender"]["groups"]["nonbinary"]["equal_opportunity_difference"]
     assert first["matcher"]["top_5:nonbinary"]["eod"] == nonbinary["value"]
     older = served["10"]["age_band"]["groups"]["40_and_over"]["equal_opportunity_difference"]

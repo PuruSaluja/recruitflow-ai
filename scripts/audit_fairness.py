@@ -82,7 +82,7 @@ import sklearn
 
 from app.cli import check_writable
 from app.config import REPO_ROOT
-from app.ml.corpus import CorpusConfig, generate_corpus
+from app.ml.corpus import CorpusConfig, _years_phrase, generate_corpus
 from app.ml.evaluate import NDCG_K, bootstrap_interval, evaluate_scores
 from app.ml.fairness import (
     FOUR_FIFTHS,
@@ -128,6 +128,14 @@ DEFAULT_CORPUS_SEEDS = (1, 2, 3, 4)
 
 #: Each audited attribute, and the group the others are compared with.
 REFERENCES = {"gender": "man", "age_band": "under_40"}
+
+#: Years added to or taken from each job's minimum to price experience with: the
+#: served matcher's mean change in log-odds against a candidate exactly at the
+#: minimum, everything else on the profile held fixed.
+YEAR_SHIFTS = (-5, -3, -1, 1, 3, 5, 10)
+#: Weight and cap the generator's ground truth gives a shortfall in years.
+GROUND_TRUTH_SHORTFALL_WEIGHT = 2.0
+GROUND_TRUTH_SHORTFALL_CAP = 5
 
 #: Fits a model to (pairs, labels) and returns it; ``predict_proba`` must work on it.
 Fitter = Callable[[TrainingData], Any]
@@ -277,6 +285,12 @@ MITIGATIONS: dict[str, Fitter] = {
         lambda: LineDroppingFeaturiser(EXCLUDED_HEADINGS), reweigh=False
     ),
     "reweighing": _mitigated(PairFeaturiser, reweigh=True),
+    # The served configuration with one more change: no input for experience past
+    # the job's minimum, which the ground truth never rewards.
+    "served_without_experience_surplus": _mitigated(
+        lambda: LineDroppingFeaturiser(EXCLUDED_HEADINGS, dropped_features=("experience_surplus",)),
+        reweigh=True,
+    ),
 }
 
 #: The key each comparison with the unmitigated matcher is recorded under.
@@ -332,17 +346,118 @@ def audit_all(
 
 
 def scorer_report(data: TrainingData, scores: np.ndarray, *, resamples: int) -> dict[str, Any]:
-    """Ranking quality and the audit at every cut-off, for one set of out-of-fold scores."""
+    """Ranking quality and the audit at every cut-off, for one set of out-of-fold scores.
+
+    ``at_k_meeting_minimum`` audits age again on the pairs whose candidate meets the
+    job's minimum years only, from the same shortlists: what is left of the age gap
+    once the requirement itself is out of the comparison.
+    """
     evaluation = evaluate_scores(data, scores)
     ndcgs = [slate.ndcg for slate in evaluation.slates if slate.ndcg is not None]
+    selections = {k: top_k_selection(data.job_refs, scores, k) for k in CUTOFFS}
+    meets = meets_minimum(data)
+    meeting = _subset(data, meets)
     return {
         f"ndcg_at_{NDCG_K}": evaluation.ndcg_at_10,
         f"ndcg_at_{NDCG_K}_95ci": bootstrap_interval(ndcgs, resamples=resamples),
         "at_k": {
-            str(k): audit_all(data, top_k_selection(data.job_refs, scores, k), resamples=resamples)
-            for k in CUTOFFS
+            str(k): audit_all(data, selected, resamples=resamples)
+            for k, selected in selections.items()
+        },
+        "at_k_meeting_minimum": {
+            str(k): {
+                "age_band": audit_dict(
+                    audit_selection(
+                        meeting.job_refs,
+                        selected[meets],
+                        groups_of(meeting, "age_band"),
+                        meeting.relevance,
+                        reference=REFERENCES["age_band"],
+                        resamples=resamples,
+                    )
+                )
+            }
+            for k, selected in selections.items()
         },
     }
+
+
+def meets_minimum(data: TrainingData) -> np.ndarray:
+    """Whether each pair's candidate has at least the job's minimum years."""
+    return np.array(
+        [c.years_experience >= job.min_years_experience for job, c in data.pairs], dtype=bool
+    )
+
+
+def with_years(data: TrainingData, years: Sequence[int]) -> TrainingData:
+    """``data`` with each candidate's years set to ``years``, in the profile and the resume.
+
+    The generator writes the years into the resume's first line once, as "with N
+    years of experience"; that phrase is rewritten so the text agrees.
+    """
+    pairs = []
+    for (job, candidate), new in zip(data.pairs, years, strict=True):
+        old = f"with {_years_phrase(candidate.years_experience)} of experience"
+        if candidate.resume_text.count(old) != 1:
+            raise AuditRefused(f"candidate {candidate.ref}'s resume does not state its years once")
+        text = candidate.resume_text.replace(old, f"with {_years_phrase(int(new))} of experience")
+        changed = dataclasses.replace(candidate, years_experience=int(new), resume_text=text)
+        pairs.append((job, changed))
+    return TrainingData(
+        pairs=tuple(pairs), advanced=data.advanced, relevance=data.relevance, job_refs=data.job_refs
+    )
+
+
+def experience_report(data: TrainingData) -> dict[str, Any]:
+    """Each age group's qualified pairs: how often they fall short of the job's minimum years,
+    and how far past it they go when they do not."""
+    minimums = np.array([job.min_years_experience for job, _ in data.pairs])
+    years = np.array([c.years_experience for _, c in data.pairs])
+    groups = np.array(groups_of(data, "age_band"))
+    qualified = data.relevance >= QUALIFIED_GRADE
+    meets = years >= minimums
+    report = {}
+    for group in sorted(set(groups.tolist())):
+        mine = qualified & (groups == group)
+        meeting = mine & meets
+        report[group] = {
+            "qualified_pairs": int(mine.sum()),
+            "short_of_minimum_share": float((~meets[mine]).mean()) if mine.any() else None,
+            "mean_years_past_minimum": (
+                float((years - minimums)[meeting].mean()) if meeting.any() else None
+            ),
+        }
+    return report
+
+
+def price_of_years(
+    data: TrainingData, at_minimum: np.ndarray, shifted: Sequence[np.ndarray]
+) -> dict[str, Any]:
+    """Mean change in log-odds from a candidate exactly at the minimum to one ``shift`` years off.
+
+    Over the pairs whose job asks for at least the largest shortfall, so every shifted
+    profile has a real number of years. The ground truth's own change is beside it.
+    """
+    minimums = np.array([job.min_years_experience for job, _ in data.pairs])
+    usable = minimums >= -min(YEAR_SHIFTS)
+    base = _log_odds(at_minimum[usable])
+    return {
+        "pairs": int(usable.sum()),
+        "matcher": {
+            str(shift): float(np.mean(_log_odds(scores[usable]) - base))
+            for shift, scores in zip(YEAR_SHIFTS, shifted, strict=True)
+        },
+        "ground_truth": {
+            str(shift): -GROUND_TRUTH_SHORTFALL_WEIGHT
+            * min(max(-shift, 0) / GROUND_TRUTH_SHORTFALL_CAP, 1.0)
+            for shift in YEAR_SHIFTS
+        },
+    }
+
+
+def _log_odds(probabilities: np.ndarray) -> np.ndarray:
+    clipped = np.clip(probabilities, 1e-9, 1 - 1e-9)
+    return np.log(clipped / (1 - clipped))
 
 
 def _same_pairs(first: TrainingData, second: TrainingData, *, compare_advanced: bool) -> bool:
@@ -421,8 +536,13 @@ def audit(config: CorpusConfig, *, folds: int, fold_seed: int, resamples: int) -
             for (_, a), (_, b) in zip(data.pairs, without_proxy.pairs, strict=True)
         ]
     )
-    served, served_no_line = out_of_fold_scores(
-        data, fold_of, fit_served, also_score=[without_proxy]
+    minimums = np.array([job.min_years_experience for job, _ in data.pairs])
+    shifted_versions = [with_years(data, np.maximum(minimums + s, 0)) for s in YEAR_SHIFTS]
+    served, served_no_line, served_at_minimum, *served_shifted = out_of_fold_scores(
+        data,
+        fold_of,
+        fit_served,
+        also_score=[without_proxy, with_years(data, minimums), *shifted_versions],
     )
     unmitigated, unmitigated_no_line = out_of_fold_scores(
         data, fold_of, fit_unmitigated, also_score=[without_proxy]
@@ -461,6 +581,8 @@ def audit(config: CorpusConfig, *, folds: int, fold_seed: int, resamples: int) -
             for attribute in REFERENCES
         },
         "historical_decisions": audit_all(data, data.advanced.astype(float), resamples=resamples),
+        "experience": experience_report(data),
+        "matcher_price_of_years": price_of_years(data, served_at_minimum, served_shifted),
         "scorers": {
             "matcher": matcher,
             "matcher_without_mitigation": scorer_report(data, unmitigated, resamples=resamples),
@@ -516,6 +638,9 @@ def run_summary(results: dict[str, Any]) -> dict[str, Any]:
         rows[name] = {f"ndcg_at_{NDCG_K}": report[f"ndcg_at_{NDCG_K}"]}
         for k in CUTOFFS:
             rows[name].update(_cells(report["at_k"][str(k)], f"top_{k}"))
+            rows[name].update(
+                _cells(report["at_k_meeting_minimum"][str(k)], f"top_{k}_meeting_minimum")
+            )
         compared = report.get(COMPARED_KEY)
         if compared is not None:
             rows[name][COMPARED_KEY] = {
