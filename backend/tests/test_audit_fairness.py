@@ -770,3 +770,16 @@ def test_an_unwritable_output_exits_2_before_the_audit_runs(
 
     assert code == 2
     assert "cannot write" in capsys.readouterr().err
+
+
+def test_an_output_that_is_a_directory_exits_2_before_the_audit_runs(
+    tmp_path: Path, capsys, monkeypatch
+) -> None:
+    out = tmp_path / "audit.json"
+    out.mkdir()
+    monkeypatch.setattr(script, "audit", lambda *a, **k: pytest.fail("the audit ran"))
+
+    code = script.main([*CORPUS, *FAST, "--folds", "2", "--out", str(out)])
+
+    assert code == 2
+    assert f"cannot write {out}" in capsys.readouterr().err

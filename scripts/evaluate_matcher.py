@@ -82,6 +82,7 @@ import numpy as np
 import sklearn
 from scipy.stats import rankdata
 
+from app.cli import check_writable
 from app.config import REPO_ROOT
 from app.ml.artifact import (
     MatcherUnavailable,
@@ -793,6 +794,12 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.resamples < 1:
         print(f"error: --resamples must be at least 1, got {args.resamples}", file=sys.stderr)
+        return 2
+    # The evaluation takes minutes; an output it cannot write should not wait for it.
+    try:
+        check_writable(args.out)
+    except OSError as error:
+        print(f"error: cannot write {args.out}: {error}", file=sys.stderr)
         return 2
     try:
         results = evaluate(

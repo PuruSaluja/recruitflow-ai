@@ -331,3 +331,15 @@ def test_a_refusal_or_a_model_it_cannot_load_exits_2(
     code, out = _main(tmp_path, _evaluation())
     assert code == 2 and "cannot load the cross-encoder" in capsys.readouterr().err
     assert not out.exists()
+
+
+def test_an_out_path_it_cannot_write_is_refused_before_the_timings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "out").write_text("a file where the folder should be", encoding="utf-8")
+    monkeypatch.setattr(script, "run", lambda *a, **k: pytest.fail("the timings ran"))
+
+    code, out = _main(tmp_path, _evaluation(), "--repeats", "1", "--jobs", "1")
+
+    assert code == 2
+    assert f"cannot write {out}" in capsys.readouterr().err

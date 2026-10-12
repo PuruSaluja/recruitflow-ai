@@ -28,6 +28,7 @@ from typing import Any
 
 from sklearn.metrics import roc_auc_score
 
+from app.cli import check_writable
 from app.ml.artifact import default_matcher_path, save_matcher
 from app.ml.corpus import CorpusConfig, generate_corpus
 from app.ml.train import (
@@ -132,6 +133,13 @@ def main(argv: list[str] | None = None) -> int:
             f"error: --test-share must be a number between 0 and 1, got {args.test_share}",
             file=sys.stderr,
         )
+        return 2
+
+    # Training takes a while; a path it cannot write should not wait for it.
+    try:
+        check_writable(args.out)
+    except OSError as error:
+        print(f"error: cannot write {args.out}: {error}", file=sys.stderr)
         return 2
 
     try:

@@ -243,3 +243,16 @@ def test_time_is_counted_even_when_the_model_fails() -> None:
     with pytest.raises(RuntimeError, match="model crashed"):
         timed.encode(["a"])
     assert timed.seconds >= 0.05
+
+
+def test_an_unwritable_out_is_refused_before_any_embedding_is_written(
+    url: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The embeddings go to the database before the report is written, so a report path
+    that fails afterwards would leave the work done and its report lost."""
+    out = tmp_path / "report.json"
+    out.mkdir()
+    monkeypatch.setattr(script, "run", lambda *a, **k: pytest.fail("the refresh ran"))
+
+    assert script.main(["--url", url, "--out", str(out)]) == 2
+    assert f"cannot write {out}" in capsys.readouterr().err

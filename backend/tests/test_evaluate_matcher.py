@@ -1241,3 +1241,14 @@ def test_a_refusal_as_a_command_exits_2(tmp_path: Path) -> None:
 
     assert result.returncode == 2
     assert "Traceback" not in result.stderr
+
+
+def test_an_out_path_it_cannot_write_is_refused_before_the_evaluation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = tmp_path / "evaluation.json"
+    out.mkdir()
+    monkeypatch.setattr(script, "evaluate", lambda *a, **k: pytest.fail("the evaluation ran"))
+
+    assert script.main(["--out", str(out), *FAST]) == 2
+    assert f"cannot write {out}" in capsys.readouterr().err

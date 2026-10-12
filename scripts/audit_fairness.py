@@ -80,6 +80,7 @@ from typing import Any
 import numpy as np
 import sklearn
 
+from app.cli import check_writable
 from app.config import REPO_ROOT
 from app.ml.corpus import CorpusConfig, generate_corpus
 from app.ml.evaluate import NDCG_K, bootstrap_interval, evaluate_scores
@@ -628,9 +629,9 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 2
-    # The audit takes minutes; a folder that cannot be made should not wait for it.
+    # The audit takes minutes; an output it cannot write should not wait for it.
     try:
-        args.out.parent.mkdir(parents=True, exist_ok=True)
+        check_writable(args.out)
     except OSError as error:
         print(f"error: cannot write {args.out}: {error}", file=sys.stderr)
         return 2

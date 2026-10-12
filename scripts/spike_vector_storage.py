@@ -44,6 +44,7 @@ from psycopg import sql
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
+from app.cli import check_writable
 from app.config import get_settings
 
 #: all-MiniLM-L6-v2, the usual small sentence-transformer, embeds in 384 dims.
@@ -273,6 +274,14 @@ def main(argv: list[str] | None = None) -> int:
     if min(args.sizes) < 1:
         print(f"error: --sizes must all be at least 1, got {args.sizes}", file=sys.stderr)
         return 2
+
+    if args.out is not None:
+        # The timings take a while; an output it cannot write should not wait for them.
+        try:
+            check_writable(args.out)
+        except OSError as error:
+            print(f"error: cannot write {args.out}: {error}", file=sys.stderr)
+            return 2
 
     url = args.url or get_settings().database_url
     try:

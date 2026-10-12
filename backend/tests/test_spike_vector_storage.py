@@ -207,3 +207,14 @@ def test_any_other_database_error_is_reported_not_raised(
 
     assert script.main([*SMALL, "--url", url]) == 2
     assert "permission denied to create temporary tables" in capsys.readouterr().err
+
+
+def test_an_unwritable_out_is_refused_before_the_timings_run(
+    url: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = tmp_path / "spike.json"
+    out.mkdir()
+    monkeypatch.setattr(script, "run", lambda *a, **k: pytest.fail("the spike ran"))
+
+    assert script.main([*SMALL, "--url", url, "--out", str(out)]) == 2
+    assert f"cannot write {out}" in capsys.readouterr().err

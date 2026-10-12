@@ -266,3 +266,14 @@ def test_it_runs_as_a_command(tmp_path: Path) -> None:
         json.loads(manifest_path_for(out).read_text(encoding="utf-8"))["training_label"]
         == "advanced"
     )
+
+
+def test_an_out_path_it_cannot_write_is_refused_before_training(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = tmp_path / "matcher.joblib"
+    out.mkdir()
+    monkeypatch.setattr(script, "generate_corpus", lambda *a, **k: pytest.fail("it trained"))
+
+    assert script.main([*BASE, "--out", str(out)]) == 2
+    assert f"cannot write {out}" in capsys.readouterr().err

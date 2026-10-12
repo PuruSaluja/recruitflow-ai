@@ -37,6 +37,7 @@ from typing import Any
 
 import numpy as np
 
+from app.cli import check_writable
 from app.config import REPO_ROOT
 from app.ml.corpus import CorpusConfig, generate_corpus
 from app.ml.cross_encoder import CrossEncoderScorer, SentenceTransformerCrossEncoder
@@ -277,6 +278,12 @@ def main(argv: list[str] | None = None) -> int:
         evaluation = json.loads(args.evaluation.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
         print(f"error: cannot read {args.evaluation}: {error}", file=sys.stderr)
+        return 2
+    # The timings take minutes; an output it cannot write should not wait for them.
+    try:
+        check_writable(args.out)
+    except OSError as error:
+        print(f"error: cannot write {args.out}: {error}", file=sys.stderr)
         return 2
     try:
         results = run(evaluation, repeats=args.repeats, jobs=args.jobs)

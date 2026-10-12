@@ -32,6 +32,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError, OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
+from app.cli import check_writable
 from app.config import get_settings
 from app.ml.encoder import Encoder, EncoderUnavailable, SentenceTransformerEncoder
 from app.services.embeddings import CANDIDATES, DEFAULT_BATCH_SIZE, JOBS, refresh_embeddings
@@ -154,6 +155,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {error}", file=sys.stderr)
         return 2
     kinds = list(KINDS) if args.kind == "all" else [args.kind]
+    if args.out is not None:
+        # Checked first: the embeddings are written to the database before the report.
+        try:
+            check_writable(args.out)
+        except OSError as error:
+            print(f"error: cannot write {args.out}: {error}", file=sys.stderr)
+            return 2
 
     try:
         report = run(url, kinds, args.batch_size, args.device)
