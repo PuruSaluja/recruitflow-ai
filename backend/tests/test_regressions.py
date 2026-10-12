@@ -700,7 +700,7 @@ LOST_RACES = [
                  409, CHANGED.format("Candidate", "candidate"),
                  id="delete-candidate-application-edited"),
     # A job or candidate DELETE whose application was deleted, not edited,
-    # still deletes (409 until 2026-09-29): see section 11.
+    # still deletes (409 until 2026-09-29): see section 12.
 ]
 # fmt: on
 
@@ -803,7 +803,7 @@ def test_a_delete_refused_because_the_row_changed_leaves_it_whole(
     assert len(client.get(f"/applications/{application['id']}/stage-events").json()) == 1
 
 
-# --- 11. a delete's cascade meeting another delete (found 2026-09-29) ------
+# --- 12. a delete's cascade meeting another delete (found 2026-09-29) ------
 #
 # Was: when a job delete and a candidate delete met on the same application,
 # the one that lost answered 409 "changed by someone else", though nothing had
@@ -2395,7 +2395,7 @@ def test_every_timestamp_the_api_returns_is_utc(
     assert [stamp for stamp in stamps if not stamp.endswith("Z")] == []
 
 
-# --- 12. a listing's total counted apart from its page ------------------------
+# --- 13. a listing's total counted apart from its page ----------------------
 #
 # Was: GET /jobs, /candidates and /applications counted the matching rows in
 # one statement and read the page in a second, so a row committed in between
