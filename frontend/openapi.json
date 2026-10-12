@@ -1,0 +1,3141 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "RecruitFlow AI",
+    "description": "Recruiting platform API: job requisitions, candidates, application pipelines, and ML-scored candidate shortlists.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health",
+        "description": "Report service health, including a real round-trip to PostgreSQL.\n\nReturns 503 when the database is unreachable so an orchestrator can pull\nthe instance out of rotation rather than serving requests that will fail.",
+        "operationId": "health_api_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "List job requisitions",
+        "operationId": "list_jobs_api_v1_jobs_get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/JobStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by requisition status",
+              "title": "Status"
+            },
+            "description": "Filter by requisition status"
+          },
+          {
+            "name": "seniority",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/SeniorityLevel"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by seniority level",
+              "title": "Seniority"
+            },
+            "description": "Filter by seniority level"
+          },
+          {
+            "name": "employment_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/EmploymentType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by employment type",
+              "title": "Employment Type"
+            },
+            "description": "Filter by employment type"
+          },
+          {
+            "name": "department",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exact department match",
+              "title": "Department"
+            },
+            "description": "Exact department match"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Case-insensitive substring match on title",
+              "title": "Q"
+            },
+            "description": "Case-insensitive substring match on title"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "description": "Maximum rows to return",
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "Maximum rows to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "description": "Rows to skip",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Rows to skip"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_JobRead_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Create a job requisition",
+        "operationId": "create_job_api_v1_jobs_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Fetch one job requisition",
+        "operationId": "get_job_api_v1_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2147483647,
+              "exclusiveMinimum": 0,
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Partially update a job",
+        "operationId": "update_job_api_v1_jobs__job_id__patch",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2147483647,
+              "exclusiveMinimum": 0,
+              "title": "Job Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Delete a job requisition",
+        "description": "Hard-delete a job; applications and cached match scores cascade.\n\nSee :func:`app.api.deps.delete_with_applications` for what a race with\nanother write to one of its applications answers.",
+        "operationId": "delete_job_api_v1_jobs__job_id__delete",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2147483647,
+              "exclusiveMinimum": 0,
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}/close": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Close a job requisition",
+        "description": "Close a requisition. Idempotent: closing a closed job is a no-op.",
+        "operationId": "close_job_api_v1_jobs__job_id__close_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2147483647,
+              "exclusiveMinimum": 0,
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/candidates": {
+      "get": {
+        "tags": [
+          "candidates"
+        ],
+        "summary": "List candidates",
+        "operationId": "list_candidates_api_v1_candidates_get",
+        "parameters": [
+          {
+            "name": "seniority",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/SeniorityLevel"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by seniority level",
+              "title": "Seniority"
+            },
+            "description": "Filter by seniority level"
+          },
+          {
+            "name": "education_level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/EducationLevel"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by education level",
+              "title": "Education Level"
+            },
+            "description": "Filter by education level"
+          },
+          {
+            "name": "min_years_experience",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 60,
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Years Experience"
+            }
+          },
+          {
+            "name": "max_years_experience",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 60,
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Max Years Experience"
+            }
+          },
+          {
+            "name": "location",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Case-insensitive substring match",
+              "title": "Location"
+            },
+            "description": "Case-insensitive substring match"
+          },
+          {
+            "name": "skill",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Repeatable; a candidate must have every skill listed",
+              "title": "Skill"
+            },
+            "description": "Repeatable; a candidate must have every skill listed"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Substring match on name, email or current title",
+              "title": "Q"
+            },
+            "description": "Substring match on name, email or current title"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "description": "Maximum rows to return",
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "Maximum rows to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "description": "Rows to skip",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Rows to skip"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_CandidateRead_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "candidates"
+        ],
+        "summary": "Create a candidate",
+        "description": "Create a candidate. A duplicate email is a 409, not a 500.",
+        "operationId": "create_candidate_api_v1_candidates_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CandidateCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CandidateRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/candidates/resume-preview": {
+      "post": {
+        "tags": [
+          "candidates"
+        ],
+        "summary": "Parse a resume file without storing anything",
+        "description": "Extract text from an upload so a client can show it before committing.\n\nDeclared before ``/{candidate_id}`` so the literal path wins the match.",
+        "operationId": "preview_resume_api_v1_candidates_resume_preview_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_preview_resume_api_v1_candidates_resume_preview_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResumePreview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/candidates/{candidate_id}": {
+      "get": {
+        "tags": [
+          "candidates"
+        ],
+        "summary": "Fetch one candidate",
+        "operationId": "get_candidate_api_v1_candidates__candidate_id__get",
+        "parameters": [
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2147483647,
+              "exclusiveMinimum": 0,
+              "title": "Candidate Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CandidateRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "candidates"
+        ],
+        "summary": "Partially update",
+        "operationId": "update_candidate_api_v1_candidates__candidate_id__patch",
+        "parameters": [
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2147483647,
+              "exclusiveMinimum": 0,
+              "title": "Candidate Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CandidateUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CandidateRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "candidates"
+        ],
+        "summary": "Delete a candidate",
+        "description": "Hard-delete a candidate; applications and cached match scores cascade.\n\nSee :func:`app.api.deps.delete_with_applications` for what a race with\nanother write to one of its applications answers.",
+        "operationId": "delete_candidate_api_v1_candidates__candidate_id__delete",
+        "parameters": [
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2147483647,
+              "exclusiveMinimum": 0,
+              "title": "Candidate Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/candidates/{candidate_id}/resume": {
+      "get": {
+        "tags": [
+          "candidates"
+        ],
+        "summary": "Fetch the stored resume text",
+        "operationId": "get_resume_api_v1_candidates__candidate_id__resume_get",
+        "parameters": [
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2147483647,
+              "exclusiveMinimum": 0,
+              "title": "Candidate Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "candidates"
+        ],
+        "summary": "Upload a resume file, replacing the stored text",
+        "description": "Ingest a PDF or plain-text resume into ``resume_text``.\n\nPUT rather than POST: the stored text is replaced wholesale, so re-uploading\nthe same file twice leaves the candidate in the same state.",
+        "operationId": "upload_resume_api_v1_candidates__candidate_id__resume_put",
+        "parameters": [
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2147483647,
+              "exclusiveMinimum": 0,
+              "title": "Candidate Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_resume_api_v1_candidates__candidate_id__resume_put"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CandidateRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/applications": {
+      "get": {
+        "tags": [
+          "applications"
+        ],
+        "summary": "List applications",
+        "operationId": "list_applications_api_v1_applications_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 2147483647,
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only this job's pipeline",
+              "title": "Job Id"
+            },
+            "description": "Only this job's pipeline"
+          },
+          {
+            "name": "candidate_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 2147483647,
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only this candidate's applications",
+              "title": "Candidate Id"
+            },
+            "description": "Only this candidate's applications"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ApplicationStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by pipeline stage",
+              "title": "Status"
+            },
+            "description": "Filter by pipeline stage"
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exact match on how the application arrived",
+              "title": "Source"
+            },
+            "description": "Exact match on how the application arrived"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "description": "Maximum rows to return",
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "Maximum rows to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "description": "Rows to skip",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Rows to skip"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ApplicationRead_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "applications"
+        ],
+        "summary": "Apply a candidate to a job",
+        "description": "Open an application at the first pipeline stage.\n\nA missing job or candidate is a 404 naming which one; an unopen requisition\nor a repeat application is a 409, since both conflict with existing state\nrather than being malformed requests. A job or candidate deleted while the\nrequest runs is refused by its foreign key and gets the same 404.",
+        "operationId": "create_application_api_v1_applications_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/applications/{application_id}": {
+      "get": {
+        "tags": [
+          "applications"
+        ],
+        "summary": "Fetch one application",
+        "operationId": "get_application_api_v1_applications__application_id__get",
+        "parameters": [
+          {
+            "name": "application_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2147483647,
+              "exclusiveMinimum": 0,
+              "title": "Application Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "applications"
+        ],
+        "summary": "Update an application, including its pipeline stage",
+        "description": "Partially update an application.\n\nA status change must be a legal move through the pipeline; an illegal one\nis a 409 naming the stages that *are* reachable. Re-sending the current\nstatus is a no-op, so a retried request does not fail.",
+        "operationId": "update_application_api_v1_applications__application_id__patch",
+        "parameters": [
+          {
+            "name": "application_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2147483647,
+              "exclusiveMinimum": 0,
+              "title": "Application Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "applications"
+        ],
+        "summary": "Delete an application",
+        "description": "Hard-delete an application.\n\nWithdrawing a candidate is a status change; this is for removing a record\ncreated in error, which is why it leaves no pipeline history behind.",
+        "operationId": "delete_application_api_v1_applications__application_id__delete",
+        "parameters": [
+          {
+            "name": "application_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2147483647,
+              "exclusiveMinimum": 0,
+              "title": "Application Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/applications/{application_id}/stage-events": {
+      "get": {
+        "tags": [
+          "applications"
+        ],
+        "summary": "Full pipeline history for one application",
+        "description": "Every status move this application has made, oldest first.\n\nAnswers \"how long did screening take\" and similar questions without\nreconstructing history from ``updated_at``. A handful of rows per\napplication, so this returns the whole list rather than a page.",
+        "operationId": "list_stage_events_api_v1_applications__application_id__stage_events_get",
+        "parameters": [
+          {
+            "name": "application_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2147483647,
+              "exclusiveMinimum": 0,
+              "title": "Application Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApplicationStageEventRead"
+                  },
+                  "title": "Response List Stage Events Api V1 Applications  Application Id  Stage Events Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/applications/{application_id}/reopen": {
+      "post": {
+        "tags": [
+          "applications"
+        ],
+        "summary": "Reopen a rejected or withdrawn application",
+        "description": "Put a rejected or withdrawn application back at the start of the pipeline.\n\nDeliberately separate from a status PATCH, which still cannot move a\nfinished application. The stage event records the real ``from_status``, so\nthe rejected or withdrawn stint keeps its duration. The same row is reopened\nrather than a new one created, since a candidate holds one application per\njob; and like applying in the first place, it needs the requisition open.",
+        "operationId": "reopen_application_api_v1_applications__application_id__reopen_post",
+        "parameters": [
+          {
+            "name": "application_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2147483647,
+              "exclusiveMinimum": 0,
+              "title": "Application Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ApplicationReopen"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}/score": {
+      "post": {
+        "tags": [
+          "matching"
+        ],
+        "summary": "Score a candidate pool against a job and cache the ranking",
+        "description": "Score candidates against a job with the trained matcher, rank them and cache the scores.\n\nLeaving out ``candidate_ids`` scores every candidate on file. The whole\npool is scored and cached in ``match_scores``; ``limit`` only trims what\ncomes back, and ranks are positions within this pool. Scoring again with\nan unchanged matcher updates the cached rows rather than adding more.\n\nA missing job or candidate is a 404, checked before the matcher is\nloaded. A missing or unreadable matcher is a 503 naming the command that\nregenerates it (see ``app.main``).\n\nA candidate deleted mid-run, before the run wrote its score, fails the\nwrite. The run is then rolled back, re-read and scored again, and the\ncandidate has dropped out of the pool (or is now a 404, if it was asked for\nby id). A row someone else inserted first is updated in place. Up to three\nattempts are made, and only a third failure is answered with a 409.\n\nOther runs of the same job, an edit of the job and a delete of it take\nturns with this run's write (see :func:`score_pool`). A run that waited on\nanother updates the rows that one saved instead of racing it to insert\nthem, and a delete already under way finishes first, making this a 404.",
+        "operationId": "score_job_api_v1_jobs__job_id__score_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2147483647,
+              "exclusiveMinimum": 0,
+              "title": "Job Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ScoreJobRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScoreJobResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}/matches": {
+      "get": {
+        "tags": [
+          "matching"
+        ],
+        "summary": "A job's cached ranking under the current matcher",
+        "description": "Page through the scores cached for a job, best first. Nothing is scored here.\n\nOnly scores from the matcher currently on disk are listed; rows an\nearlier model left behind stay in the table but are never mixed in. Ranks\nrun across everything cached for the job under that matcher, so they stay\n1 to ``total`` even when some candidates were scored in a separate,\nsmaller run -- which is the one case where they differ from the rank that\nrun returned. A score is as of its ``scored_at``: editing the job or a\ncandidate afterwards does not rescore it.\n\nThe matcher is loaded here too, not just hashed, so a file that exists\nbut cannot be used is the same 503 scoring gives. Hashing alone would\nlist nothing for it -- no score can carry the version of a file that\nnever loaded -- and every shortlist would look emptied.",
+        "operationId": "list_matches_api_v1_jobs__job_id__matches_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2147483647,
+              "exclusiveMinimum": 0,
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "description": "Maximum rows to return",
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "Maximum rows to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "description": "Rows to skip",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Rows to skip"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}/report.pdf": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "A job's ranked shortlist as a PDF",
+        "description": "The best ``limit`` candidates cached for the job under the current matcher.\n\nNothing is scored here: the ranks, scores and features are the ones\n``GET /jobs/{id}/matches`` lists. A job with nothing cached under the\ncurrent matcher is a 409 pointing at the scoring endpoint, rather than an\nempty report that reads as if nobody fitted.",
+        "operationId": "shortlist_report_api_v1_jobs__job_id__report_pdf_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2147483647,
+              "exclusiveMinimum": 0,
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "description": "Candidates to list",
+              "default": 25,
+              "title": "Limit"
+            },
+            "description": "Candidates to list"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The report as a PDF",
+            "content": {
+              "application/pdf": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}/candidates/{candidate_id}/scorecard.pdf": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "One candidate's scorecard for a job as a PDF",
+        "description": "The candidate's cached score for the job, its rank, skills, profile and features.\n\nThe rank is the candidate's position in the job's cached ranking, the same\none ``GET /jobs/{id}/matches`` gives it: best score first, ties to the lower\ncandidate id. A missing job or candidate is a 404; a candidate with no\nscore for the job under the current matcher is a 409.",
+        "operationId": "scorecard_report_api_v1_jobs__job_id__candidates__candidate_id__scorecard_pdf_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2147483647,
+              "exclusiveMinimum": 0,
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2147483647,
+              "exclusiveMinimum": 0,
+              "title": "Candidate Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The report as a PDF",
+            "content": {
+              "application/pdf": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApplicationCreate": {
+        "properties": {
+          "job_id": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Job Id"
+          },
+          "candidate_id": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Candidate Id"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "changed_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "candidate_id"
+        ],
+        "title": "ApplicationCreate"
+      },
+      "ApplicationRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "job_id": {
+            "type": "integer",
+            "title": "Job Id"
+          },
+          "candidate_id": {
+            "type": "integer",
+            "title": "Candidate Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ApplicationStatus"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "applied_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Applied At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "job_id",
+          "candidate_id",
+          "status",
+          "source",
+          "notes",
+          "applied_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ApplicationRead"
+      },
+      "ApplicationReopen": {
+        "properties": {
+          "changed_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ApplicationReopen",
+        "description": "Body for reopening a rejected or withdrawn application. Every field is optional."
+      },
+      "ApplicationStageEventRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "application_id": {
+            "type": "integer",
+            "title": "Application Id"
+          },
+          "from_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApplicationStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "to_status": {
+            "$ref": "#/components/schemas/ApplicationStatus"
+          },
+          "changed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "application_id",
+          "from_status",
+          "to_status",
+          "changed_by",
+          "occurred_at"
+        ],
+        "title": "ApplicationStageEventRead"
+      },
+      "ApplicationStatus": {
+        "type": "string",
+        "enum": [
+          "applied",
+          "screening",
+          "interview",
+          "offer",
+          "hired",
+          "rejected",
+          "withdrawn"
+        ],
+        "title": "ApplicationStatus"
+      },
+      "ApplicationUpdate": {
+        "properties": {
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApplicationStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "changed_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ApplicationUpdate",
+        "description": "Partial update; used mainly to advance pipeline status."
+      },
+      "Body_preview_resume_api_v1_candidates_resume_preview_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_preview_resume_api_v1_candidates_resume_preview_post"
+      },
+      "Body_upload_resume_api_v1_candidates__candidate_id__resume_put": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "description": "PDF, .txt or .md, up to 2 MB"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_resume_api_v1_candidates__candidate_id__resume_put"
+      },
+      "CandidateCreate": {
+        "properties": {
+          "full_name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 2,
+            "title": "Full Name"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 150
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "current_title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Title"
+          },
+          "years_experience": {
+            "type": "integer",
+            "maximum": 60.0,
+            "minimum": 0.0,
+            "title": "Years Experience",
+            "default": 0
+          },
+          "seniority": {
+            "$ref": "#/components/schemas/SeniorityLevel",
+            "default": "mid"
+          },
+          "education_level": {
+            "$ref": "#/components/schemas/EducationLevel",
+            "default": "bachelor"
+          },
+          "resume_text": {
+            "type": "string",
+            "maxLength": 100000,
+            "minLength": 20,
+            "title": "Resume Text"
+          },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Skills"
+          }
+        },
+        "type": "object",
+        "required": [
+          "full_name",
+          "email",
+          "resume_text"
+        ],
+        "title": "CandidateCreate"
+      },
+      "CandidateRead": {
+        "properties": {
+          "full_name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 2,
+            "title": "Full Name"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 150
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "current_title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Title"
+          },
+          "years_experience": {
+            "type": "integer",
+            "maximum": 60.0,
+            "minimum": 0.0,
+            "title": "Years Experience",
+            "default": 0
+          },
+          "seniority": {
+            "$ref": "#/components/schemas/SeniorityLevel",
+            "default": "mid"
+          },
+          "education_level": {
+            "$ref": "#/components/schemas/EducationLevel",
+            "default": "bachelor"
+          },
+          "resume_text": {
+            "type": "string",
+            "minLength": 20,
+            "title": "Resume Text"
+          },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Skills"
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "full_name",
+          "email",
+          "resume_text",
+          "id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "CandidateRead"
+      },
+      "CandidateSummary": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "full_name": {
+            "type": "string",
+            "title": "Full Name"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "current_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Title"
+          },
+          "years_experience": {
+            "type": "integer",
+            "title": "Years Experience"
+          },
+          "seniority": {
+            "$ref": "#/components/schemas/SeniorityLevel"
+          },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Skills"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "full_name",
+          "email",
+          "current_title",
+          "years_experience",
+          "seniority",
+          "skills"
+        ],
+        "title": "CandidateSummary",
+        "description": "Trimmed projection used inside match listings and PDF reports."
+      },
+      "CandidateUpdate": {
+        "properties": {
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 150
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "current_title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Title"
+          },
+          "years_experience": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 60.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Years Experience"
+          },
+          "seniority": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeniorityLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "education_level": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EducationLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resume_text": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100000,
+                "minLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resume Text"
+          },
+          "skills": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skills"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "CandidateUpdate",
+        "description": "Partial update; every field is optional."
+      },
+      "EducationLevel": {
+        "type": "string",
+        "enum": [
+          "high_school",
+          "associate",
+          "bachelor",
+          "master",
+          "doctorate"
+        ],
+        "title": "EducationLevel"
+      },
+      "EmploymentType": {
+        "type": "string",
+        "enum": [
+          "full_time",
+          "part_time",
+          "contract",
+          "internship"
+        ],
+        "title": "EmploymentType"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "database": {
+            "type": "string",
+            "title": "Database"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "version",
+          "database"
+        ],
+        "title": "HealthResponse"
+      },
+      "JobCreate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 2,
+            "title": "Title"
+          },
+          "department": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 150
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "employment_type": {
+            "$ref": "#/components/schemas/EmploymentType",
+            "default": "full_time"
+          },
+          "seniority": {
+            "$ref": "#/components/schemas/SeniorityLevel",
+            "default": "mid"
+          },
+          "education_required": {
+            "$ref": "#/components/schemas/EducationLevel",
+            "default": "bachelor"
+          },
+          "min_years_experience": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 0.0,
+            "title": "Min Years Experience",
+            "default": 0
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 20000,
+            "minLength": 20,
+            "title": "Description"
+          },
+          "required_skills": {
+            "items": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Required Skills"
+          },
+          "preferred_skills": {
+            "items": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Preferred Skills"
+          },
+          "salary_min": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,8}|(?=[\\d.]{1,11}0*$)\\d{0,8}\\.\\d{0,2}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Min"
+          },
+          "salary_max": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,8}|(?=[\\d.]{1,11}0*$)\\d{0,8}\\.\\d{0,2}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Max"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus",
+            "default": "open"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "description"
+        ],
+        "title": "JobCreate"
+      },
+      "JobRead": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 2,
+            "title": "Title"
+          },
+          "department": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 150
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "employment_type": {
+            "$ref": "#/components/schemas/EmploymentType",
+            "default": "full_time"
+          },
+          "seniority": {
+            "$ref": "#/components/schemas/SeniorityLevel",
+            "default": "mid"
+          },
+          "education_required": {
+            "$ref": "#/components/schemas/EducationLevel",
+            "default": "bachelor"
+          },
+          "min_years_experience": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 0.0,
+            "title": "Min Years Experience",
+            "default": 0
+          },
+          "description": {
+            "type": "string",
+            "minLength": 20,
+            "title": "Description"
+          },
+          "required_skills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Required Skills"
+          },
+          "preferred_skills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Preferred Skills"
+          },
+          "salary_min": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,8}|(?=[\\d.]{1,11}0*$)\\d{0,8}\\.\\d{0,2}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Min"
+          },
+          "salary_max": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,8}|(?=[\\d.]{1,11}0*$)\\d{0,8}\\.\\d{0,2}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Max"
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "requirement_notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Requirement Notes",
+            "description": "Things about the job's requirements a recruiter should check; empty when none.",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "description",
+          "id",
+          "status",
+          "created_at",
+          "updated_at",
+          "requirement_notes"
+        ],
+        "title": "JobRead"
+      },
+      "JobStatus": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "open",
+          "paused",
+          "closed"
+        ],
+        "title": "JobStatus"
+      },
+      "JobUpdate": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "department": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 150
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "employment_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmploymentType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "seniority": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeniorityLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "education_required": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EducationLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "min_years_experience": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 50.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Years Experience"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20000,
+                "minLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "required_skills": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "type": "array",
+                "maxItems": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required Skills"
+          },
+          "preferred_skills": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "type": "array",
+                "maxItems": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Skills"
+          },
+          "salary_min": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,8}|(?=[\\d.]{1,11}0*$)\\d{0,8}\\.\\d{0,2}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Min"
+          },
+          "salary_max": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,8}|(?=[\\d.]{1,11}0*$)\\d{0,8}\\.\\d{0,2}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Max"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "JobUpdate",
+        "description": "Partial update; every field is optional."
+      },
+      "MatchFeatures": {
+        "properties": {
+          "required_skill_coverage": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Required Skill Coverage",
+            "description": "Share of the job's required skills the candidate lists; 1.0 if the job requires none"
+          },
+          "preferred_skill_coverage": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Preferred Skill Coverage",
+            "description": "Share of the job's preferred skills the candidate lists; 1.0 if the job prefers none"
+          },
+          "skill_jaccard": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Skill Jaccard",
+            "description": "Overlap between the job's skills, required and preferred, and the candidate's, over their union; 0.0 when both are empty"
+          },
+          "experience_gap": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Experience Gap",
+            "description": "Years short of the job's minimum, divided by 5, capped at 1.0"
+          },
+          "experience_surplus": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Experience Surplus",
+            "description": "Years beyond the job's minimum, divided by 5, capped at 1.0"
+          },
+          "seniority_distance": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Seniority Distance",
+            "description": "Seniority levels between candidate and job, either direction, as a share of the widest possible gap"
+          },
+          "seniority_direction": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": -1.0,
+            "title": "Seniority Direction",
+            "description": "seniority_distance with a sign: negative under-levelled, positive over"
+          },
+          "education_fit": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Education Fit",
+            "description": "1.0 when the candidate meets or exceeds the education required, down to 0.0"
+          }
+        },
+        "type": "object",
+        "required": [
+          "required_skill_coverage",
+          "preferred_skill_coverage",
+          "skill_jaccard",
+          "experience_gap",
+          "experience_surplus",
+          "seniority_distance",
+          "seniority_direction",
+          "education_fit"
+        ],
+        "title": "MatchFeatures",
+        "description": "The engineered features behind a score, as ``match_scores.features`` stores them.\n\nExactly :data:`app.ml.features.FEATURE_NAMES`, in that order. The TF-IDF\nhalf of the matcher's input is not broken out per score: the calibrated\nmatcher keeps one fitted vocabulary per calibration fold, so there is no\nsingle text similarity to report back."
+      },
+      "MatchPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RankedCandidate"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Total rows matching the query, ignoring pagination"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "job_id": {
+            "type": "integer",
+            "title": "Job Id"
+          },
+          "model_version": {
+            "type": "string",
+            "title": "Model Version",
+            "description": "Content hash of the matcher whose scores are listed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset",
+          "job_id",
+          "model_version"
+        ],
+        "title": "MatchPage",
+        "description": "A page of one job's cached ranking under the current matcher, best first."
+      },
+      "Page_ApplicationRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApplicationRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Total rows matching the query, ignoring pagination"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[ApplicationRead]"
+      },
+      "Page_CandidateRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Total rows matching the query, ignoring pagination"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[CandidateRead]"
+      },
+      "Page_JobRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/JobRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Total rows matching the query, ignoring pagination"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[JobRead]"
+      },
+      "RankedCandidate": {
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Rank",
+            "description": "1-based position, best first"
+          },
+          "score": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "description": "Calibrated probability that this candidate would be advanced, learned from past recruiter decisions reweighed so that gender and the decision are independent"
+          },
+          "scored_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Scored At"
+          },
+          "candidate": {
+            "$ref": "#/components/schemas/CandidateSummary"
+          },
+          "features": {
+            "$ref": "#/components/schemas/MatchFeatures"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rank",
+          "score",
+          "scored_at",
+          "candidate",
+          "features"
+        ],
+        "title": "RankedCandidate",
+        "description": "One candidate's place in a job's ranking, and what the score was built from."
+      },
+      "ResumePreview": {
+        "properties": {
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename"
+          },
+          "characters": {
+            "type": "integer",
+            "title": "Characters",
+            "description": "Length of the extracted text"
+          },
+          "words": {
+            "type": "integer",
+            "title": "Words",
+            "description": "Whitespace-delimited token count"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "characters",
+          "words",
+          "text"
+        ],
+        "title": "ResumePreview",
+        "description": "Result of parsing a resume upload without storing it."
+      },
+      "ScoreJobRequest": {
+        "properties": {
+          "candidate_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer",
+                  "maximum": 2147483647.0,
+                  "exclusiveMinimum": 0.0
+                },
+                "type": "array",
+                "maxItems": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Ids",
+            "description": "Score only these candidates; omit to score every candidate on file"
+          },
+          "limit": {
+            "type": "integer",
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "description": "Ranked rows to return; the whole pool is still scored and cached",
+            "default": 50
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ScoreJobRequest",
+        "description": "Body for scoring a candidate pool against one job. Every field is optional."
+      },
+      "ScoreJobResponse": {
+        "properties": {
+          "job_id": {
+            "type": "integer",
+            "title": "Job Id"
+          },
+          "model_version": {
+            "type": "string",
+            "title": "Model Version",
+            "description": "Content hash of the matcher that produced the scores"
+          },
+          "scored_count": {
+            "type": "integer",
+            "title": "Scored Count",
+            "description": "Distinct candidates scored and cached in this run"
+          },
+          "elapsed_ms": {
+            "type": "number",
+            "title": "Elapsed Ms",
+            "description": "Server time spent loading the matcher, scoring the pool and caching it"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/RankedCandidate"
+            },
+            "type": "array",
+            "title": "Results",
+            "description": "The best `limit` of the pool, ranked within that pool"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "model_version",
+          "scored_count",
+          "elapsed_ms",
+          "results"
+        ],
+        "title": "ScoreJobResponse"
+      },
+      "SeniorityLevel": {
+        "type": "string",
+        "enum": [
+          "intern",
+          "junior",
+          "mid",
+          "senior",
+          "staff",
+          "principal"
+        ],
+        "title": "SeniorityLevel"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
