@@ -14,8 +14,8 @@ descriptions.
 > dense and hybrid retrieval, a measured cross-encoder re-rank of the
 > hybrid's shortlist, and a fairness audit of the matcher's shortlists, whose
 > findings the served matcher is now trained to counter, and PDF reports of a
-> job's shortlist and a candidate's scorecard. The frontend is landing
-> incrementally.
+> job's shortlist and a candidate's scorecard. The web client has its
+> scaffold and a typed API client; its views are next.
 
 ## Tech stack
 
@@ -25,8 +25,8 @@ descriptions.
 | Database | PostgreSQL 16, SQLAlchemy 2.0, Alembic |
 | ML       | scikit-learn (TF-IDF + engineered features); sentence-transformers (embeddings, optional) |
 | Reports  | ReportLab |
-| Frontend | React 18, Vite, TypeScript |
-| Tests    | pytest, httpx2 |
+| Frontend | React 19, Vite 8, TypeScript 5.9; API types generated from the OpenAPI schema |
+| Tests    | pytest, httpx2; Vitest for the web client |
 
 ## Data model
 
@@ -68,6 +68,30 @@ uvicorn app.main:app --reload --app-dir backend
 
 Interactive docs are then at `http://localhost:8000/docs`.
 
+Run the web client (Node 20.19 or later) beside it:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+It is served at `http://localhost:5173`, and the dev server forwards `/api` to
+the API on `127.0.0.1:8000` (`RECRUITFLOW_API_TARGET` points it elsewhere), so
+the browser talks to one origin.
+
+The client's types in `frontend/src/api/schema.ts` are generated from
+`frontend/openapi.json`, the API's schema. After changing the API, refresh
+both:
+
+```bash
+python scripts/export_openapi.py
+cd frontend && npm run gen:api
+```
+
+The suite fails while `openapi.json` lags the API, and CI fails while
+`schema.ts` lags `openapi.json`.
+
 The app's own log lines go to stderr as `time LEVEL logger: message`, from
 `RECRUITFLOW_LOG_LEVEL` up (default `INFO`); uvicorn's lines keep their own
 format.
@@ -86,6 +110,14 @@ describe.
 Every database test empties all tables first, so the suite refuses to start
 unless the test database's name ends in `_test` and differs from
 `RECRUITFLOW_DATABASE_URL`.
+
+The web client's tests (Vitest) need neither the API nor a database:
+
+```bash
+cd frontend
+npm test
+npm run build      # type-checks, then builds
+```
 
 The resume normaliser's unit tests need no database:
 
