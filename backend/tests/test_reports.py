@@ -7,6 +7,8 @@ from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 from pypdf import PdfReader
+from reportlab.lib.units import mm
+from reportlab.pdfbase.pdfmetrics import stringWidth
 
 from app.ml.corpus import CorpusConfig, generate_corpus
 from app.ml.features import FEATURE_NAMES, feature_dict
@@ -15,6 +17,10 @@ from app.models.enums import EducationLevel, EmploymentType, SeniorityLevel
 from app.schemas.candidate import CandidateSummary
 from app.schemas.match import MatchFeatures, RankedCandidate
 from app.services.reports import (
+    FONT,
+    FONT_BOLD,
+    SHORTLIST_HEADER,
+    SHORTLIST_WIDTHS_MM,
     drawable,
     scorecard_pdf,
     shortlist_pdf,
@@ -119,12 +125,43 @@ def test_markup_in_a_field_is_drawn_as_text() -> None:
 
 
 @pytest.mark.parametrize(
+    "name",
+    [
+        "Zoë Müller",
+        "Łukasz Šimić",  # Polish and Croatian letters Windows-1252 lacks
+        "Ğül Şahin",  # Turkish
+        "Nguyễn Văn Đức",  # Vietnamese, with stacked accents
+        "Ελένη Παπαδοπούλου",  # Greek
+        "Дмитрий Иванов",  # Cyrillic
+        "Արամ",  # Armenian
+        "ნინო",  # Georgian
+    ],
+)
+def test_names_in_the_scripts_the_font_has_are_drawn_as_typed(name: str) -> None:
+    """Read back from the PDF, not just from drawable: the embedded font has to carry each
+    letter's text mapping too, or the name could not be copied or searched."""
+    assert drawable(name) == name
+    job = _job()
+    pdf = shortlist_pdf(
+        job,
+        [_ranked(_candidate(full_name=name), job, 1, 0.5)],
+        total=1,
+        model_version="v",
+        generated_at=GENERATED_AT,
+    )
+    assert name in _text(pdf)
+
+
+@pytest.mark.parametrize(
     ("value", "drawn"),
     [
-        ("Zoë Müller", "Zoë Müller"),  # Windows-1252 has both
-        ("Šimić", "Šimic"),  # Š is in Windows-1252; ć is folded to c
-        ("Łukasz", "?ukasz"),  # no decomposition: drawn as ?
-        ("李雷", "??"),
+        ("李雷", "??"),  # Chinese: not in the font
+        ("김민준", "???"),  # Korean
+        ("राम", "???"),  # Devanagari
+        ("יעל", "???"),  # Hebrew: in the font, but would be laid out left to right
+        ("محمد", "????"),  # Arabic: also unjoined
+        ("Sam \U0001f600", "Sam ?"),  # in the font, but past U+FFFF it cannot be mapped
+        ("\U0001d400lpha", "Alpha"),  # mathematical bold A folds to A
         ("Jose\u0301 Garci\u0301a", "Jos\u00e9 Garc\u00eda"),  # accents composed first
         ("q\u0301", "q"),  # an accent with no composed letter is dropped, not drawn as ?
         ("A\tB\nC", "A B C"),  # whitespace controls become spaces
@@ -203,6 +240,39 @@ def _scorecard(job: Job, candidate: Candidate) -> str:
             generated_at=GENERATED_AT,
         )
     )
+
+
+def _fonts(pdf: bytes) -> set[str]:
+    found = set()
+    for page in PdfReader(io.BytesIO(pdf)).pages:
+        for font in (page["/Resources"].get("/Font") or {}).values():
+            found.add(str(font.get_object()["/BaseFont"]).split("+")[-1])
+    return found
+
+
+def test_the_shortlist_columns_fit_their_headings_and_widest_values() -> None:
+    """DejaVu Sans is wider than Helvetica; ReportLab does not wrap a plain cell, it lets the
+    text run into the padding and past the border. Default padding is 6 pt a side."""
+    widest = ("200", "Candidate", "Current title", "60", "0.999", "100%", "100%")
+    assert sum(SHORTLIST_WIDTHS_MM) == 178  # A4 less the two 16 mm margins
+    for heading, value, width in zip(SHORTLIST_HEADER, widest, SHORTLIST_WIDTHS_MM, strict=True):
+        room = width * mm - 12
+        assert stringWidth(heading, FONT_BOLD, 8) <= room, heading
+        assert stringWidth(value, FONT, 8) <= room, value
+
+
+def test_both_reports_draw_every_word_in_the_embedded_font() -> None:
+    """Table cells the code fills (ranks, scores, levels) included, not only names."""
+    job = _job()
+    candidate = _candidate()
+    ranked = _ranked(candidate, job, 1, 0.5)
+    shortlist = shortlist_pdf(job, [ranked], total=1, model_version="v", generated_at=GENERATED_AT)
+    scorecard = scorecard_pdf(
+        job, candidate, ranked, total=1, model_version="v", generated_at=GENERATED_AT
+    )
+
+    assert _fonts(shortlist) == {"DejaVuSans", "DejaVuSans-Bold"}
+    assert _fonts(scorecard) == {"DejaVuSans", "DejaVuSans-Bold"}
 
 
 def test_the_scorecard_shows_rank_skills_profile_and_every_feature() -> None:

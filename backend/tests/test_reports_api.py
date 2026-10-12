@@ -388,7 +388,7 @@ def test_names_with_markup_and_letters_outside_the_font_still_make_a_report(
 ) -> None:
     job = make_job(**(corpus.jobs[0].api_payload() | {"title": "R&D <Lead>"}))
     candidate = make_candidate(
-        **(corpus.candidates[0].api_payload() | {"full_name": "Łukasz <b>Šimić"})
+        **(corpus.candidates[0].api_payload() | {"full_name": "Łukasz <b>Šimić 李"})
     )
     _scored(client, job["id"])
 
@@ -396,8 +396,8 @@ def test_names_with_markup_and_letters_outside_the_font_still_make_a_report(
     scorecard = _text(client.get(f"/jobs/{job['id']}/candidates/{candidate['id']}/scorecard.pdf"))
 
     assert "Shortlist: R&D <Lead>" in shortlist
-    assert "?ukasz <b>Šimic" in shortlist
-    assert "Scorecard: ?ukasz <b>Šimic" in scorecard
+    assert "Łukasz <b>Šimić ?" in shortlist
+    assert "Scorecard: Łukasz <b>Šimić ?" in scorecard
 
 
 # --- sample script ---------------------------------------------------------

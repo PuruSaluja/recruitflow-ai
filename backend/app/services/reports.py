@@ -14,14 +14,18 @@ each other silently. That compares the rows' ``updated_at``, stamped by the
 database's clock, with ``scored_at``, stamped by the app's, so on separate
 hosts the two clocks have to agree.
 
-Text is drawn in the PDF's built-in Helvetica, which only covers Windows-1252.
-Characters outside it are drawn without their accents where that leaves a
-character the font has (``"ś"`` as ``"s"``), and as ``"?"`` otherwise
-(``"Ł"``, any CJK). Accents typed as separate combining marks are composed
-onto their letter first. Zero-width spaces, direction marks and control
-characters are left out, except that whitespace controls read as spaces.
-Every field is also escaped, since ReportLab reads ``<`` and ``&`` in a
-paragraph as markup and fails on an unclosed tag.
+Text is drawn in DejaVu Sans, embedded in each PDF (``app/assets/fonts``),
+which has Latin with its accents (Polish, Turkish, Vietnamese...), Greek,
+Cyrillic, Armenian and Georgian. A character neither of its two weights has
+is drawn without its accents where that leaves one they have, and as ``"?"``
+otherwise (Chinese, Japanese, Korean, Devanagari, Thai, emoji). So are Hebrew
+and Arabic: the font has their letters, but ReportLab lays text out left to
+right without joining Arabic letters, so drawing them would misspell the name.
+Accents typed as separate combining marks are composed onto their letter
+first. Zero-width spaces, direction marks and control characters are left
+out, except that whitespace controls read as spaces. Every field is also
+escaped, since ReportLab reads ``<`` and ``&`` in a paragraph as markup and
+fails on an unclosed tag.
 """
 
 from __future__ import annotations
@@ -31,12 +35,15 @@ import unicodedata
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from app.ml.features import FEATURE_NAMES, skill_keys
@@ -47,18 +54,50 @@ from app.schemas.match import MatchFeatures, RankedCandidate
 
 #: Most rows one shortlist report lists.
 MAX_SHORTLIST = 200
+#: The shortlist's columns, and their widths across the page's 178 mm, wide enough
+#: for each heading and for "200" or "100%" in the embedded font at 8 pt.
+SHORTLIST_HEADER = ("#", "Candidate", "Current title", "Years", "Score", "Required", "Preferred")
+SHORTLIST_WIDTHS_MM = (10, 48, 51, 14, 15, 20, 20)
+
+_FONT_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
+FONT = "DejaVuSans"
+FONT_BOLD = "DejaVuSans-Bold"
+
+
+def _register_fonts() -> frozenset[int]:
+    """Register DejaVu Sans with ReportLab; return the code points both weights draw."""
+    regular = TTFont(FONT, str(_FONT_DIR / "DejaVuSans.ttf"))
+    bold = TTFont(FONT_BOLD, str(_FONT_DIR / "DejaVuSans-Bold.ttf"))
+    pdfmetrics.registerFont(regular)
+    pdfmetrics.registerFont(bold)
+    # So that <b> in a paragraph picks the bold face; the reports use no italics.
+    pdfmetrics.registerFontFamily(
+        FONT, normal=FONT, bold=FONT_BOLD, italic=FONT, boldItalic=FONT_BOLD
+    )
+    return frozenset(regular.face.charToGlyph) & frozenset(bold.face.charToGlyph)
+
+
+#: Code points both weights have a glyph for: a name can be drawn in either.
+_GLYPHS = _register_fonts()
+#: Right-to-left letters, which ReportLab would lay out left to right.
+_RIGHT_TO_LEFT = {"R", "AL"}
+#: ReportLab writes a code point past U+FFFF into the PDF's text map as five hex
+#: digits, which readers reject, so it could not be copied or searched: emoji and
+#: the like are treated as missing, though the font has some.
+_LAST_MAPPABLE = 0xFFFF
 
 _STYLES = getSampleStyleSheet()
-_BODY = ParagraphStyle("body", parent=_STYLES["BodyText"], fontSize=9, leading=11)
+_BODY = ParagraphStyle("body", parent=_STYLES["BodyText"], fontName=FONT, fontSize=9, leading=11)
 _SMALL = ParagraphStyle("small", parent=_BODY, fontSize=7.5, leading=9, textColor=colors.grey)
 _CELL = ParagraphStyle("cell", parent=_BODY, fontSize=8, leading=10)
-_TITLE = _STYLES["Title"]
-_HEADING = _STYLES["Heading2"]
+_TITLE = ParagraphStyle("title", parent=_STYLES["Title"], fontName=FONT_BOLD)
+_HEADING = ParagraphStyle("heading", parent=_STYLES["Heading2"], fontName=FONT_BOLD)
 
 _TABLE_STYLE = TableStyle(
     [
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#E8ECF2")),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, 0), (-1, -1), FONT),
+        ("FONTNAME", (0, 0), (-1, 0), FONT_BOLD),
         ("FONTSIZE", (0, 0), (-1, -1), 8),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.HexColor("#C5CCD6")),
@@ -73,7 +112,7 @@ _INVISIBLE = {"Cf", "Mn", "Me"}
 
 
 def drawable(value: object) -> str:
-    """``value`` as text Helvetica can draw, escaped for a ReportLab paragraph."""
+    """``value`` as text the embedded font can draw, escaped for a ReportLab paragraph."""
     out = []
     # Composed first, so a letter typed as "e" plus a combining accent is drawn as
     # the one letter the font has rather than as "e?".
@@ -85,22 +124,22 @@ def drawable(value: object) -> str:
             continue
         if category in _INVISIBLE:
             continue
-        if _encodable(char):
+        if _has_glyph(char):
             out.append(char)
             continue
         folded = "".join(
             c for c in unicodedata.normalize("NFKD", char) if not unicodedata.combining(c)
         )
-        out.append(folded if folded and all(map(_encodable, folded)) else "?")
+        out.append(folded if folded and all(map(_has_glyph, folded)) else "?")
     return escape("".join(out))
 
 
-def _encodable(char: str) -> bool:
-    try:
-        char.encode("cp1252")
-    except UnicodeEncodeError:
-        return False
-    return True
+def _has_glyph(char: str) -> bool:
+    return (
+        ord(char) <= _LAST_MAPPABLE
+        and ord(char) in _GLYPHS
+        and unicodedata.bidirectional(char) not in _RIGHT_TO_LEFT
+    )
 
 
 @dataclass(frozen=True)
@@ -162,6 +201,9 @@ def _render(story: list, title: str) -> bytes:
         bottomMargin=14 * mm,
         title=title,
         author="RecruitFlow AI",
+        # The canvas otherwise selects Helvetica at the top of each page, which puts
+        # an unembedded font in the file even though no text is drawn in it.
+        initialFontName=FONT,
     )
     doc.build(story)
     return buffer.getvalue()
@@ -178,8 +220,7 @@ def shortlist_pdf(
     """The job's ranked shortlist: the best ``rows`` of ``total`` cached, best first."""
     if not rows:
         raise ValueError("a shortlist needs at least one ranked candidate")
-    header = ["#", "Candidate", "Current title", "Years", "Score", "Required", "Preferred"]
-    table = [header]
+    table = [list(SHORTLIST_HEADER)]
     for row in rows:
         features = row.features
         table.append(
@@ -193,8 +234,7 @@ def shortlist_pdf(
                 f"{features.preferred_skill_coverage:.0%}",
             ]
         )
-    widths = [w * mm for w in (9, 48, 55, 13, 15, 19, 19)]
-    grid = Table(table, colWidths=widths, repeatRows=1)
+    grid = Table(table, colWidths=[w * mm for w in SHORTLIST_WIDTHS_MM], repeatRows=1)
     grid.setStyle(_TABLE_STYLE)
 
     oldest = min(row.scored_at for row in rows)
