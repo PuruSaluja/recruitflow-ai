@@ -8,6 +8,8 @@ import { ApiProvider } from "./api/context";
 import { AppRoutes } from "./App";
 import {
   fakeApi,
+  makeApplication,
+  makeCandidate,
   makeJob,
   makeRanked,
   page,
@@ -224,6 +226,58 @@ describe("job detail", () => {
       view.unmount();
     }
     expect(api.fetchImpl.mock.calls.filter(([url]) => String(url).includes("/jobs/"))).toHaveLength(1);
+  });
+});
+
+describe("candidate detail", () => {
+  it("shows the candidate, their resume and their applications with job titles", async () => {
+    const api = fakeApi({
+      ...HEALTH,
+      "GET /candidates/10": () => ({ body: makeCandidate({ phone: "+1 613 555 0100" }) }),
+      "GET /applications": () => ({
+        body: page([
+          makeApplication({ id: 100, job_id: 1, status: "interview" }),
+          makeApplication({ id: 101, job_id: 2, status: "rejected", source: null }),
+        ]),
+      }),
+      "GET /jobs/1": () => ({ body: makeJob() }),
+      "GET /jobs/2": () => ({ status: 404, body: { detail: "Job 2 not found" } }),
+    });
+    renderAt("/candidates/10", api.client);
+
+    expect(await screen.findByRole("heading", { name: "Amara Okafor" })).toBeTruthy();
+    expect(screen.getByText("+1 613 555 0100")).toBeTruthy();
+    expect(screen.getByText("Six years building Python services on PostgreSQL.")).toBeTruthy();
+    expect(screen.getByText("Kubernetes")).toBeTruthy();
+
+    const first = await screen.findByRole("link", { name: "Backend Engineer" });
+    expect(first.getAttribute("href")).toBe("/jobs/1");
+    expect(screen.getByRole("link", { name: "Job 2" }).getAttribute("href")).toBe("/jobs/2");
+    expect(screen.getByText("Interview")).toBeTruthy();
+    expect(screen.getByText("Rejected")).toBeTruthy();
+    expect(api.calls("GET /applications")[0]?.url.search).toBe("?candidate_id=10&limit=200");
+  });
+
+  it("says how many applications are not shown", async () => {
+    const api = fakeApi({
+      ...HEALTH,
+      "GET /candidates/10": () => ({ body: makeCandidate() }),
+      "GET /applications": () => ({ body: page([makeApplication()], 201, 200) }),
+      "GET /jobs/1": () => ({ body: makeJob() }),
+    });
+    renderAt("/candidates/10", api.client);
+
+    expect(await screen.findByText("Showing the latest 1 of 201.")).toBeTruthy();
+  });
+
+  it("says there is no such candidate for a 404", async () => {
+    const api = fakeApi({
+      ...HEALTH,
+      "GET /candidates/9": () => ({ status: 404, body: { detail: "Candidate 9 not found" } }),
+    });
+    renderAt("/candidates/9", api.client);
+
+    expect(await screen.findByRole("heading", { name: "No such candidate" })).toBeTruthy();
   });
 });
 
