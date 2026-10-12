@@ -112,27 +112,28 @@ Coverage counts lines and branches in `backend/app` and in `scripts`, the
 command-line entry points that train, evaluate and audit the matcher and write
 the sample reports. Scripts the tests run as a subprocess are counted only
 where a test also calls them in-process. Measured on 2026-10-11 over the whole
-suite (1,600 tests, every one passing, with the embeddings extra installed so
+suite (1,630 tests, every one passing, with the embeddings extra installed so
 the real models load):
 
 | Area | Lines | Branches | Covered |
 | ---- | ----- | -------- | ------- |
 | `app/ml` (features, training, ranking, retrieval, fairness) | 1,169 of 1,169 | 264 of 264 | 100% |
-| `app/services` (scoring, reports, resumes, embeddings) | 382 of 383 | 85 of 86 | 99.6% |
+| `app/services` (scoring, reports, resumes, embeddings) | 394 of 395 | 85 of 86 | 99.6% |
 | `app/api` (routes, body limit, errors) | 582 of 582 | 125 of 126 | 99.9% |
-| `app/schemas` | 276 of 279 | 15 of 18 | 98.0% |
-| `app/db`, `app/models` and top level | 346 of 346 | 10 of 10 | 100% |
-| `scripts` | 1,048 of 1,066 | 214 of 222 | 98.0% |
-| **Total** | **3,803 of 3,825** | **713 of 726** | **99.2%** |
+| `app/schemas` | 274 of 276 | 15 of 18 | 98.3% |
+| `app/db`, `app/models` and top level | 357 of 357 | 14 of 14 | 100% |
+| `scripts` | 1,069 of 1,099 | 218 of 226 | 97.1% |
+| **Total** | **3,845 of 3,878** | **721 of 734** | **99.0%** |
 
-Of the 22 lines missed, 7 are the calls to `main()` under the scripts'
-`if __name__ == "__main__"`. The rest are conditions the tests do not stage
-(an output file that cannot be written once the run is done, a server that has
-pgvector, a machine without torch), the timing script's loaders of the real
-models, which its tests replace with fakes, and four lines in the schemas and
-the resume decoder. CI's main job prints the same report on every push; it
-leaves the embeddings extra out, so the 21 tests that load the real models skip
-there and it misses 38 lines rather than 22.
+Of the 33 lines missed, 7 are the calls to `main()` under the scripts'
+`if __name__ == "__main__"`, and 18 are six scripts' handling of an output
+that turns unwritable during a run: each checks its output path before it
+starts (`app/cli.py`), and the tests cover that check. The rest are conditions
+the tests do not stage (a server that has pgvector, a machine without torch),
+the timing script's loaders of the real models, which its tests replace with
+fakes, and three lines in the schemas and the resume decoder. CI's main job
+prints the same report on every push; it leaves the embeddings extra out, so
+the 21 tests that load the real models skip there and it misses more lines.
 
 ## API
 
@@ -1071,14 +1072,21 @@ no score for the job, is a 409 naming the scoring endpoint, rather than an
 empty report that reads as if nobody fitted. A missing job or candidate is
 a 404, and a matcher that cannot be loaded is the same 503 scoring gives.
 
-Text is drawn in the PDF's built-in Helvetica, which covers Windows-1252
-only. Other characters are drawn without their accents where that leaves a
-character the font has (`ć` as `c`), and as `?` otherwise (`Ł`, Chinese or
-Cyrillic names). Embedding a Unicode font would lift that. Accents typed as
-separate combining marks are composed onto their letter first, so they are
-drawn when the font has the letter. Zero-width spaces, direction marks and
-control characters are left out, except that whitespace controls such as
-tabs and line breaks read as spaces. Long skill lists run onto further pages.
+Text is drawn in DejaVu Sans 2.37, embedded in each PDF (regular and bold,
+unmodified, with its licence and checksums in
+[`backend/app/assets/fonts`](backend/app/assets/fonts)). It draws Latin with
+its accents (`Łukasz Šimić`, `Nguyễn Văn Đức`), Greek, Cyrillic, Armenian
+and Georgian, and those names read back from the PDF as typed, so they can
+be copied and searched. Characters it lacks are drawn without their accents
+where that leaves one it has, and as `?` otherwise: Chinese, Japanese,
+Korean, Devanagari and Thai names, and emoji (DejaVu has some, but ReportLab
+cannot map characters past U+FFFF for copying). Hebrew and Arabic are drawn
+as `?` too: the font has their letters, but ReportLab lays text out left to
+right and does not join Arabic letters, so drawing them would misspell the
+name. Accents typed as separate combining marks are composed onto their
+letter first. Zero-width spaces, direction marks and control characters are
+left out, except that whitespace controls such as tabs and line breaks read
+as spaces. Long skill lists run onto further pages.
 
 [`docs/samples/shortlist.pdf`](docs/samples/shortlist.pdf) and
 [`docs/samples/scorecard.pdf`](docs/samples/scorecard.pdf) were made by
