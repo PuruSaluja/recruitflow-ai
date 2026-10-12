@@ -7,7 +7,9 @@ from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 from pypdf import PdfReader
+from reportlab.lib.fonts import tt2ps
 from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.pdfmetrics import stringWidth
 
 from app.ml.corpus import CorpusConfig, generate_corpus
@@ -153,10 +155,47 @@ def test_names_in_the_scripts_the_font_has_are_drawn_as_typed(name: str) -> None
 
 
 @pytest.mark.parametrize(
+    ("name", "drawn"),
+    [
+        ("李雷", '<font face="DroidSansFallback">李雷</font>'),  # Chinese, simplified
+        ("陳淑芬", '<font face="DroidSansFallback">陳淑芬</font>'),  # and traditional
+        ("山田さくら", '<font face="DroidSansFallback">山田さくら</font>'),  # Japanese kanji, kana
+        ("김민준", '<font face="NanumSquare">김민준</font>'),  # Korean Hangul
+        ("Anna 王", 'Anna <font face="DroidSansFallback">王</font>'),  # only what DejaVu lacks
+    ],
+)
+def test_chinese_japanese_and_korean_are_drawn_in_the_fallback_faces(name: str, drawn: str) -> None:
+    """Read back from both reports, the scorecard's bold title included, and drawn in the
+    face that has the characters rather than as "?"."""
+    assert drawable(name) == drawn
+    job = _job()
+    candidate = _candidate(full_name=name)
+    ranked = _ranked(candidate, job, 1, 0.5)
+    shortlist = shortlist_pdf(job, [ranked], total=1, model_version="v", generated_at=GENERATED_AT)
+    scorecard = scorecard_pdf(
+        job, candidate, ranked, total=1, model_version="v", generated_at=GENERATED_AT
+    )
+
+    assert name in _text(shortlist)
+    assert f"Scorecard: {name}" in _text(scorecard)
+    face = drawn.split('face="')[1].split('"')[0]
+    regular, bold = (_embedded_name(face), _embedded_name(_bold_of(face)))
+    assert regular in _fonts(shortlist)  # the table cell
+    assert bold in _fonts(scorecard)  # the bold title
+
+
+def _embedded_name(registered: str) -> str:
+    """The name a registered font is embedded under: its own, not the registered one."""
+    return pdfmetrics.getFont(registered).face.name.decode()
+
+
+def _bold_of(family: str) -> str:
+    return tt2ps(family, 1, 0)
+
+
+@pytest.mark.parametrize(
     ("value", "drawn"),
     [
-        ("李雷", "??"),  # Chinese: not in the font
-        ("김민준", "???"),  # Korean
         ("राम", "???"),  # Devanagari
         ("יעל", "???"),  # Hebrew: in the font, but would be laid out left to right
         ("محمد", "????"),  # Arabic: also unjoined

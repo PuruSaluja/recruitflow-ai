@@ -31,6 +31,7 @@ fails on an unclosed tag.
 from __future__ import annotations
 
 import io
+import itertools
 import unicodedata
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
@@ -64,28 +65,49 @@ FONT = "DejaVuSans"
 FONT_BOLD = "DejaVuSans-Bold"
 
 
-def _register_fonts() -> frozenset[int]:
-    """Register DejaVu Sans with ReportLab; return the code points both weights draw."""
-    regular = TTFont(FONT, str(_FONT_DIR / "DejaVuSans.ttf"))
-    bold = TTFont(FONT_BOLD, str(_FONT_DIR / "DejaVuSans-Bold.ttf"))
+@dataclass(frozen=True)
+class _Face:
+    """A registered font family and the code points every one of its weights draws."""
+
+    family: str
+    bold: str
+    glyphs: frozenset[int]
+
+
+def _register(family: str, regular_file: str, bold_file: str | None = None) -> _Face:
+    """Register ``family`` and its bold face with ReportLab.
+
+    A family with one weight draws bold text in that weight. The reports use no italics.
+    """
+    regular = TTFont(family, str(_FONT_DIR / regular_file))
     pdfmetrics.registerFont(regular)
-    pdfmetrics.registerFont(bold)
-    # So that <b> in a paragraph picks the bold face; the reports use no italics.
+    glyphs = frozenset(regular.face.charToGlyph)
+    bold_name = family
+    if bold_file is not None:
+        bold_name = f"{family}-Bold"
+        bold = TTFont(bold_name, str(_FONT_DIR / bold_file))
+        pdfmetrics.registerFont(bold)
+        glyphs &= frozenset(bold.face.charToGlyph)
     pdfmetrics.registerFontFamily(
-        FONT, normal=FONT, bold=FONT_BOLD, italic=FONT, boldItalic=FONT_BOLD
+        family, normal=family, bold=bold_name, italic=family, boldItalic=bold_name
     )
-    return frozenset(regular.face.charToGlyph) & frozenset(bold.face.charToGlyph)
+    return _Face(family, bold_name, glyphs)
 
 
-#: Code points both weights have a glyph for: a name can be drawn in either.
-_GLYPHS = _register_fonts()
+#: Tried in order for each character; the first that has it draws it. DejaVu Sans
+#: draws the reports' own text, Droid Sans Fallback Chinese characters and Japanese
+#: kana, Nanum Square Korean Hangul.
+_FACES = (
+    _register(FONT, "DejaVuSans.ttf", "DejaVuSans-Bold.ttf"),
+    _register("DroidSansFallback", "DroidSansFallbackFull.ttf"),
+    _register("NanumSquare", "NanumSquareR.ttf", "NanumSquareB.ttf"),
+)
 #: Right-to-left letters, which ReportLab would lay out left to right.
 _RIGHT_TO_LEFT = {"R", "AL"}
 #: ReportLab writes a code point past U+FFFF into the PDF's text map as five hex
 #: digits, which readers reject, so it could not be copied or searched: emoji and
 #: the like are treated as missing, though the font has some.
 _LAST_MAPPABLE = 0xFFFF
-
 _STYLES = getSampleStyleSheet()
 _BODY = ParagraphStyle("body", parent=_STYLES["BodyText"], fontName=FONT, fontSize=9, leading=11)
 _SMALL = ParagraphStyle("small", parent=_BODY, fontSize=7.5, leading=9, textColor=colors.grey)
@@ -111,35 +133,53 @@ _TABLE_STYLE = TableStyle(
 _INVISIBLE = {"Cf", "Mn", "Me"}
 
 
-def drawable(value: object) -> str:
-    """``value`` as text the embedded font can draw, escaped for a ReportLab paragraph."""
-    out = []
+def drawable(value: object, *, bold: bool = False) -> str:
+    """``value`` as text the embedded fonts can draw, escaped for a ReportLab paragraph.
+
+    Characters the first face lacks are wrapped in ``<font face=...>`` for the face
+    that has them. That tag sets the weight too, overriding ``<b>`` and a bold style,
+    so text drawn in bold has to say so with ``bold``.
+    """
+    runs: list[tuple[_Face, str]] = []
     # Composed first, so a letter typed as "e" plus a combining accent is drawn as
     # the one letter the font has rather than as "e?".
     for char in unicodedata.normalize("NFC", str(value)):
         category = unicodedata.category(char)
         if category == "Cc":  # controls: whitespace reads as a space, the rest draw a box
             if char.isspace():
-                out.append(" ")
+                runs.append((_FACES[0], " "))
             continue
         if category in _INVISIBLE:
             continue
-        if _has_glyph(char):
-            out.append(char)
+        face = _face_for(char)
+        if face is not None:
+            runs.append((face, char))
             continue
         folded = "".join(
             c for c in unicodedata.normalize("NFKD", char) if not unicodedata.combining(c)
         )
-        out.append(folded if folded and all(map(_has_glyph, folded)) else "?")
-    return escape("".join(out))
+        faces = [_face_for(c) for c in folded]
+        if folded and None not in faces:
+            runs.extend(zip(faces, folded, strict=True))
+        else:
+            runs.append((_FACES[0], "?"))
+    out = []
+    for face, group in itertools.groupby(runs, key=lambda run: run[0]):
+        text = escape("".join(char for _, char in group))
+        if face is not _FACES[0]:
+            text = f'<font face="{face.bold if bold else face.family}">{text}</font>'
+        out.append(text)
+    return "".join(out)
 
 
-def _has_glyph(char: str) -> bool:
-    return (
-        ord(char) <= _LAST_MAPPABLE
-        and ord(char) in _GLYPHS
-        and unicodedata.bidirectional(char) not in _RIGHT_TO_LEFT
-    )
+def _face_for(char: str) -> _Face | None:
+    """The first face that can draw ``char``, or ``None``."""
+    if ord(char) > _LAST_MAPPABLE or unicodedata.bidirectional(char) in _RIGHT_TO_LEFT:
+        return None
+    for face in _FACES:
+        if ord(char) in face.glyphs:
+            return face
+    return None
 
 
 @dataclass(frozen=True)
@@ -239,7 +279,7 @@ def shortlist_pdf(
 
     oldest = min(row.scored_at for row in rows)
     story = [
-        _para(f"Shortlist: {drawable(job.title)}", _TITLE),
+        _para(f"Shortlist: {drawable(job.title, bold=True)}", _TITLE),
         _para(f"Job {job.id} · {_job_line(job)}"),
         _para(
             f"The top {len(rows)} of {total} candidates scored for this job, best first. "
@@ -314,7 +354,7 @@ def scorecard_pdf(
     features.setStyle(_TABLE_STYLE)
 
     story = [
-        _para(f"Scorecard: {drawable(candidate.full_name)}", _TITLE),
+        _para(f"Scorecard: {drawable(candidate.full_name, bold=True)}", _TITLE),
         _para(
             f"For job {job.id}, {drawable(job.title)} ({_job_line(job)}). "
             f"Candidate {candidate.id}"
