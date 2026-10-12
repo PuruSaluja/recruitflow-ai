@@ -447,6 +447,40 @@ def test_the_spread_holds_the_main_run_first_and_matches_its_sections(results: d
     assert first["matcher"]["ndcg_at_10_minus_unmitigated"]["95ci"] == served["95ci"]
 
 
+def test_aggregating_runs_counts_only_the_figures_each_run_could_measure() -> None:
+    """A ratio is undefined in a run whose reference group nobody selected; the spread
+    then says no run measured it rather than averaging the gap away."""
+
+    def run(ratio: float | None, eod: float, low: float, high: float) -> dict:
+        return {
+            "rows": {
+                "matcher": {
+                    "top_5:woman": {"ratio": ratio, "eod": eod, "eod_low": low, "eod_high": high},
+                    "ndcg": {"mean": eod, "95ci": [low, high]},
+                    "pairs": 10,
+                }
+            }
+        }
+
+    totals = script.aggregate([run(None, -0.1, -0.2, -0.05), run(None, 0.1, 0.02, 0.2)])
+
+    cell = totals["matcher"]["top_5:woman"]
+    assert cell["ratio"] == {"runs": 0, "mean": None, "min": None, "max": None}
+    assert cell["eod"] == {"runs": 2, "mean": pytest.approx(0.0), "min": -0.1, "max": 0.1}
+    assert (cell["eod_interval_below_zero"], cell["eod_interval_above_zero"]) == (1, 1)
+    ndcg = totals["matcher"]["ndcg"]
+    assert (ndcg["runs"], ndcg["interval_below_zero"], ndcg["interval_above_zero"]) == (2, 1, 1)
+    assert totals["matcher"]["pairs"] == {"runs": 2, "mean": 10.0, "min": 10.0, "max": 10.0}
+
+    one_measured = script.aggregate([run(None, 0.0, -0.1, 0.1), run(0.8, 0.0, -0.1, 0.1)])
+    assert one_measured["matcher"]["top_5:woman"]["ratio"] == {
+        "runs": 1,
+        "mean": 0.8,
+        "min": 0.8,
+        "max": 0.8,
+    }
+
+
 def test_the_spread_follows_every_group_but_the_references(results: dict) -> None:
     first = results["spread"]["runs"][0]["rows"]
     served = results["scorers"]["matcher"]["at_k"]

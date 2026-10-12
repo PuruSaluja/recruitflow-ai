@@ -381,6 +381,31 @@ def test_agreement_on_three_hand_made_slates() -> None:
     assert agreement["hybrid_rrf_pairs_in_ties"] == 2
 
 
+def test_a_slate_with_nobody_relevant_is_left_out_of_the_ndcg_comparison() -> None:
+    """NDCG is undefined with nobody relevant to find, so the slate is in neither count."""
+    refs = ("J1",) * 3 + ("J3",) * 3
+    data = TrainingData(
+        pairs=tuple((None, None) for _ in refs),
+        advanced=np.zeros(6, dtype=bool),
+        relevance=np.array([2, 0, 0, 0, 0, 0]),
+        job_refs=refs,
+    )
+    scores = {
+        "bm25": np.array([3.0, 2.0, 1.0, 1.0, 2.0, 3.0]),
+        "dense": np.array([0.9, 0.1, 0.5, 0.5, 0.1, 0.9]),
+    }
+    scores["hybrid_rrf"] = fuse_per_group(refs, scores["bm25"], scores["dense"])
+    results = {name: evaluate_scores(data, s) for name, s in scores.items()}
+    assert [slate.ndcg is None for slate in results["dense"].slates] == [False, True]
+
+    agreement = script._agreement(data, scores, results)
+
+    assert agreement["ndcg_at_10_bm25_at_least_dense"]["jobs"] == 1
+    assert agreement["ndcg_at_10_bm25_below_dense"]["jobs"] == 0
+    # Still correlated: the rankings exist whether or not anyone is relevant.
+    assert agreement["slates_without_a_correlation"] == 0
+
+
 # --- the first stage of a two-stage ranking --------------------------------
 
 

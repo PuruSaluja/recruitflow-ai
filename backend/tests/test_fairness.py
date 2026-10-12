@@ -126,6 +126,24 @@ def test_selected_must_be_shares_between_zero_and_one() -> None:
         group_rates([1.5], ["a"], [1])
 
 
+@pytest.mark.parametrize(
+    ("selected", "groups", "relevance"),
+    [
+        ([1.0, 0.0], ["a"], [1, 0]),
+        ([1.0, 0.0], ["a", "b"], [1]),
+        ([[1.0], [0.0]], [["a"], ["b"]], [[1], [0]]),
+    ],
+    ids=["groups-short", "relevance-short", "nested"],
+)
+def test_sequences_of_different_lengths_or_nested_ones_are_refused(
+    selected: list, groups: list, relevance: list
+) -> None:
+    with pytest.raises(ValueError, match="flat sequences of one length"):
+        group_rates(selected, groups, relevance)
+    with pytest.raises(ValueError, match="flat sequences of one length"):
+        audit_selection(["J1"] * len(selected), selected, groups, relevance, reference="a")
+
+
 def test_an_empty_audit_is_refused() -> None:
     with pytest.raises(ValueError, match="no pairs"):
         group_rates([], [], [])
