@@ -2536,3 +2536,34 @@ def test_a_listing_page_and_its_total_are_read_in_one_statement(
     assert len(statements) == 1
     assert body["total"] == 3
     assert len(body["items"]) == max(0, min(2, 3 - offset))
+
+
+@pytest.mark.parametrize(("path", "table", "seed"), LISTINGS, ids=[p for p, _, _ in LISTINGS])
+def test_the_page_is_ordered_again_after_it_is_joined_to_its_total(
+    client: TestClient,
+    make_job: Factory,
+    make_candidate: Factory,
+    make_application: Factory,
+    path: str,
+    table: str,
+    seed,
+) -> None:
+    """The order inside the page's subquery does not carry through the join: SQL leaves
+    the joined rows unordered, so the statement has to order them again. PostgreSQL
+    happens to keep the subquery's order with this plan, which no answer would show."""
+    seed(make_job, make_candidate, make_application)
+    statements: list[str] = []
+
+    def record(conn, cursor, statement, parameters, context, executemany) -> None:
+        if f"FROM {table}" in statement:
+            statements.append(statement)
+
+    event.listen(Engine, "before_cursor_execute", record)
+    try:
+        assert client.get(path).status_code == 200
+    finally:
+        event.remove(Engine, "before_cursor_execute", record)
+
+    (statement,) = statements
+    after_the_join = statement.rsplit("ON true", 1)[1]
+    assert after_the_join.strip().startswith("ORDER BY")
