@@ -303,6 +303,20 @@ def test_bytes_no_accepted_encoding_can_decode_are_rejected_naming_all_three() -
         extract_text("resume.txt", data)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [b"\xef\xbb\xbf", b"\xff\xfe", b"\xfe\xff", b"\xef\xbb\xbf  \r\n\t"],
+    ids=["utf8-bom", "utf16-le-bom", "utf16-be-bom", "bom-and-whitespace"],
+)
+def test_a_file_holding_only_a_byte_order_mark_has_no_text_rather_than_binary(
+    data: bytes,
+) -> None:
+    """Notepad saves an empty file as just a byte-order mark. It holds no text, as a file of
+    spaces does, and is refused the same way rather than as something that is not text."""
+    with pytest.raises(ResumeIngestError, match=r"No usable text could be extracted \(0 char"):
+        extract_text("resume.txt", data)
+
+
 def test_upload_exactly_at_the_size_limit_is_accepted() -> None:
     # Padded with trailing spaces, which normalising strips, so the file sits
     # on the byte limit while its text sits on the character limit.

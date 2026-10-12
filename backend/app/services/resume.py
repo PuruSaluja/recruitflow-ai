@@ -184,7 +184,9 @@ def _decode(data: bytes) -> str:
             text = data.decode(encoding)
         except UnicodeDecodeError:
             continue
-        if _looks_like_text(text):
+        # A file that is only a byte-order mark decodes to nothing: no text, as a
+        # file of spaces holds none, which the length check after normalising says.
+        if not text or _looks_like_text(text):
             return text
         raise ResumeIngestError(
             "The file does not look like text -- upload a PDF or a plain-text resume"
