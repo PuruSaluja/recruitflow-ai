@@ -9,6 +9,7 @@ import { AppRoutes } from "./App";
 import {
   fakeApi,
   makeJob,
+  makeRanked,
   page,
 } from "./test/fakeApi";
 
@@ -107,6 +108,122 @@ describe("job list", () => {
     renderAt("/", api.client);
 
     expect(await screen.findByRole("heading", { name: "Jobs" })).toBeTruthy();
+  });
+});
+
+describe("job detail", () => {
+  const MODEL = "3f9a1c2b7d4e5f60718293a4b5c6d7e8";
+  const ranking = [
+    makeRanked(1, { id: 10, full_name: "Amara Okafor" }, 0.874),
+    makeRanked(2, { id: 11, full_name: "Wei Chen", current_title: null }, 0.412, 1),
+  ];
+
+  it("shows the job and its ranked candidates, best first", async () => {
+    const api = fakeApi({
+      ...HEALTH,
+      "GET /jobs/1": () => ({
+        body: makeJob({ requirement_notes: ["Senior roles usually ask for 5+ years."] }),
+      }),
+      "GET /jobs/1/matches": () => ({ body: { ...page(ranking, 2, 25), job_id: 1, model_version: MODEL } }),
+    });
+    renderAt("/jobs/1", api.client);
+
+    expect(await screen.findByRole("heading", { name: "Backend Engineer" })).toBeTruthy();
+    expect(screen.getByRole("note").textContent).toContain("Senior roles usually ask for 5+ years.");
+    expect(screen.getByText("120,000 – 150,000")).toBeTruthy();
+    expect(screen.getByText("5 years")).toBeTruthy();
+
+    const table = await screen.findByRole("table");
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows.map((row) => within(row).getAllByRole("cell")[0]?.textContent)).toEqual(["1", "2"]);
+    expect(within(rows[0]!).getByRole("link", { name: "Amara Okafor" }).getAttribute("href")).toBe(
+      "/candidates/10",
+    );
+    expect(rows[0]!.textContent).toContain("87%");
+    expect(rows[1]!.textContent).toContain("41%");
+    // Required skills held: 50% for the first, all of them for the second.
+    expect(within(rows[0]!).getAllByRole("cell")[3]?.textContent).toBe("50%");
+    expect(within(rows[1]!).getAllByRole("cell")[3]?.textContent).toBe("100%");
+    expect(within(rows[1]!).getByRole("link", { name: "PDF" }).getAttribute("href")).toBe(
+      "/api/v1/jobs/1/candidates/11/scorecard.pdf",
+    );
+    expect(screen.getByRole("link", { name: "Shortlist PDF" }).getAttribute("href")).toBe(
+      "/api/v1/jobs/1/report.pdf",
+    );
+    expect(screen.getByText(/Matcher 3f9a1c2b7d4e\./)).toBeTruthy();
+    expect(api.calls("GET /jobs/1/matches")[0]?.url.search).toBe("?limit=25&offset=0");
+  });
+
+  it("scores the pool when asked and then lists the new ranking", async () => {
+    let scored = false;
+    const api = fakeApi({
+      ...HEALTH,
+      "GET /jobs/1": () => ({ body: makeJob() }),
+      "GET /jobs/1/matches": () => ({
+        body: { ...page(scored ? ranking : [], scored ? 2 : 0, 25), job_id: 1, model_version: MODEL },
+      }),
+      "POST /jobs/1/score": () => {
+        scored = true;
+        return {
+          body: { job_id: 1, model_version: MODEL, scored_count: 2, elapsed_ms: 41.3, results: ranking.slice(0, 1) },
+        };
+      },
+    });
+    renderAt("/jobs/1", api.client);
+
+    expect(await screen.findByText(/No candidate has been scored/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Score all candidates" }));
+
+    expect(await screen.findByRole("link", { name: "Wei Chen" })).toBeTruthy();
+    expect(screen.getByText("Scored 2 candidates in 41 ms.")).toBeTruthy();
+    expect(api.calls("POST /jobs/1/score")[0]?.init?.body).toBe('{"limit":1}');
+  });
+
+  it("keeps the job on screen when the matcher cannot be loaded", async () => {
+    const api = fakeApi({
+      ...HEALTH,
+      "GET /jobs/1": () => ({ body: makeJob() }),
+      "GET /jobs/1/matches": () => ({
+        status: 503,
+        body: { detail: "The trained matcher is missing or cannot be loaded.", code: "matcher_unavailable" },
+      }),
+    });
+    renderAt("/jobs/1", api.client);
+
+    expect(await screen.findByRole("heading", { name: "Backend Engineer" })).toBeTruthy();
+    expect((await screen.findByRole("alert")).textContent).toContain("trained matcher is missing");
+  });
+
+  it("shows a scoring failure beside the button", async () => {
+    const api = fakeApi({
+      ...HEALTH,
+      "GET /jobs/1": () => ({ body: makeJob() }),
+      "GET /jobs/1/matches": () => ({ body: { ...page([], 0, 25), job_id: 1, model_version: MODEL } }),
+      "POST /jobs/1/score": () => ({ status: 409, body: { detail: "Scoring job 1 collided. Retry the request." } }),
+    });
+    renderAt("/jobs/1", api.client);
+    await screen.findByText(/No candidate has been scored/);
+
+    await userEvent.click(screen.getByRole("button", { name: "Score all candidates" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("collided");
+    expect((screen.getByRole("button", { name: "Score all candidates" }) as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+  });
+
+  it("says there is no such job for a 404 and for an id the API could not hold", async () => {
+    const api = fakeApi({ ...HEALTH, "GET /jobs/7": () => ({ status: 404, body: { detail: "Job 7 not found" } }) });
+    const { unmount } = renderAt("/jobs/7", api.client);
+    expect(await screen.findByRole("heading", { name: "No such job" })).toBeTruthy();
+    unmount();
+
+    for (const bad of ["abc", "0", "2147483648", "1.5"]) {
+      const view = renderAt(`/jobs/${bad}`, api.client);
+      expect(await screen.findByRole("heading", { name: "No such job" })).toBeTruthy();
+      view.unmount();
+    }
+    expect(api.fetchImpl.mock.calls.filter(([url]) => String(url).includes("/jobs/"))).toHaveLength(1);
   });
 });
 

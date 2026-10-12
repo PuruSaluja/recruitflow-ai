@@ -2,6 +2,7 @@ import { NavLink, Navigate, Route, Routes } from "react-router";
 
 import type { Health } from "./api/client";
 import { useLoad } from "./api/context";
+import { JobDetailPage } from "./pages/JobDetailPage";
 import { JobsPage } from "./pages/JobsPage";
 import { NotFound } from "./pages/NotFound";
 
@@ -33,6 +34,7 @@ export function AppRoutes() {
         <Routes>
           <Route path="/" element={<Navigate to="/jobs" replace />} />
           <Route path="/jobs" element={<JobsPage />} />
+          <Route path="/jobs/:jobId" element={<JobDetailPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
