@@ -6,11 +6,12 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from app.models.enums import EducationLevel, EmploymentType, JobStatus, SeniorityLevel
 from app.schemas.candidate import MAX_SKILL_CHARS
 from app.schemas.common import reject_null_fields
+from app.services.requirements import experience_requirement_note
 
 #: The longest job description accepted: as long as a normal job description
 #: would or should be. A typical one runs to a few
@@ -125,3 +126,10 @@ class JobRead(JobBase):
     status: JobStatus
     created_at: datetime
     updated_at: datetime
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def requirement_notes(self) -> list[str]:
+        """Things about the job's requirements a recruiter should check; empty when none."""
+        note = experience_requirement_note(self.seniority, self.min_years_experience)
+        return [note] if note else []
