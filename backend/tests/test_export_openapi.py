@@ -72,3 +72,31 @@ def test_a_one_character_change_counts_as_stale(tmp_path: Path) -> None:
     out.write_text(export_openapi.render_schema().replace("Fetch", "Fetsh", 1), encoding="utf-8")
 
     assert export_openapi.main(["--out", str(out), "--check"]) == 1
+
+
+def test_validation_patterns_are_left_out_and_a_property_named_pattern_is_kept() -> None:
+    """Patterns differ between pydantic versions; the client's types never use them."""
+    schema = {
+        "Job": {
+            "properties": {
+                "salary_min": {"type": "string", "pattern": "^[0-9]+$"},
+                "pattern": {"type": "string", "pattern": "^x$"},
+            },
+            "anyOf": [{"type": "string", "pattern": "^y$"}, {"type": "null"}],
+        }
+    }
+
+    assert export_openapi.without_patterns(schema) == {
+        "Job": {
+            "properties": {
+                "salary_min": {"type": "string"},
+                "pattern": {"type": "string"},
+            },
+            "anyOf": [{"type": "string"}, {"type": "null"}],
+        }
+    }
+
+
+def test_the_committed_schema_holds_no_patterns() -> None:
+    """Pydantic 2.13 gives a decimal field a pattern that 2.14 leaves out."""
+    assert '"pattern":' not in export_openapi.DEFAULT_OUT.read_text(encoding="utf-8")

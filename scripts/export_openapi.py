@@ -17,6 +17,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 from app.config import REPO_ROOT
 from app.main import create_app
@@ -24,9 +25,30 @@ from app.main import create_app
 DEFAULT_OUT = REPO_ROOT / "frontend" / "openapi.json"
 
 
+def without_patterns(node: Any) -> Any:
+    """The schema with every validation ``pattern`` left out.
+
+    The client's types do not use them, and they vary with the pydantic
+    version: 2.13 describes a decimal field's digits with a regular
+    expression and 2.14 does not, so keeping them made the committed file
+    match one installed version only. A property *named* ``pattern`` is kept:
+    its value is a schema, not a string.
+    """
+    if isinstance(node, dict):
+        return {
+            key: without_patterns(value)
+            for key, value in node.items()
+            if not (key == "pattern" and isinstance(value, str))
+        }
+    if isinstance(node, list):
+        return [without_patterns(item) for item in node]
+    return node
+
+
 def render_schema() -> str:
     """The schema as the committed file holds it: indented, ASCII, one trailing newline."""
-    return json.dumps(create_app().openapi(), indent=2, ensure_ascii=True) + "\n"
+    schema = without_patterns(create_app().openapi())
+    return json.dumps(schema, indent=2, ensure_ascii=True) + "\n"
 
 
 def build_parser() -> argparse.ArgumentParser:
