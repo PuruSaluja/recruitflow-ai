@@ -1,45 +1,40 @@
-import { useEffect, useState } from "react";
+import { NavLink, Navigate, Route, Routes } from "react-router";
 
-import { api, ApiError, type Health } from "./api/client";
-
-type Status = { state: "loading" } | { state: "ok"; health: Health } | { state: "error"; message: string };
+import type { Health } from "./api/client";
+import { useLoad } from "./api/context";
+import { JobsPage } from "./pages/JobsPage";
+import { NotFound } from "./pages/NotFound";
 
 function ApiStatus() {
-  const [status, setStatus] = useState<Status>({ state: "loading" });
+  const [health] = useLoad<Health>("health", (api, signal) => api.health({ signal }));
 
-  useEffect(() => {
-    const controller = new AbortController();
-    api
-      .health({ signal: controller.signal })
-      .then((health) => setStatus({ state: "ok", health }))
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        setStatus({
-          state: "error",
-          message: error instanceof ApiError ? error.message : "Unexpected error",
-        });
-      });
-    return () => controller.abort();
-  }, []);
-
-  if (status.state === "loading") return <span className="muted">Checking the API…</span>;
-  if (status.state === "error") return <span className="error">API: {status.message}</span>;
+  if (health.state === "loading") return <span className="muted">Checking the API…</span>;
+  if (health.state === "error") return <span className="error">API: {health.error.message}</span>;
   return (
     <span className="muted">
-      API {status.health.version}, database {status.health.database}
+      API {health.data.version}, database {health.data.database}
     </span>
   );
 }
 
-export function App() {
+/** The pages by address; main.tsx puts them in a browser router, tests in a memory one. */
+export function AppRoutes() {
   return (
     <div className="shell">
       <header className="topbar">
         <span className="brand">RecruitFlow AI</span>
+        <nav aria-label="Main">
+          <NavLink to="/jobs">Jobs</NavLink>
+        </nav>
+        <span className="spacer" />
         <ApiStatus />
       </header>
       <main className="content">
-        <p>Jobs, candidates and ranked shortlists.</p>
+        <Routes>
+          <Route path="/" element={<Navigate to="/jobs" replace />} />
+          <Route path="/jobs" element={<JobsPage />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
       </main>
     </div>
   );
