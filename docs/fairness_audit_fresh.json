@@ -151,6 +151,39 @@
       }
     }
   },
+  "experience": {
+    "40_and_over": {
+      "qualified_pairs": 212,
+      "short_of_minimum_share": 0.0,
+      "mean_years_past_minimum": 7.40566037735849
+    },
+    "under_40": {
+      "qualified_pairs": 1487,
+      "short_of_minimum_share": 0.09078681909885676,
+      "mean_years_past_minimum": 2.8431952662721893
+    }
+  },
+  "matcher_price_of_years": {
+    "pairs": 3000,
+    "matcher": {
+      "-5": -0.723844530309355,
+      "-3": -0.46085874966073426,
+      "-1": -0.1893780777403039,
+      "1": 0.004789441097609649,
+      "3": 0.13641505668830142,
+      "5": 0.19599593556600234,
+      "10": 0.20980380760997544
+    },
+    "ground_truth": {
+      "-5": -2.0,
+      "-3": -1.2,
+      "-1": -0.4,
+      "1": -0.0,
+      "3": -0.0,
+      "5": -0.0,
+      "10": -0.0
+    }
+  },
   "scorers": {
     "matcher": {
       "ndcg_at_10": 0.8024659773642925,
@@ -371,6 +404,104 @@
                   "selection_rate": 0.19650411934981074,
                   "qualified": 1487,
                   "true_positive_rate": 0.7686617350369872
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "at_k_meeting_minimum": {
+        "5": {
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 0.950997531879885,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1001,
+                  "selected": 126.0,
+                  "selection_rate": 0.1258741258741259,
+                  "qualified": 212,
+                  "true_positive_rate": 0.5047169811320755
+                },
+                "disparate_impact": {
+                  "value": 0.950997531879885,
+                  "low": 0.7907150576242266,
+                  "high": 1.1248127223787854
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.018770235569945337,
+                  "low": -0.05530406115735438,
+                  "high": 0.09182459412886816
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 6165,
+                  "selected": 816.0,
+                  "selection_rate": 0.13236009732360096,
+                  "qualified": 1352,
+                  "true_positive_rate": 0.4859467455621302
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        },
+        "10": {
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 0.9218394508717089,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1001,
+                  "selected": 232.0,
+                  "selection_rate": 0.23176823176823177,
+                  "qualified": 212,
+                  "true_positive_rate": 0.8018867924528302
+                },
+                "disparate_impact": {
+                  "value": 0.9218394508717089,
+                  "low": 0.7879276926768916,
+                  "high": 1.0540675148027108
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.019342413754605325,
+                  "low": -0.04708374218499576,
+                  "high": 0.0826768951308675
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 6165,
+                  "selected": 1550.0,
+                  "selection_rate": 0.25141930251419303,
+                  "qualified": 1352,
+                  "true_positive_rate": 0.7825443786982249
                 },
                 "disparate_impact": {
                   "value": 1.0,
@@ -634,6 +765,104 @@
             }
           }
         }
+      },
+      "at_k_meeting_minimum": {
+        "5": {
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 0.9872371771262028,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1001,
+                  "selected": 130.0,
+                  "selection_rate": 0.12987012987012986,
+                  "qualified": 212,
+                  "true_positive_rate": 0.5141509433962265
+                },
+                "disparate_impact": {
+                  "value": 0.9872371771262028,
+                  "low": 0.8198752203074465,
+                  "high": 1.158408357482159
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.0311627777157531,
+                  "low": -0.04031609318194572,
+                  "high": 0.10248288994724931
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 6165,
+                  "selected": 811.0,
+                  "selection_rate": 0.13154906731549068,
+                  "qualified": 1352,
+                  "true_positive_rate": 0.48298816568047337
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        },
+        "10": {
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 0.8974197949052881,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1001,
+                  "selected": 226.0,
+                  "selection_rate": 0.22577422577422576,
+                  "qualified": 212,
+                  "true_positive_rate": 0.7924528301886793
+                },
+                "disparate_impact": {
+                  "value": 0.8974197949052881,
+                  "low": 0.772036494488078,
+                  "high": 1.0223262781186908
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.01804454616501061,
+                  "low": -0.04485719172353683,
+                  "high": 0.08049822687870248
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 6165,
+                  "selected": 1551.0,
+                  "selection_rate": 0.25158150851581507,
+                  "qualified": 1352,
+                  "true_positive_rate": 0.7744082840236687
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        }
       }
     },
     "fitted_on_relevance": {
@@ -871,6 +1100,104 @@
             }
           }
         }
+      },
+      "at_k_meeting_minimum": {
+        "5": {
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 0.9135123249955786,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1001,
+                  "selected": 124.0,
+                  "selection_rate": 0.12387612387612387,
+                  "qualified": 212,
+                  "true_positive_rate": 0.5094339622641509
+                },
+                "disparate_impact": {
+                  "value": 0.9135123249955786,
+                  "low": 0.7391663554142104,
+                  "high": 1.0954070141948105
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.0009210673216478726,
+                  "low": -0.07390972248570418,
+                  "high": 0.06945252563280177
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 6165,
+                  "selected": 836.0,
+                  "selection_rate": 0.13560421735604217,
+                  "qualified": 1352,
+                  "true_positive_rate": 0.5103550295857988
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        },
+        "10": {
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 0.9165398735759882,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1001,
+                  "selected": 239.0,
+                  "selection_rate": 0.23876123876123875,
+                  "qualified": 212,
+                  "true_positive_rate": 0.8301886792452831
+                },
+                "disparate_impact": {
+                  "value": 0.9165398735759882,
+                  "low": 0.7900345791321816,
+                  "high": 1.0412270406583388
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.016579211789661707,
+                  "low": -0.04244042970594003,
+                  "high": 0.07247880701995782
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 6165,
+                  "selected": 1606.0,
+                  "selection_rate": 0.2605028386050284,
+                  "qualified": 1352,
+                  "true_positive_rate": 0.8136094674556213
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        }
       }
     },
     "trained_without_historical_bias": {
@@ -1092,6 +1419,104 @@
                   "selection_rate": 0.1957247828991316,
                   "qualified": 1487,
                   "true_positive_rate": 0.769334229993275
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "at_k_meeting_minimum": {
+        "5": {
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 1.0213919743622712,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1001,
+                  "selected": 134.0,
+                  "selection_rate": 0.13386613386613386,
+                  "qualified": 212,
+                  "true_positive_rate": 0.5377358490566038
+                },
+                "disparate_impact": {
+                  "value": 1.0213919743622712,
+                  "low": 0.8563776288249226,
+                  "high": 1.1849733835212257
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.04957016858323099,
+                  "low": -0.020638859476128556,
+                  "high": 0.1210528058783799
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 6165,
+                  "selected": 808.0,
+                  "selection_rate": 0.1310624493106245,
+                  "qualified": 1352,
+                  "true_positive_rate": 0.4881656804733728
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        },
+        "10": {
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 0.9472091614948757,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1001,
+                  "selected": 239.0,
+                  "selection_rate": 0.23876123876123875,
+                  "qualified": 212,
+                  "true_positive_rate": 0.8160377358490566
+                },
+                "disparate_impact": {
+                  "value": 0.9472091614948757,
+                  "low": 0.8198788856546795,
+                  "high": 1.079109453172875
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.03201406721000333,
+                  "low": -0.03018436102226331,
+                  "high": 0.09099708758840415
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 6165,
+                  "selected": 1554.0,
+                  "selection_rate": 0.2520681265206813,
+                  "qualified": 1352,
+                  "true_positive_rate": 0.7840236686390533
                 },
                 "disparate_impact": {
                   "value": 1.0,
@@ -1512,6 +1937,104 @@
           }
         }
       },
+      "at_k_meeting_minimum": {
+        "5": {
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 0.9772330990043165,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1001,
+                  "selected": 129.0,
+                  "selection_rate": 0.12887112887112886,
+                  "qualified": 212,
+                  "true_positive_rate": 0.5094339622641509
+                },
+                "disparate_impact": {
+                  "value": 0.9772330990043165,
+                  "low": 0.8124125135683609,
+                  "high": 1.147701357361937
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.02718544155409175,
+                  "low": -0.04616953012888997,
+                  "high": 0.09993136191234224
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 6165,
+                  "selected": 813.0,
+                  "selection_rate": 0.1318734793187348,
+                  "qualified": 1352,
+                  "true_positive_rate": 0.4822485207100592
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        },
+        "10": {
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 0.9059456672359898,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1001,
+                  "selected": 228.0,
+                  "selection_rate": 0.22777222777222778,
+                  "qualified": 212,
+                  "true_positive_rate": 0.7924528301886793
+                },
+                "disparate_impact": {
+                  "value": 0.9059456672359898,
+                  "low": 0.7756319105398274,
+                  "high": 1.0307482967199209
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.01804454616501061,
+                  "low": -0.043731584490781274,
+                  "high": 0.07972298185076522
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 6165,
+                  "selected": 1550.0,
+                  "selection_rate": 0.25141930251419303,
+                  "qualified": 1352,
+                  "true_positive_rate": 0.7744082840236687
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        }
+      },
       "ndcg_at_10_minus_unmitigated": {
         "mean": 0.0033270248424657144,
         "95ci": [
@@ -1742,6 +2265,104 @@
                   "selection_rate": 0.19650411934981074,
                   "qualified": 1487,
                   "true_positive_rate": 0.7713517148621385
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "at_k_meeting_minimum": {
+        "5": {
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 0.950997531879885,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1001,
+                  "selected": 126.0,
+                  "selection_rate": 0.1258741258741259,
+                  "qualified": 212,
+                  "true_positive_rate": 0.5047169811320755
+                },
+                "disparate_impact": {
+                  "value": 0.950997531879885,
+                  "low": 0.7832735980865777,
+                  "high": 1.1288440487795481
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.01950988054035957,
+                  "low": -0.05768667758432769,
+                  "high": 0.09704831284604186
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 6165,
+                  "selected": 816.0,
+                  "selection_rate": 0.13236009732360096,
+                  "qualified": 1352,
+                  "true_positive_rate": 0.48520710059171596
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        },
+        "10": {
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 0.9266220161161796,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1001,
+                  "selected": 232.0,
+                  "selection_rate": 0.23176823176823177,
+                  "qualified": 212,
+                  "true_positive_rate": 0.8018867924528302
+                },
+                "disparate_impact": {
+                  "value": 0.9266220161161796,
+                  "low": 0.7971008307623958,
+                  "high": 1.0575954071488374
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.020082058725019558,
+                  "low": -0.04416552254490995,
+                  "high": 0.08036245203269834
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 6165,
+                  "selected": 1542.0,
+                  "selection_rate": 0.25012165450121654,
+                  "qualified": 1352,
+                  "true_positive_rate": 0.7818047337278107
                 },
                 "disparate_impact": {
                   "value": 1.0,
@@ -2006,6 +2627,104 @@
           }
         }
       },
+      "at_k_meeting_minimum": {
+        "5": {
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 0.9672781206523539,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1001,
+                  "selected": 128.0,
+                  "selection_rate": 0.12787212787212787,
+                  "qualified": 212,
+                  "true_positive_rate": 0.5094339622641509
+                },
+                "disparate_impact": {
+                  "value": 0.9672781206523539,
+                  "low": 0.8020847640414808,
+                  "high": 1.1374151395146135
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.024226861672434985,
+                  "low": -0.04887866781915556,
+                  "high": 0.09527606694040061
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 6165,
+                  "selected": 815.0,
+                  "selection_rate": 0.1321978913219789,
+                  "qualified": 1352,
+                  "true_positive_rate": 0.48520710059171596
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        },
+        "10": {
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 0.9155034155034155,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1001,
+                  "selected": 231.0,
+                  "selection_rate": 0.23076923076923078,
+                  "qualified": 212,
+                  "true_positive_rate": 0.8018867924528302
+                },
+                "disparate_impact": {
+                  "value": 0.9155034155034155,
+                  "low": 0.787123827266389,
+                  "high": 1.042050166469535
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.020082058725019558,
+                  "low": -0.0435549629551668,
+                  "high": 0.08063330305180913
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 6165,
+                  "selected": 1554.0,
+                  "selection_rate": 0.2520681265206813,
+                  "qualified": 1352,
+                  "true_positive_rate": 0.7818047337278107
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        }
+      },
       "ndcg_at_10_minus_unmitigated": {
         "mean": 0.0028708385126411224,
         "95ci": [
@@ -2015,6 +2734,351 @@
         "jobs_better": 72,
         "jobs_equal": 56,
         "jobs_worse": 72
+      }
+    },
+    "served_without_experience_surplus": {
+      "ndcg_at_10": 0.7979745915368963,
+      "ndcg_at_10_95ci": [
+        0.7795572672648321,
+        0.8151138469662969
+      ],
+      "at_k": {
+        "5": {
+          "gender": {
+            "reference": "man",
+            "min_disparate_impact": 0.9102132508972779,
+            "groups": {
+              "man": {
+                "rates": {
+                  "pairs": 5559,
+                  "selected": 574.0,
+                  "selection_rate": 0.10325598129159921,
+                  "qualified": 959,
+                  "true_positive_rate": 0.4869655891553702
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              },
+              "nonbinary": {
+                "rates": {
+                  "pairs": 532,
+                  "selected": 50.0,
+                  "selection_rate": 0.09398496240601503,
+                  "qualified": 104,
+                  "true_positive_rate": 0.40384615384615385
+                },
+                "disparate_impact": {
+                  "value": 0.9102132508972779,
+                  "low": 0.691055547358602,
+                  "high": 1.1581926864430176
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.08311943530921634,
+                  "low": -0.1766601419906448,
+                  "high": 0.009772323854636231
+                }
+              },
+              "woman": {
+                "rates": {
+                  "pairs": 3909,
+                  "selected": 376.0,
+                  "selection_rate": 0.09618828344845229,
+                  "qualified": 636,
+                  "true_positive_rate": 0.4669811320754717
+                },
+                "disparate_impact": {
+                  "value": 0.9315516858709865,
+                  "low": 0.8253571199567481,
+                  "high": 1.046982499638988
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.019984457079898488,
+                  "low": -0.06593497724144953,
+                  "high": 0.02530723026966992
+                }
+              }
+            }
+          },
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 1.2374589207268034,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1018,
+                  "selected": 123.0,
+                  "selection_rate": 0.12082514734774066,
+                  "qualified": 212,
+                  "true_positive_rate": 0.4811320754716981
+                },
+                "disparate_impact": {
+                  "value": 1.2374589207268034,
+                  "low": 1.0032334198983128,
+                  "high": 1.4928502297966502
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.007695626245067311,
+                  "low": -0.06358544786254317,
+                  "high": 0.07933127288345654
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 8982,
+                  "selected": 877.0,
+                  "selection_rate": 0.0976397238922289,
+                  "qualified": 1487,
+                  "true_positive_rate": 0.4734364492266308
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        },
+        "10": {
+          "gender": {
+            "reference": "man",
+            "min_disparate_impact": 0.9522672690330348,
+            "groups": {
+              "man": {
+                "rates": {
+                  "pairs": 5559,
+                  "selected": 1129.0,
+                  "selection_rate": 0.203094081669365,
+                  "qualified": 959,
+                  "true_positive_rate": 0.781021897810219
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              },
+              "nonbinary": {
+                "rates": {
+                  "pairs": 532,
+                  "selected": 115.0,
+                  "selection_rate": 0.2161654135338346,
+                  "qualified": 104,
+                  "true_positive_rate": 0.75
+                },
+                "disparate_impact": {
+                  "value": 1.064360968852601,
+                  "low": 0.9036746182098323,
+                  "high": 1.2428390739047461
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.031021897810219023,
+                  "low": -0.1118006442948138,
+                  "high": 0.04829917978379345
+                }
+              },
+              "woman": {
+                "rates": {
+                  "pairs": 3909,
+                  "selected": 756.0,
+                  "selection_rate": 0.19339984650805833,
+                  "qualified": 636,
+                  "true_positive_rate": 0.7610062893081762
+                },
+                "disparate_impact": {
+                  "value": 0.9522672690330348,
+                  "low": 0.881111833937432,
+                  "high": 1.0329526408063565
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.02001560850204287,
+                  "low": -0.06266598255139923,
+                  "high": 0.023041224952123598
+                }
+              }
+            }
+          },
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 1.1521510493424743,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1018,
+                  "selected": 231.0,
+                  "selection_rate": 0.2269155206286837,
+                  "qualified": 212,
+                  "true_positive_rate": 0.7830188679245284
+                },
+                "disparate_impact": {
+                  "value": 1.1521510493424743,
+                  "low": 0.9769909123070005,
+                  "high": 1.3374884784875407
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.013012142974965446,
+                  "low": -0.05388920368958984,
+                  "high": 0.07761637264547867
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 8982,
+                  "selected": 1769.0,
+                  "selection_rate": 0.19694945446448453,
+                  "qualified": 1487,
+                  "true_positive_rate": 0.7700067249495629
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "at_k_meeting_minimum": {
+        "5": {
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 0.9166294959652892,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1001,
+                  "selected": 121.0,
+                  "selection_rate": 0.12087912087912088,
+                  "qualified": 212,
+                  "true_positive_rate": 0.4811320754716981
+                },
+                "disparate_impact": {
+                  "value": 0.9166294959652892,
+                  "low": 0.7614367063491759,
+                  "high": 1.080047942912569
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": -0.0077732499720888915,
+                  "low": -0.07898151850848593,
+                  "high": 0.06280770510445492
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 6165,
+                  "selected": 813.0,
+                  "selection_rate": 0.1318734793187348,
+                  "qualified": 1352,
+                  "true_positive_rate": 0.488905325443787
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        },
+        "10": {
+          "age_band": {
+            "reference": "under_40",
+            "min_disparate_impact": 0.9106457744590041,
+            "groups": {
+              "40_and_over": {
+                "rates": {
+                  "pairs": 1001,
+                  "selected": 228.0,
+                  "selection_rate": 0.22777222777222778,
+                  "qualified": 212,
+                  "true_positive_rate": 0.7830188679245284
+                },
+                "disparate_impact": {
+                  "value": 0.9106457744590041,
+                  "low": 0.7811606201974383,
+                  "high": 1.0370228622955888
+                },
+                "passes_four_fifths": true,
+                "equal_opportunity_difference": {
+                  "value": 0.0019537791671319082,
+                  "low": -0.06620975058801246,
+                  "high": 0.0657027523734943
+                }
+              },
+              "under_40": {
+                "rates": {
+                  "pairs": 6165,
+                  "selected": 1542.0,
+                  "selection_rate": 0.25012165450121654,
+                  "qualified": 1352,
+                  "true_positive_rate": 0.7810650887573964
+                },
+                "disparate_impact": {
+                  "value": 1.0,
+                  "low": 1.0,
+                  "high": 1.0
+                },
+                "passes_four_fifths": null,
+                "equal_opportunity_difference": {
+                  "value": 0.0,
+                  "low": 0.0,
+                  "high": 0.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "ndcg_at_10_minus_unmitigated": {
+        "mean": 0.0021540046800509376,
+        "95ci": [
+          -0.0052876458374354835,
+          0.009206664856062306
+        ],
+        "jobs_better": 87,
+        "jobs_equal": 31,
+        "jobs_worse": 82
       }
     }
   },
@@ -2067,6 +3131,12 @@
               "eod_low": -0.0369414658495918,
               "eod_high": 0.11157682827494164
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.950997531879885,
+              "eod": 0.018770235569945337,
+              "eod_low": -0.05530406115735438,
+              "eod_high": 0.09182459412886816
+            },
             "top_10:woman": {
               "ratio": 0.9459747687451356,
               "eod": -0.024716194148779236,
@@ -2084,6 +3154,12 @@
               "eod": 0.03322505741584303,
               "eod_low": -0.03361993152277284,
               "eod_high": 0.095641656555451
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9218394508717089,
+              "eod": 0.019342413754605325,
+              "eod_low": -0.04708374218499576,
+              "eod_high": 0.0826768951308675
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": 0.006645390507447177,
@@ -2113,6 +3189,12 @@
               "eod_low": -0.022162219032243503,
               "eod_high": 0.12313816239692003
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9872371771262028,
+              "eod": 0.0311627777157531,
+              "eod_low": -0.04031609318194572,
+              "eod_high": 0.10248288994724931
+            },
             "top_10:woman": {
               "ratio": 0.8762699080501372,
               "eod": -0.048284704323817484,
@@ -2130,6 +3212,12 @@
               "eod": 0.029171054801994667,
               "eod_low": -0.03410547416315736,
               "eod_high": 0.09182645638342211
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.8974197949052881,
+              "eod": 0.01804454616501061,
+              "eod_low": -0.04485719172353683,
+              "eod_high": 0.08049822687870248
             }
           },
           "fitted_on_relevance": {
@@ -2152,6 +3240,12 @@
               "eod_low": -0.047549898349580365,
               "eod_high": 0.09547066891289317
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9135123249955786,
+              "eod": -0.0009210673216478726,
+              "eod_low": -0.07390972248570418,
+              "eod_high": 0.06945252563280177
+            },
             "top_10:woman": {
               "ratio": 0.9388883183984954,
               "eod": -0.0010493110617060264,
@@ -2169,6 +3263,12 @@
               "eod": 0.039334610650797464,
               "eod_low": -0.02064198409444263,
               "eod_high": 0.09559059873759564
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9165398735759882,
+              "eod": 0.016579211789661707,
+              "eod_low": -0.04244042970594003,
+              "eod_high": 0.07247880701995782
             }
           },
           "trained_without_historical_bias": {
@@ -2191,6 +3291,12 @@
               "eod_low": -0.0006558979332403757,
               "eod_high": 0.14045476372710092
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 1.0213919743622712,
+              "eod": 0.04957016858323099,
+              "eod_low": -0.020638859476128556,
+              "eod_high": 0.1210528058783799
+            },
             "top_10:woman": {
               "ratio": 0.9380625591035099,
               "eod": -0.013196726149487525,
@@ -2208,6 +3314,12 @@
               "eod": 0.046703505855781535,
               "eod_low": -0.0155133121187004,
               "eod_high": 0.10378937184561844
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9472091614948757,
+              "eod": 0.03201406721000333,
+              "eod_low": -0.03018436102226331,
+              "eod_high": 0.09099708758840415
             }
           },
           "drop_proxy_terms": {
@@ -2230,6 +3342,12 @@
               "eod_low": -0.025375837624675483,
               "eod_high": 0.11948366359009148
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9772330990043165,
+              "eod": 0.02718544155409175,
+              "eod_low": -0.04616953012888997,
+              "eod_high": 0.09993136191234224
+            },
             "top_10:woman": {
               "ratio": 0.8894293711344861,
               "eod": -0.03729481050098049,
@@ -2247,6 +3365,12 @@
               "eod": 0.027826064889419078,
               "eod_low": -0.03559174267685472,
               "eod_high": 0.08884444556875207
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9059456672359898,
+              "eod": 0.01804454616501061,
+              "eod_low": -0.043731584490781274,
+              "eod_high": 0.07972298185076522
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0033270248424657144,
@@ -2276,6 +3400,12 @@
               "eod_low": -0.0371921651231319,
               "eod_high": 0.11756653918579893
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.950997531879885,
+              "eod": 0.01950988054035957,
+              "eod_low": -0.05768667758432769,
+              "eod_high": 0.09704831284604186
+            },
             "top_10:woman": {
               "ratio": 0.9343103088670959,
               "eod": -0.02784445275149039,
@@ -2293,6 +3423,12 @@
               "eod": 0.03053507759069174,
               "eod_low": -0.03323037464760842,
               "eod_high": 0.09101919104007139
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9266220161161796,
+              "eod": 0.020082058725019558,
+              "eod_low": -0.04416552254490995,
+              "eod_high": 0.08036245203269834
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": 0.009299897043377166,
@@ -2322,6 +3458,12 @@
               "eod_low": -0.02921004189578484,
               "eod_high": 0.11667528770788434
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9672781206523539,
+              "eod": 0.024226861672434985,
+              "eod_low": -0.04887866781915556,
+              "eod_high": 0.09527606694040061
+            },
             "top_10:woman": {
               "ratio": 0.9039627615202376,
               "eod": -0.03570608797161612,
@@ -2340,11 +3482,75 @@
               "eod_low": -0.02848249784718972,
               "eod_high": 0.09529847427663204
             },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9155034155034155,
+              "eod": 0.020082058725019558,
+              "eod_low": -0.0435549629551668,
+              "eod_high": 0.08063330305180913
+            },
             "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0028708385126411224,
               "95ci": [
                 -0.0017242234753563897,
                 0.007648310358203692
+              ]
+            }
+          },
+          "served_without_experience_surplus": {
+            "ndcg_at_10": 0.7979745915368963,
+            "top_5:woman": {
+              "ratio": 0.9315516858709865,
+              "eod": -0.019984457079898488,
+              "eod_low": -0.06593497724144953,
+              "eod_high": 0.02530723026966992
+            },
+            "top_5:nonbinary": {
+              "ratio": 0.9102132508972779,
+              "eod": -0.08311943530921634,
+              "eod_low": -0.1766601419906448,
+              "eod_high": 0.009772323854636231
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.2374589207268034,
+              "eod": 0.007695626245067311,
+              "eod_low": -0.06358544786254317,
+              "eod_high": 0.07933127288345654
+            },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9166294959652892,
+              "eod": -0.0077732499720888915,
+              "eod_low": -0.07898151850848593,
+              "eod_high": 0.06280770510445492
+            },
+            "top_10:woman": {
+              "ratio": 0.9522672690330348,
+              "eod": -0.02001560850204287,
+              "eod_low": -0.06266598255139923,
+              "eod_high": 0.023041224952123598
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.064360968852601,
+              "eod": -0.031021897810219023,
+              "eod_low": -0.1118006442948138,
+              "eod_high": 0.04829917978379345
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.1521510493424743,
+              "eod": 0.013012142974965446,
+              "eod_low": -0.05388920368958984,
+              "eod_high": 0.07761637264547867
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9106457744590041,
+              "eod": 0.0019537791671319082,
+              "eod_low": -0.06620975058801246,
+              "eod_high": 0.0657027523734943
+            },
+            "ndcg_at_10_minus_unmitigated": {
+              "mean": 0.0021540046800509376,
+              "95ci": [
+                -0.0052876458374354835,
+                0.009206664856062306
               ]
             }
           },
@@ -2420,6 +3626,12 @@
               "eod_low": -0.03697595335232018,
               "eod_high": 0.09970030985634148
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9340782522040229,
+              "eod": 0.01359272077704593,
+              "eod_low": -0.05422428000577478,
+              "eod_high": 0.0815039042249317
+            },
             "top_10:woman": {
               "ratio": 0.9480685597339472,
               "eod": -0.004854703208924449,
@@ -2437,6 +3649,12 @@
               "eod": 0.03187055106520664,
               "eod_low": -0.03310616495780777,
               "eod_high": 0.09466587305581813
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9330364044278219,
+              "eod": 0.016104722563358265,
+              "eod_low": -0.04646534626421945,
+              "eod_high": 0.07823904982342554
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": -0.001503624697100964,
@@ -2466,6 +3684,12 @@
               "eod_low": -0.029009192066010506,
               "eod_high": 0.11626353949142723
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9492665164675029,
+              "eod": 0.02672490789326787,
+              "eod_low": -0.04746499262292326,
+              "eod_high": 0.09869341764421549
+            },
             "top_10:woman": {
               "ratio": 0.8607464555479258,
               "eod": -0.05349846866166941,
@@ -2483,6 +3707,12 @@
               "eod": 0.025808580020555527,
               "eod_low": -0.03577934645571157,
               "eod_high": 0.08416046386544378
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9077025108052905,
+              "eod": 0.012867031372111204,
+              "eod_low": -0.048519869519153894,
+              "eod_high": 0.07346170483742123
             }
           },
           "fitted_on_relevance": {
@@ -2505,6 +3735,12 @@
               "eod_low": -0.059995867290761624,
               "eod_high": 0.08066920384540559
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.881934294822123,
+              "eod": -0.01229485318745105,
+              "eod_low": -0.08639793193105999,
+              "eod_high": 0.05551859685433823
+            },
             "top_10:woman": {
               "ratio": 0.9351327651249014,
               "eod": -0.013595136443228961,
@@ -2522,6 +3758,12 @@
               "eod": 0.037989620738221874,
               "eod_low": -0.02136857427879663,
               "eod_high": 0.0932591003554278
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9138430148405211,
+              "eod": 0.01731885676007594,
+              "eod_low": -0.042838270782673146,
+              "eod_high": 0.07283639641806204
             }
           },
           "trained_without_historical_bias": {
@@ -2544,6 +3786,12 @@
               "eod_low": 0.0030291420238220987,
               "eod_high": 0.13944850556586666
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9960594960594961,
+              "eod": 0.050309813553645166,
+              "eod_low": -0.01729462744186724,
+              "eod_high": 0.11783578750239188
+            },
             "top_10:woman": {
               "ratio": 0.9297885349187441,
               "eod": -0.006907417973386898,
@@ -2561,6 +3809,12 @@
               "eod": 0.04940300211899362,
               "eod_low": -0.01668526919558123,
               "eod_high": 0.11022227525271133
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9407679698941834,
+              "eod": 0.03599140337166462,
+              "eod_low": -0.0319674004538524,
+              "eod_high": 0.09714784202343356
             }
           },
           "drop_proxy_terms": {
@@ -2583,6 +3837,12 @@
               "eod_low": -0.022072329816528357,
               "eod_high": 0.12048103937406134
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9704377508347732,
+              "eod": 0.032921178966171694,
+              "eod_low": -0.037667535486116295,
+              "eod_high": 0.10512307405607917
+            },
             "top_10:woman": {
               "ratio": 0.8874409994762829,
               "eod": -0.024716194148779236,
@@ -2600,6 +3860,12 @@
               "eod": 0.028508076283767503,
               "eod_low": -0.03220044203380734,
               "eod_high": 0.08675308550986269
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9202408199820878,
+              "eod": 0.012406497711287212,
+              "eod_low": -0.04903840036027958,
+              "eod_high": 0.07181229152016735
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0003925648483111338,
@@ -2629,6 +3895,12 @@
               "eod_low": -0.03251699218538006,
               "eod_high": 0.10374524564388017
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9363874691439587,
+              "eod": 0.018309701909121345,
+              "eod_low": -0.05097462183637495,
+              "eod_high": 0.08635515610274637
+            },
             "top_10:woman": {
               "ratio": 0.9434743949070427,
               "eod": 0.00717794348148304,
@@ -2646,6 +3918,12 @@
               "eod": 0.023791095151692088,
               "eod_low": -0.03969289371039658,
               "eod_high": 0.08733628913311929
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9352166328155945,
+              "eod": 0.007689516579211797,
+              "eod_low": -0.05663257171320553,
+              "eod_high": 0.07088175115104972
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0007100512015561331,
@@ -2675,6 +3953,12 @@
               "eod_low": -0.026682515100281377,
               "eod_high": 0.10945802810496788
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9527910208603279,
+              "eod": 0.02524561795243946,
+              "eod_low": -0.04427441873109693,
+              "eod_high": 0.09273075350547845
+            },
             "top_10:woman": {
               "ratio": 0.9077777016012817,
               "eod": -0.02575894701634962,
@@ -2693,11 +3977,75 @@
               "eod_low": -0.030449375040010246,
               "eod_high": 0.09338178684978096
             },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9162570934886588,
+              "eod": 0.015644188902534384,
+              "eod_low": -0.04774997425181548,
+              "eod_high": 0.07731154583748821
+            },
             "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0035648507669550273,
               "95ci": [
                 -0.0015631179930669851,
                 0.009116036346975416
+              ]
+            }
+          },
+          "served_without_experience_surplus": {
+            "ndcg_at_10": 0.8049126808619503,
+            "top_5:woman": {
+              "ratio": 0.9372382510550885,
+              "eod": -0.02259953699149403,
+              "eod_low": -0.06972608277614004,
+              "eod_high": 0.023197291383694526
+            },
+            "top_5:nonbinary": {
+              "ratio": 1.0283970030524465,
+              "eod": -0.016854495869094432,
+              "eod_low": -0.11905475422072935,
+              "eod_high": 0.0854129292237821
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.1917806386295267,
+              "eod": 0.002988161551052526,
+              "eod_low": -0.06821555976760887,
+              "eod_high": 0.07107343925978099
+            },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.898322937877944,
+              "eod": -0.012211119794574066,
+              "eod_low": -0.08513313891267557,
+              "eod_high": 0.05571562815090726
+            },
+            "top_10:woman": {
+              "ratio": 0.9347739962319814,
+              "eod": -0.010598041723231089,
+              "eod_low": -0.05485860704533847,
+              "eod_high": 0.033315303963943214
+            },
+            "top_10:nonbinary": {
+              "ratio": 0.9982191455852603,
+              "eod": -0.0663551776690463,
+              "eod_low": -0.15240190323876188,
+              "eod_high": 0.023167044071754246
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.1634417496939637,
+              "eod": 0.015029627843828997,
+              "eod_low": -0.053038705980114224,
+              "eod_high": 0.0809246575065101
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9252341388200304,
+              "eod": 0.0019537791671319082,
+              "eod_low": -0.0657406423794279,
+              "eod_high": 0.067971577968918
+            },
+            "ndcg_at_10_minus_unmitigated": {
+              "mean": 0.003286496157436758,
+              "95ci": [
+                -0.003711153716017138,
+                0.0112247212295193
               ]
             }
           },
@@ -2773,6 +4121,12 @@
               "eod_low": -0.04163904308255276,
               "eod_high": 0.08476289825224098
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9227009287910628,
+              "eod": 0.0004605336608239363,
+              "eod_low": -0.06338184112554539,
+              "eod_high": 0.06310680089434469
+            },
             "top_10:woman": {
               "ratio": 0.958181291037776,
               "eod": -0.014801844164190947,
@@ -2790,6 +4144,12 @@
               "eod": 0.04938396924287225,
               "eod_low": -0.010807767745696155,
               "eod_high": 0.10803977136495699
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9509090258275926,
+              "eod": 0.036912470693312494,
+              "eod_low": -0.023750816320140804,
+              "eod_high": 0.0959192948236199
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": -0.0011014792162554665,
@@ -2819,6 +4179,12 @@
               "eod_low": -0.02431922906945152,
               "eod_high": 0.10492249498019567
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.962796508702216,
+              "eod": 0.02450597298202528,
+              "eod_low": -0.042156763043587515,
+              "eod_high": 0.09075824546621593
+            },
             "top_10:woman": {
               "ratio": 0.8949865961030101,
               "eod": -0.04722555597090794,
@@ -2836,6 +4202,12 @@
               "eod": 0.050738475593508525,
               "eod_low": -0.00844695748384135,
               "eod_high": 0.10633272857641787
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9294106152914443,
+              "eod": 0.0386708719437312,
+              "eod_low": -0.02246332776382173,
+              "eod_high": 0.09636522490385147
             }
           },
           "fitted_on_relevance": {
@@ -2858,6 +4230,12 @@
               "eod_low": -0.056706077107396904,
               "eod_high": 0.0875891662822552
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9083183004046315,
+              "eod": -0.00609858211454728,
+              "eod_low": -0.08141336613358605,
+              "eod_high": 0.06335001004931144
+            },
             "top_10:woman": {
               "ratio": 0.9405442060852651,
               "eod": -0.003647995487962463,
@@ -2875,6 +4253,12 @@
               "eod": 0.035299640913070585,
               "eod_low": -0.02235904481560544,
               "eod_high": 0.09296207002527732
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9111394223753775,
+              "eod": 0.013620631908004999,
+              "eod_low": -0.04310221626136576,
+              "eod_high": 0.07139505558123861
             }
           },
           "trained_without_historical_bias": {
@@ -2897,6 +4281,12 @@
               "eod_low": -0.006320453082518903,
               "eod_high": 0.1239170679729451
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9960594960594961,
+              "eod": 0.038936027687841934,
+              "eod_low": -0.026882555142628887,
+              "eod_high": 0.10370671385418749
+            },
             "top_10:woman": {
               "ratio": 0.9401191763999028,
               "eod": -0.00641063476761039,
@@ -2914,6 +4304,12 @@
               "eod": 0.07027889507809826,
               "eod_low": 0.011756073242869978,
               "eod_high": 0.12526850231224365
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.950266647490663,
+              "eod": 0.05753879647203308,
+              "eod_low": -0.0007317238540940489,
+              "eod_high": 0.11471396050331426
             }
           },
           "drop_proxy_terms": {
@@ -2936,6 +4332,12 @@
               "eod_low": -0.024797720228943117,
               "eod_high": 0.10223676095188071
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9805120252881447,
+              "eod": 0.022747571731606575,
+              "eod_low": -0.04251586933079666,
+              "eod_high": 0.08711739925864374
+            },
             "top_10:woman": {
               "ratio": 0.9030600784573791,
               "eod": -0.03989349492723693,
@@ -2953,6 +4355,12 @@
               "eod": 0.048720990724644975,
               "eod_low": -0.010334300792874866,
               "eod_high": 0.1039116938960655
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9333995020523518,
+              "eod": 0.037191582002902734,
+              "eod_low": -0.022675146039860684,
+              "eod_high": 0.09422259416565802
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0015992113750836299,
@@ -2982,6 +4390,12 @@
               "eod_low": -0.031140838320353317,
               "eod_high": 0.09742405611650494
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9592261879035674,
+              "eod": 0.01507201071787434,
+              "eod_low": -0.05036447820418695,
+              "eod_high": 0.08090193543721678
+            },
             "top_10:woman": {
               "ratio": 0.9405242475875233,
               "eod": -0.023176658075432344,
@@ -2999,6 +4413,12 @@
               "eod": 0.03793252210985776,
               "eod_low": -0.020683331088283588,
               "eod_high": 0.0942903536836245
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9106457744590041,
+              "eod": 0.025259573517918965,
+              "eod_low": -0.032349708471748354,
+              "eod_high": 0.08330815843363792
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": -0.0009436559509044246,
@@ -3028,6 +4448,12 @@
               "eod_low": -0.01975203228846187,
               "eod_high": 0.10872846913676484
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9832803335278583,
+              "eod": 0.026264374232443877,
+              "eod_low": -0.037889093799267956,
+              "eod_high": 0.09098510550088222
+            },
             "top_10:woman": {
               "ratio": 0.9223103429488883,
               "eod": -0.032594224854244236,
@@ -3046,11 +4472,75 @@
               "eod_low": 0.007834291307568013,
               "eod_high": 0.1293871274549231
             },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9697069358747953,
+              "eod": 0.057999330132857074,
+              "eod_low": -0.0051091139455648376,
+              "eod_high": 0.11706986298208517
+            },
             "ndcg_at_10_minus_unmitigated": {
               "mean": -0.0011149624804820033,
               "95ci": [
                 -0.006874204898944067,
                 0.004897745633438568
+              ]
+            }
+          },
+          "served_without_experience_surplus": {
+            "ndcg_at_10": 0.798148578547645,
+            "top_5:woman": {
+              "ratio": 0.9200387066635524,
+              "eod": -0.03201710377030581,
+              "eod_low": -0.07846786774998439,
+              "eod_high": 0.012223280781011325
+            },
+            "top_5:nonbinary": {
+              "ratio": 0.9631480876103301,
+              "eod": -0.039213523702574804,
+              "eod_low": -0.1376478728961386,
+              "eod_high": 0.05931660403482646
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.2031612787997856,
+              "eod": -0.0003838296684472997,
+              "eod_low": -0.06511760255833408,
+              "eod_high": 0.06281260485274753
+            },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.889526630040706,
+              "eod": -0.01766774589706377,
+              "eod_low": -0.08443836903996198,
+              "eod_high": 0.046434000400477786
+            },
+            "top_10:woman": {
+              "ratio": 0.9438735661068061,
+              "eod": -0.0221175097225228,
+              "eod_low": -0.0643480421438748,
+              "eod_high": 0.018750038520718444
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.1096546676425576,
+              "eod": -0.03959452955803322,
+              "eod_low": -0.12130973756352505,
+              "eod_high": 0.0456456890160211
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.180425804899563,
+              "eod": 0.03726002715357002,
+              "eod_low": -0.02628032695408789,
+              "eod_high": 0.10005072553443511
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9320620670914213,
+              "eod": 0.025999218488333198,
+              "eod_low": -0.03754646713414475,
+              "eod_high": 0.0884892664170311
+            },
+            "ndcg_at_10_minus_unmitigated": {
+              "mean": -0.005104280180253737,
+              "95ci": [
+                -0.012567160202555789,
+                0.0021951196621231915
               ]
             }
           },
@@ -3126,6 +4616,12 @@
               "eod_low": -0.06607654722818654,
               "eod_high": 0.07384222609879526
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.889526630040706,
+              "eod": -0.017207212236239833,
+              "eod_low": -0.08566714337954298,
+              "eod_high": 0.05391158440440734
+            },
             "top_10:woman": {
               "ratio": 0.9619735652767119,
               "eod": -0.012683547458371858,
@@ -3143,6 +4639,12 @@
               "eod": 0.03322505741584303,
               "eod_low": -0.029938700104377873,
               "eod_high": 0.09090934766709317
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9333995020523518,
+              "eod": 0.019342413754605325,
+              "eod_low": -0.0437788480920619,
+              "eod_high": 0.07721604522132937
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0034065107641080817,
@@ -3172,6 +4674,12 @@
               "eod_low": -0.06507736394414695,
               "eod_high": 0.07338827044171937
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.8809100435017306,
+              "eod": -0.01618845595623536,
+              "eod_low": -0.08460914022853258,
+              "eod_high": 0.05584565333790088
+            },
             "top_10:woman": {
               "ratio": 0.8802326196840183,
               "eod": -0.047738734662023496,
@@ -3189,6 +4697,12 @@
               "eod": 0.039959523416781884,
               "eod_low": -0.020848628005306936,
               "eod_high": 0.09708513125618798
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9196459648948339,
+              "eod": 0.02701797476833756,
+              "eod_low": -0.03344366352200308,
+              "eod_high": 0.08414256092004875
             }
           },
           "fitted_on_relevance": {
@@ -3211,6 +4725,12 @@
               "eod_low": -0.03994951455702866,
               "eod_high": 0.09702089512236
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9219822094073592,
+              "eod": 0.004814670090432016,
+              "eod_low": -0.06598982097425096,
+              "eod_high": 0.0739025660522615
+            },
             "top_10:woman": {
               "ratio": 0.938036088202371,
               "eod": 0.0015821643352286197,
@@ -3228,6 +4748,12 @@
               "eod": 0.045406098133509265,
               "eod_low": -0.012226514472940165,
               "eod_high": 0.10032497766480823
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9153998986088538,
+              "eod": 0.02305459417215594,
+              "eod_low": -0.03504328080000245,
+              "eod_high": 0.07834605004656776
             }
           },
           "trained_without_historical_bias": {
@@ -3250,6 +4776,12 @@
               "eod_low": -0.0461909716716779,
               "eod_high": 0.08834987789544942
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9556822487856971,
+              "eod": 0.0019398236016523462,
+              "eod_low": -0.06697635246003772,
+              "eod_high": 0.06750427909893841
+            },
             "top_10:woman": {
               "ratio": 0.9565033333970607,
               "eod": -0.007933775355618122,
@@ -3267,6 +4799,12 @@
               "eod": 0.05412949968912972,
               "eod_low": -0.008283617841696584,
               "eod_high": 0.11116815499394687
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9379958991106105,
+              "eod": 0.040247850842916155,
+              "eod_low": -0.01999016782828606,
+              "eod_high": 0.0982970779147313
             }
           },
           "drop_proxy_terms": {
@@ -3289,6 +4827,12 @@
               "eod_low": -0.0685841811663752,
               "eod_high": 0.07308496707951712
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.877672695854514,
+              "eod": -0.01794685720665401,
+              "eod_low": -0.08763128778894849,
+              "eod_high": 0.053259764898016315
+            },
             "top_10:woman": {
               "ratio": 0.8918897566701277,
               "eod": -0.036219266662731786,
@@ -3306,6 +4850,12 @@
               "eod": 0.03255256245955518,
               "eod_low": -0.026957763821581774,
               "eod_high": 0.08898897265111738
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9202408199820878,
+              "eod": 0.019342413754605325,
+              "eod_low": -0.04093657087421253,
+              "eod_high": 0.07693684471391497
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0006393292635918541,
@@ -3335,6 +4885,12 @@
               "eod_low": -0.06890317305473981,
               "eod_high": 0.07393143573510529
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.8852388397842942,
+              "eod": -0.015727922295411423,
+              "eod_low": -0.08450696204887811,
+              "eod_high": 0.05643422265212964
+            },
             "top_10:woman": {
               "ratio": 0.9484884306638561,
               "eod": -0.013196726149487525,
@@ -3352,6 +4908,12 @@
               "eod": 0.017738640545101658,
               "eod_low": -0.044671432374749784,
               "eod_high": 0.07655220415641877
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9180385395550656,
+              "eod": 0.0032516467567266227,
+              "eod_low": -0.06040127138180941,
+              "eod_high": 0.06307306597589324
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": 0.00502216881560734,
@@ -3381,6 +4943,12 @@
               "eod_low": -0.06783789194691973,
               "eod_high": 0.06643996782061067
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.8744499074976432,
+              "eod": -0.02090543708831083,
+              "eod_low": -0.08672371244405798,
+              "eod_high": 0.04622042986996065
+            },
             "top_10:woman": {
               "ratio": 0.9239932635585668,
               "eod": -0.02994635397197032,
@@ -3399,11 +4967,75 @@
               "eod_low": -0.027846776563221414,
               "eod_high": 0.09308823832427035
             },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9196459648948339,
+              "eod": 0.018602768784191204,
+              "eod_low": -0.043212874786055594,
+              "eod_high": 0.07848136238965683
+            },
             "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0026600172093155876,
               "95ci": [
                 -0.003494689536498423,
                 0.009536406251844348
+              ]
+            }
+          },
+          "served_without_experience_surplus": {
+            "ndcg_at_10": 0.8059894652620311,
+            "top_5:woman": {
+              "ratio": 0.9776957022256332,
+              "eod": -0.011112859962880639,
+              "eod_low": -0.06210895966066735,
+              "eod_high": 0.03651204321675032
+            },
+            "top_5:nonbinary": {
+              "ratio": 1.0262654403866809,
+              "eod": -0.027743242159300574,
+              "eod_low": -0.13059048527311767,
+              "eod_high": 0.07048472057877392
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.1577932064468526,
+              "eod": -0.007800307063734746,
+              "eod_low": -0.07726319920881726,
+              "eod_high": 0.06692075610476253
+            },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.8625404079949534,
+              "eod": -0.024882773249972068,
+              "eod_low": -0.0949214786505289,
+              "eod_high": 0.04805824753814615
+            },
+            "top_10:woman": {
+              "ratio": 0.9539571843285681,
+              "eod": -0.010598041723231089,
+              "eod_low": -0.054376357259798246,
+              "eod_high": 0.032934406764178664
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0847932831190665,
+              "eod": -0.01827825459212329,
+              "eod_low": -0.1066292672959541,
+              "eod_high": 0.06510295771479983
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.1634417496939637,
+              "eod": 0.01705662915075301,
+              "eod_low": -0.050611800372655724,
+              "eod_high": 0.07976485068603703
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9192300237076356,
+              "eod": 0.005191470358378858,
+              "eod_low": -0.06270942365541654,
+              "eod_high": 0.06823502463578353
+            },
+            "ndcg_at_10_minus_unmitigated": {
+              "mean": 0.001157125380047429,
+              "95ci": [
+                -0.006589188895909989,
+                0.009248536053297608
               ]
             }
           },
@@ -3479,6 +5111,12 @@
               "eod_low": -0.06668714421760769,
               "eod_high": 0.10115270510394922
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.945214494637634,
+              "eod": -0.0026007644056380563,
+              "eod_low": -0.08642974161245082,
+              "eod_high": 0.07824596223143426
+            },
             "top_10:woman": {
               "ratio": 1.1236933760862986,
               "eod": 0.003887756550007171,
@@ -3496,6 +5134,12 @@
               "eod": -0.02977308859661798,
               "eod_low": -0.09639663270081797,
               "eod_high": 0.02868059241419342
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.8824885899591641,
+              "eod": -0.04416836399341084,
+              "eod_low": -0.11040405767746621,
+              "eod_high": 0.01559372102974773
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": -0.00011815946150780755,
@@ -3525,6 +5169,12 @@
               "eod_low": -0.06083543122110936,
               "eod_high": 0.10359529770163092
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9380727383655899,
+              "eod": 0.0027468291772496656,
+              "eod_low": -0.08023995624405778,
+              "eod_high": 0.08427384083960598
+            },
             "top_10:woman": {
               "ratio": 1.080307782152417,
               "eod": -0.011940621009042918,
@@ -3542,6 +5192,12 @@
               "eod": -0.013672496025437297,
               "eod_low": -0.08161510942066211,
               "eod_high": 0.04814698821387084
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.8787245098143179,
+              "eod": -0.027403374096224287,
+              "eod_low": -0.09477511309693167,
+              "eod_high": 0.03586899290165011
             }
           },
           "fitted_on_relevance": {
@@ -3564,6 +5220,12 @@
               "eod_low": -0.08419856925761068,
               "eod_high": 0.0812206700421344
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.8701139502762432,
+              "eod": -0.019292721917018918,
+              "eod_low": -0.10636150460854202,
+              "eod_high": 0.06268827162867986
+            },
             "top_10:woman": {
               "ratio": 1.1354139462931432,
               "eod": 0.011311742927540336,
@@ -3581,6 +5243,12 @@
               "eod": 0.008780170544876453,
               "eod_low": -0.06046906731489474,
               "eod_high": 0.07221560393976549
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9231845261985949,
+              "eod": -0.005071693458732596,
+              "eod_low": -0.07393736557583656,
+              "eod_high": 0.05857786758756528
             }
           },
           "trained_without_historical_bias": {
@@ -3603,6 +5271,12 @@
               "eod_low": -0.026888338881344932,
               "eod_high": 0.14292806968908908
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9845674940216046,
+              "eod": 0.04624978698887472,
+              "eod_low": -0.04282224409301508,
+              "eod_high": 0.12866217429496177
+            },
             "top_10:woman": {
               "ratio": 1.126910055597996,
               "eod": 0.012180884686334936,
@@ -3620,6 +5294,12 @@
               "eod": 0.003721636074577317,
               "eod_low": -0.06312398288508744,
               "eod_high": 0.06374855862657657
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.930344652939519,
+              "eod": -0.00832569198185551,
+              "eod_low": -0.07385384395093003,
+              "eod_high": 0.05137843601362592
             }
           },
           "drop_proxy_terms": {
@@ -3642,6 +5322,12 @@
               "eod_low": -0.06942807058914187,
               "eod_high": 0.09915606252955872
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9286317842053948,
+              "eod": -0.004118215088490862,
+              "eod_low": -0.09010217124807032,
+              "eod_high": 0.07855666942388648
+            },
             "top_10:woman": {
               "ratio": 1.0965011595459462,
               "eod": -0.0017302209780827305,
@@ -3659,6 +5345,12 @@
               "eod": -0.01969576528400052,
               "eod_low": -0.08906823965895669,
               "eod_high": 0.04072623533500948
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.8781626654985799,
+              "eod": -0.0327509676791119,
+              "eod_low": -0.10273185646894446,
+              "eod_high": 0.029224542124402453
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0010504060269729452,
@@ -3688,6 +5380,12 @@
               "eod_low": -0.0691385902790489,
               "eod_high": 0.09490042562586515
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9131681523912821,
+              "eod": -0.004154731281393764,
+              "eod_low": -0.08792851492518862,
+              "eod_high": 0.0768298984620374
+            },
             "top_10:woman": {
               "ratio": 1.1258357848109626,
               "eod": 0.001335156542267124,
@@ -3705,6 +5403,12 @@
               "eod": -0.02442549501373026,
               "eod_low": -0.09266964613894939,
               "eod_high": 0.033896399905096616
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.8853188933265765,
+              "eod": -0.03806204506909672,
+              "eod_low": -0.10628986090535132,
+              "eod_high": 0.021011181268775637
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": -0.0003947098605912167,
@@ -3734,6 +5438,12 @@
               "eod_low": -0.0616587222711472,
               "eod_high": 0.10456506412932619
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9440575613516637,
+              "eod": 0.0004706531529704572,
+              "eod_low": -0.08368903252692965,
+              "eod_high": 0.0818951051905446
+            },
             "top_10:woman": {
               "ratio": 1.1210740442073095,
               "eod": 0.008736567809182194,
@@ -3752,11 +5462,75 @@
               "eod_low": -0.0834604351351265,
               "eod_high": 0.04593493798008821
             },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.8764814351243005,
+              "eod": -0.030438275461929898,
+              "eod_low": -0.09844843270816078,
+              "eod_high": 0.03054426588040494
+            },
             "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0019963670847185427,
               "95ci": [
                 -0.0012543321319825771,
                 0.005406110608002845
+              ]
+            }
+          },
+          "served_without_experience_surplus": {
+            "ndcg_at_10": 0.8214625353844973,
+            "top_5:woman": {
+              "ratio": 1.1335543902189633,
+              "eod": 0.011163392200621791,
+              "eod_low": -0.033921490124304114,
+              "eod_high": 0.05752255872343565
+            },
+            "top_5:nonbinary": {
+              "ratio": 0.9539605489607696,
+              "eod": -0.10928872122901978,
+              "eod_low": -0.21433059283149988,
+              "eod_high": -0.005662631080755156
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.2301340192229593,
+              "eod": 0.00881268969504262,
+              "eod_low": -0.07687289805612499,
+              "eod_high": 0.08835329831620102
+            },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9165419263533189,
+              "eod": -0.007226148840002278,
+              "eod_low": -0.09361240952910638,
+              "eod_high": 0.07357559459727007
+            },
+            "top_10:woman": {
+              "ratio": 1.1258357848109626,
+              "eod": 0.010141062191204697,
+              "eod_low": -0.031934253347933025,
+              "eod_high": 0.050933289459583406
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.142835923470858,
+              "eod": 0.03455251216445243,
+              "eod_low": -0.05851768492342426,
+              "eod_high": 0.12164405411624013
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.1243401287651746,
+              "eod": -0.030448764272293705,
+              "eod_low": -0.09742840457161887,
+              "eod_high": 0.031230308569996243
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.8826776406425314,
+              "eod": -0.042650913310558036,
+              "eod_low": -0.10835179378356673,
+              "eod_high": 0.019143194105966002
+            },
+            "ndcg_at_10_minus_unmitigated": {
+              "mean": -0.0009806880919833983,
+              "95ci": [
+                -0.00633301295900731,
+                0.004443164426484514
               ]
             }
           },
@@ -3832,6 +5606,12 @@
               "eod_low": 0.06412688623517375,
               "eod_high": 0.1800349223115093
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 1.340840339506217,
+              "eod": 0.11213619731463481,
+              "eod_low": 0.05029720306766454,
+              "eod_high": 0.16759701724446513
+            },
             "top_10:woman": {
               "ratio": 0.9868866356946657,
               "eod": -0.017485865469319517,
@@ -3849,6 +5629,12 @@
               "eod": 0.08885324477831691,
               "eod_low": 0.03980354679462972,
               "eod_high": 0.13580485456636343
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 1.1656603687795133,
+              "eod": 0.08036805119647261,
+              "eod_low": 0.031132492500569788,
+              "eod_high": 0.12458680430714691
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": 0.004112497026904559,
@@ -3878,6 +5664,12 @@
               "eod_low": 0.0595696295272729,
               "eod_high": 0.1733879184525494
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 1.3322452091247667,
+              "eod": 0.10589279973054488,
+              "eod_low": 0.046079618086326504,
+              "eod_high": 0.16007234938465636
+            },
             "top_10:woman": {
               "ratio": 0.9170026830034697,
               "eod": -0.07093192150069083,
@@ -3895,6 +5687,12 @@
               "eod": 0.06654522592813494,
               "eod_low": 0.01347217828731658,
               "eod_high": 0.11396718200282976
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 1.1413640921300126,
+              "eod": 0.05545876264984617,
+              "eod_low": 0.002713284732689184,
+              "eod_high": 0.10110167698642172
             }
           },
           "fitted_on_relevance": {
@@ -3917,6 +5715,12 @@
               "eod_low": 0.07342846488387533,
               "eod_high": 0.19245676313418664
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 1.3672578886270095,
+              "eod": 0.10961924154508018,
+              "eod_low": 0.050237034042794636,
+              "eod_high": 0.16775147383284636
+            },
             "top_10:woman": {
               "ratio": 1.0195577738865067,
               "eod": -0.009794736268366022,
@@ -3934,6 +5738,12 @@
               "eod": 0.09777860171199204,
               "eod_low": 0.05394607875146924,
               "eod_high": 0.14005418418981316
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 1.2005983470125696,
+              "eod": 0.08442518792963538,
+              "eod_low": 0.04098580853676649,
+              "eod_high": 0.12563145471891643
             }
           },
           "trained_without_historical_bias": {
@@ -3956,6 +5766,12 @@
               "eod_low": 0.039769268907694215,
               "eod_high": 0.16033857839143112
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 1.3013297401611217,
+              "eod": 0.08722690876800837,
+              "eod_low": 0.025498834588758602,
+              "eod_high": 0.1438043044763912
+            },
             "top_10:woman": {
               "ratio": 0.9578055485849715,
               "eod": -0.0314568804744606,
@@ -3973,6 +5789,12 @@
               "eod": 0.07741847081392161,
               "eod_low": 0.02734327168563808,
               "eod_high": 0.1255515321999334
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 1.1648769948757636,
+              "eod": 0.06320253532770947,
+              "eod_low": 0.014167193836941339,
+              "eod_high": 0.11042611676068699
             }
           },
           "drop_proxy_terms": {
@@ -3995,6 +5817,12 @@
               "eod_low": 0.05686830183243257,
               "eod_high": 0.1719882954270331
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 1.3322452091247667,
+              "eod": 0.10439242463677145,
+              "eod_low": 0.0451732102432115,
+              "eod_high": 0.15940649215165112
+            },
             "top_10:woman": {
               "ratio": 0.9438123049932823,
               "eod": -0.05009177501421547,
@@ -4012,6 +5840,12 @@
               "eod": 0.07335343016351514,
               "eod_low": 0.021134452467092738,
               "eod_high": 0.12006743608586669
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 1.1493724250263484,
+              "eod": 0.06137146531530835,
+              "eod_low": 0.009559941736864986,
+              "eod_high": 0.10767775987886799
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0017320413319019548,
@@ -4041,6 +5875,12 @@
               "eod_low": 0.07868191426442268,
               "eod_high": 0.19957052738218123
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 1.3898314412289048,
+              "eod": 0.12771254037999297,
+              "eod_low": 0.06696356354594853,
+              "eod_high": 0.18435587416505309
+            },
             "top_10:woman": {
               "ratio": 0.9762821342365711,
               "eod": -0.02860787762545769,
@@ -4058,6 +5898,12 @@
               "eod": 0.09433957194826403,
               "eod_low": 0.045681037986462926,
               "eod_high": 0.13930208065418467
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 1.1872473314819638,
+              "eod": 0.08478037876816147,
+              "eod_low": 0.03667916654839708,
+              "eod_high": 0.12803019055778586
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": 0.004270861516539794,
@@ -4087,6 +5933,12 @@
               "eod_low": 0.061427582541622026,
               "eod_high": 0.17710422918300123
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 1.3357557366850428,
+              "eod": 0.11072461993049276,
+              "eod_low": 0.049943175704663646,
+              "eod_high": 0.16574317843398823
+            },
             "top_10:woman": {
               "ratio": 0.9657723158272091,
               "eod": -0.03612076000907449,
@@ -4105,11 +5957,75 @@
               "eod_low": 0.03499616827732593,
               "eod_high": 0.130594658794292
             },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 1.1472939458965068,
+              "eod": 0.07703660609029805,
+              "eod_low": 0.028903676642469435,
+              "eod_high": 0.12004253489124336
+            },
             "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0009858525126869705,
               "95ci": [
                 -0.004575103155066266,
                 0.006307473398796503
+              ]
+            }
+          },
+          "served_without_experience_surplus": {
+            "ndcg_at_10": 0.8115995340218138,
+            "top_5:woman": {
+              "ratio": 0.8762140076569186,
+              "eod": -0.05671636953953396,
+              "eod_low": -0.10647134999790846,
+              "eod_high": -0.006173200721533083
+            },
+            "top_5:nonbinary": {
+              "ratio": 0.7702518431526065,
+              "eod": -0.10258531540847982,
+              "eod_low": -0.21505889847083243,
+              "eod_high": 0.021813444229986885
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.7439873673981698,
+              "eod": 0.10975341081897266,
+              "eod_low": 0.0500115116057044,
+              "eod_high": 0.16622452076563635
+            },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 1.2995724042931756,
+              "eod": 0.09956060443682346,
+              "eod_low": 0.04070045838975468,
+              "eod_high": 0.15592696680605123
+            },
+            "top_10:woman": {
+              "ratio": 0.9963401216098833,
+              "eod": -0.018910366893820973,
+              "eod_low": -0.05982747546587018,
+              "eod_high": 0.02230753525107633
+            },
+            "top_10:nonbinary": {
+              "ratio": 0.9103934233705226,
+              "eod": -0.07275652073997474,
+              "eod_low": -0.17067927355759563,
+              "eod_high": 0.025251379037798546
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.4667196768027975,
+              "eod": 0.06588428739541852,
+              "eod_low": 0.012140771673543022,
+              "eod_high": 0.11712124792854903
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 1.1379303498537772,
+              "eod": 0.05995988793116647,
+              "eod_low": 0.007847927820530573,
+              "eod_high": 0.10807952726843813
+            },
+            "ndcg_at_10_minus_unmitigated": {
+              "mean": 0.0036235960992431105,
+              "95ci": [
+                -0.0033421983306479645,
+                0.010503599403539688
               ]
             }
           },
@@ -4185,6 +6101,12 @@
               "eod_low": -0.029464478942950446,
               "eod_high": 0.11304677503203889
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 1.034722146598569,
+              "eod": 0.025318192486143976,
+              "eod_low": -0.04281609452148481,
+              "eod_high": 0.10033166246381438
+            },
             "top_10:woman": {
               "ratio": 0.9424830053667264,
               "eod": -0.021772647720643468,
@@ -4202,6 +6124,12 @@
               "eod": 0.05433327512950348,
               "eod_low": -0.0020795383797782754,
               "eod_high": 0.1130749554168509
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 1.0252589016328448,
+              "eod": 0.046884872993807614,
+              "eod_low": -0.010147165690439861,
+              "eod_high": 0.10363006565600863
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": -0.0009406126733156748,
@@ -4231,6 +6159,12 @@
               "eod_low": -0.030470702901043437,
               "eod_high": 0.11017057933486495
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 1.0626091703056768,
+              "eod": 0.02383780758606996,
+              "eod_low": -0.043637524807794745,
+              "eod_high": 0.09903883639443666
+            },
             "top_10:woman": {
               "ratio": 0.9073881520778073,
               "eod": -0.039815817984832025,
@@ -4248,6 +6182,12 @@
               "eod": 0.04601012746638722,
               "eod_low": -0.01432462866024873,
               "eod_high": 0.10674553870317278
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.999034262680551,
+              "eod": 0.03860916033290607,
+              "eod_low": -0.021246920824739078,
+              "eod_high": 0.09852794018476273
             }
           },
           "fitted_on_relevance": {
@@ -4270,6 +6210,12 @@
               "eod_low": -0.012214643920308082,
               "eod_high": 0.11700212973486153
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 1.048756500777688,
+              "eod": 0.03295120145872077,
+              "eod_low": -0.02796681642250431,
+              "eod_high": 0.09964454617257165
+            },
             "top_10:woman": {
               "ratio": 0.9814215775158658,
               "eod": -0.028835736311359272,
@@ -4287,6 +6233,12 @@
               "eod": 0.06472265875094585,
               "eod_low": 0.01269301127153937,
               "eod_high": 0.11192723196008467
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 1.014352826290251,
+              "eod": 0.048462746655593913,
+              "eod_low": -0.002506198529512032,
+              "eod_high": 0.0962227918969507
             }
           },
           "trained_without_historical_bias": {
@@ -4309,6 +6261,12 @@
               "eod_low": -0.048233780225911835,
               "eod_high": 0.09689433511773725
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 1.0334335760548599,
+              "eod": 0.005636294704915945,
+              "eod_low": -0.06394095568545967,
+              "eod_high": 0.08210878017411646
+            },
             "top_10:woman": {
               "ratio": 0.9642420957542909,
               "eod": -0.031231769314109536,
@@ -4326,6 +6284,12 @@
               "eod": 0.05514812874687158,
               "eod_low": -0.0025858650514117808,
               "eod_high": 0.11024211996769577
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 1.009386949340453,
+              "eod": 0.04806195952411041,
+              "eod_low": -0.011450013855898122,
+              "eod_high": 0.10407810295609515
             }
           },
           "drop_proxy_terms": {
@@ -4348,6 +6312,12 @@
               "eod_low": -0.030300318730285204,
               "eod_high": 0.11163274319898507
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 1.0639390941733935,
+              "eod": 0.02457800003610694,
+              "eod_low": -0.04197219378363249,
+              "eod_high": 0.09834494124247131
+            },
             "top_10:woman": {
               "ratio": 0.9134503546099291,
               "eod": -0.033211100925077175,
@@ -4365,6 +6335,12 @@
               "eod": 0.050841045340783375,
               "eod_low": -0.009687904675785102,
               "eod_high": 0.11090572686095175
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9996750800395507,
+              "eod": 0.04422740156343086,
+              "eod_low": -0.014920812814537717,
+              "eod_high": 0.1052673638670143
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": -0.0009573229501202781,
@@ -4394,6 +6370,12 @@
               "eod_low": -0.03797162121869633,
               "eod_high": 0.10381855026765688
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 1.0250316770625438,
+              "eod": 0.016739181455471097,
+              "eod_low": -0.05239684591032421,
+              "eod_high": 0.09155650697506094
+            },
             "top_10:woman": {
               "ratio": 0.949182389937107,
               "eod": -0.02512709392449375,
@@ -4411,6 +6393,12 @@
               "eod": 0.061172225132413716,
               "eod_low": 0.003651447838346253,
               "eod_high": 0.11975471350786657
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 1.0252589016328448,
+              "eod": 0.0525031142243324,
+              "eod_low": -0.0031346529489938765,
+              "eod_high": 0.11080705933311567
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": 0.00020389311932098142,
@@ -4440,6 +6428,12 @@
               "eod_low": -0.044238097246930376,
               "eod_high": 0.09234972365584773
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 1.0128457962659962,
+              "eod": 0.006679785524724202,
+              "eod_low": -0.05915157560516443,
+              "eod_high": 0.07937435064193984
+            },
             "top_10:woman": {
               "ratio": 0.9637403065825069,
               "eod": -0.015272106008834108,
@@ -4458,11 +6452,75 @@
               "eod_low": 0.007348132641374481,
               "eod_high": 0.12160332998825156
             },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 1.018946239938932,
+              "eod": 0.05620407647451753,
+              "eod_low": -0.00015846088942645932,
+              "eod_high": 0.11323387289465692
+            },
             "ndcg_at_10_minus_unmitigated": {
               "mean": -0.0016682905448755323,
               "95ci": [
                 -0.007622293025977522,
                 0.003925156047369413
+              ]
+            }
+          },
+          "served_without_experience_surplus": {
+            "ndcg_at_10": 0.8066719977760198,
+            "top_5:woman": {
+              "ratio": 0.9857330895795247,
+              "eod": -0.000979248270689237,
+              "eod_low": -0.04939693986980855,
+              "eod_high": 0.04748387742474431
+            },
+            "top_5:nonbinary": {
+              "ratio": 1.1757312614259596,
+              "eod": 0.04284834193699144,
+              "eod_low": -0.06389553617715382,
+              "eod_high": 0.14856476412769423
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.226437609250156,
+              "eod": -0.0061114021302601795,
+              "eod_low": -0.07179287010770775,
+              "eod_high": 0.06559099189796117
+            },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9457236392652387,
+              "eod": -0.015489881027603736,
+              "eod_low": -0.08034342686803783,
+              "eod_high": 0.056686809719195506
+            },
+            "top_10:woman": {
+              "ratio": 0.9565786163522013,
+              "eod": -0.03487790649220768,
+              "eod_low": -0.07362550673514617,
+              "eod_high": 0.002291528801792952
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0689858490566038,
+              "eod": -0.010919210587810424,
+              "eod_low": -0.10351088096170064,
+              "eod_high": 0.07812328630241396
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.2571143480018672,
+              "eod": 0.03515511320644904,
+              "eod_low": -0.024151308030077603,
+              "eod_high": 0.09326021433355647
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9943460084739304,
+              "eod": 0.031510534202307205,
+              "eod_low": -0.026525687684013387,
+              "eod_high": 0.09105152137888878
+            },
+            "ndcg_at_10_minus_unmitigated": {
+              "mean": -0.0017872480194220742,
+              "95ci": [
+                -0.00930340419102454,
+                0.004960362690353918
               ]
             }
           },
@@ -4538,6 +6596,12 @@
               "eod_low": -0.018631748603424144,
               "eod_high": 0.1317628533522892
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 1.075604650477136,
+              "eod": 0.047781877983233745,
+              "eod_low": -0.029678123717677155,
+              "eod_high": 0.12037334109817095
+            },
             "top_10:woman": {
               "ratio": 1.0412204234122042,
               "eod": 0.013623636994130495,
@@ -4555,6 +6619,12 @@
               "eod": 0.09641946036795812,
               "eod_low": 0.04377196565656297,
               "eod_high": 0.14412808886143724
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 1.0401781518472129,
+              "eod": 0.08697672242054733,
+              "eod_low": 0.03345349381886317,
+              "eod_high": 0.13550375529808248
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0043579170159363636,
@@ -4584,6 +6654,12 @@
               "eod_low": -0.0032710806382025,
               "eod_high": 0.1486178072497972
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 1.0884829865107157,
+              "eod": 0.06572807615685955,
+              "eod_low": -0.011901225856139048,
+              "eod_high": 0.14023136378102075
+            },
             "top_10:woman": {
               "ratio": 1.0009680624581883,
               "eod": 0.003063150999858766,
@@ -4601,6 +6677,12 @@
               "eod": 0.08704042738377504,
               "eod_low": 0.031711828496674796,
               "eod_high": 0.13443356244323226
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 1.0377877552640558,
+              "eod": 0.07721645073736849,
+              "eod_low": 0.020649304691244322,
+              "eod_high": 0.1255266584083325
             }
           },
           "fitted_on_relevance": {
@@ -4623,6 +6705,12 @@
               "eod_low": -0.04982739082801509,
               "eod_high": 0.08125373948837288
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 0.9881751617548628,
+              "eod": 0.002974877328092207,
+              "eod_low": -0.06643456609955084,
+              "eod_high": 0.06342021513468327
+            },
             "top_10:woman": {
               "ratio": 1.0548971138550665,
               "eod": 0.051071781764940094,
@@ -4640,6 +6728,12 @@
               "eod": 0.07203997719019184,
               "eod_low": 0.018564236138327927,
               "eod_high": 0.12071604487376564
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 0.9689757849910376,
+              "eod": 0.05077012554650839,
+              "eod_low": -0.0026664456698916508,
+              "eod_high": 0.09992001937602964
             }
           },
           "trained_without_historical_bias": {
@@ -4662,6 +6756,12 @@
               "eod_low": 0.0008445239578121315,
               "eod_high": 0.1430503740303235
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 1.1264684172066783,
+              "eod": 0.06417044375810566,
+              "eod_low": -0.010937493190277875,
+              "eod_high": 0.13276131320347653
+            },
             "top_10:woman": {
               "ratio": 1.0475770804537927,
               "eod": 0.03552163470800529,
@@ -4679,6 +6779,12 @@
               "eod": 0.10080734715927853,
               "eod_low": 0.0481523690423961,
               "eod_high": 0.14526061702532636
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 1.0397764069607278,
+              "eod": 0.08932988381265627,
+              "eod_low": 0.03590741542015515,
+              "eod_high": 0.1348070309911556
             }
           },
           "drop_proxy_terms": {
@@ -4701,6 +6807,12 @@
               "eod_low": -0.003919064677720386,
               "eod_high": 0.14757805779551542
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 1.0898947672973707,
+              "eod": 0.06494925995748257,
+              "eod_low": -0.01308699789867275,
+              "eod_high": 0.13935423185502807
+            },
             "top_10:woman": {
               "ratio": 1.01175740400267,
               "eod": 0.005978602894902485,
@@ -4718,6 +6830,12 @@
               "eod": 0.08564182598517367,
               "eod_low": 0.03028239286568107,
               "eod_high": 0.1334922613816058
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 1.0401781518472129,
+              "eod": 0.07565881833861465,
+              "eod_low": 0.019498323065934086,
+              "eod_high": 0.1240410482997631
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": 0.0003056083945656507,
@@ -4747,6 +6865,12 @@
               "eod_low": -0.004657021175124655,
               "eod_high": 0.148510445010853
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 1.098823457055875,
+              "eod": 0.06221504686267426,
+              "eod_low": -0.016785521333627547,
+              "eod_high": 0.13893967706703214
+            },
             "top_10:woman": {
               "ratio": 1.042172178826658,
               "eod": 0.01838532769936163,
@@ -4764,6 +6888,12 @@
               "eod": 0.10210990726012192,
               "eod_low": 0.051737082492179516,
               "eod_high": 0.14592241155827387
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 1.0477430838606472,
+              "eod": 0.0928262003128636,
+              "eod_low": 0.041423809942491445,
+              "eod_high": 0.13798683892130706
             },
             "ndcg_at_10_minus_unmitigated": {
               "mean": 0.004976858712983907,
@@ -4793,6 +6923,12 @@
               "eod_low": -0.02258509484388408,
               "eod_high": 0.13131462227828808
             },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 1.0624385743719056,
+              "eod": 0.047003061783856825,
+              "eod_low": -0.03344471448248006,
+              "eod_high": 0.1202771350445679
+            },
             "top_10:woman": {
               "ratio": 1.062667994988437,
               "eod": 0.019098136422599277,
@@ -4811,11 +6947,75 @@
               "eod_low": 0.04441754429206355,
               "eod_high": 0.140189031373357
             },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 1.0543541323821386,
+              "eod": 0.0861979062211704,
+              "eod_low": 0.03452738413427455,
+              "eod_high": 0.1323202317245035
+            },
             "ndcg_at_10_minus_unmitigated": {
               "mean": 0.00585700547640612,
               "95ci": [
                 0.00047261618849428044,
                 0.011348548950434235
+              ]
+            }
+          },
+          "served_without_experience_surplus": {
+            "ndcg_at_10": 0.8080938896401257,
+            "top_5:woman": {
+              "ratio": 1.060045459128028,
+              "eod": 0.012503050307599461,
+              "eod_low": -0.03788228790612626,
+              "eod_high": 0.06899950091640204
+            },
+            "top_5:nonbinary": {
+              "ratio": 0.9694334536284186,
+              "eod": 0.037157632637425775,
+              "eod_low": -0.08561159726578459,
+              "eod_high": 0.15890406938446391
+            },
+            "top_5:40_and_over": {
+              "ratio": 1.3742282224814057,
+              "eod": 0.042582310393469214,
+              "eod_low": -0.034917473946856896,
+              "eod_high": 0.1149826738635955
+            },
+            "top_5_meeting_minimum:40_and_over": {
+              "ratio": 1.0260536916879361,
+              "eod": 0.03490634150254701,
+              "eod_low": -0.04236675570593831,
+              "eod_high": 0.10748727361364274
+            },
+            "top_10:woman": {
+              "ratio": 1.0469466489594577,
+              "eod": 0.0052336856706182155,
+              "eod_low": -0.03841838366088541,
+              "eod_high": 0.04697839688282467
+            },
+            "top_10:nonbinary": {
+              "ratio": 1.0271958998018411,
+              "eod": 0.04414863053054974,
+              "eod_low": -0.05540540540540539,
+              "eod_high": 0.13335055331210358
+            },
+            "top_10:40_and_over": {
+              "ratio": 1.3290541809971752,
+              "eod": 0.06926978600798339,
+              "eod_low": 0.016109170818996283,
+              "eod_high": 0.11583155310785696
+            },
+            "top_10_meeting_minimum:40_and_over": {
+              "ratio": 1.0336837290809626,
+              "eod": 0.06122564945917397,
+              "eod_low": 0.007921508701865452,
+              "eod_high": 0.10804077427090002
+            },
+            "ndcg_at_10_minus_unmitigated": {
+              "mean": 0.003738208256659019,
+              "95ci": [
+                -0.003287733555764384,
+                0.011116624184132456
               ]
             }
           },
@@ -4954,6 +7154,22 @@
           "eod_interval_below_zero": 0,
           "eod_interval_above_zero": 1
         },
+        "top_5_meeting_minimum:40_and_over": {
+          "ratio": {
+            "runs": 8,
+            "mean": 1.011710621766904,
+            "min": 0.889526630040706,
+            "max": 1.340840339506217
+          },
+          "eod": {
+            "runs": 8,
+            "mean": 0.02478147264374373,
+            "min": -0.017207212236239833,
+            "max": 0.11213619731463481
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 1
+        },
         "top_10:woman": {
           "ratio": {
             "runs": 8,
@@ -4998,6 +7214,22 @@
             "mean": 0.044692190852365685,
             "min": -0.02977308859661798,
             "max": 0.09641946036795812
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 2
+        },
+        "top_10_meeting_minimum:40_and_over": {
+          "ratio": {
+            "runs": 8,
+            "mean": 0.9815962994247763,
+            "min": 0.8824885899591641,
+            "max": 1.1656603687795133
+          },
+          "eod": {
+            "runs": 8,
+            "mean": 0.032720412922912265,
+            "min": -0.04416836399341084,
+            "max": 0.08697672242054733
           },
           "eod_interval_below_zero": 0,
           "eod_interval_above_zero": 2
@@ -5066,6 +7298,22 @@
           "eod_interval_below_zero": 0,
           "eod_interval_above_zero": 1
         },
+        "top_5_meeting_minimum:40_and_over": {
+          "ratio": {
+            "runs": 8,
+            "mean": 1.0252025437630503,
+            "min": 0.8809100435017306,
+            "max": 1.3322452091247667
+          },
+          "eod": {
+            "runs": 8,
+            "mean": 0.03305133941069187,
+            "min": -0.01618845595623536,
+            "max": 0.10589279973054488
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 1
+        },
         "top_10:woman": {
           "ratio": {
             "runs": 8,
@@ -5110,6 +7358,22 @@
             "mean": 0.041450114823212564,
             "min": -0.013672496025437297,
             "max": 0.08704042738377504
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 2
+        },
+        "top_10_meeting_minimum:40_and_over": {
+          "ratio": {
+            "runs": 8,
+            "mean": 0.9638861882232241,
+            "min": 0.8787245098143179,
+            "max": 1.1413640921300126
+          },
+          "eod": {
+            "runs": 8,
+            "mean": 0.030060177984135877,
+            "min": -0.027403374096224287,
+            "max": 0.07721645073736849
           },
           "eod_interval_below_zero": 0,
           "eod_interval_above_zero": 2
@@ -5170,6 +7434,22 @@
           "eod_interval_below_zero": 0,
           "eod_interval_above_zero": 1
         },
+        "top_5_meeting_minimum:40_and_over": {
+          "ratio": {
+            "runs": 8,
+            "mean": 0.9875063288831869,
+            "min": 0.8701139502762432,
+            "max": 1.3672578886270095
+          },
+          "eod": {
+            "runs": 8,
+            "mean": 0.013969095735207507,
+            "min": -0.019292721917018918,
+            "max": 0.10961924154508018
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 1
+        },
         "top_10:woman": {
           "ratio": {
             "runs": 8,
@@ -5217,6 +7497,22 @@
           },
           "eod_interval_below_zero": 0,
           "eod_interval_above_zero": 3
+        },
+        "top_10_meeting_minimum:40_and_over": {
+          "ratio": {
+            "runs": 8,
+            "mean": 0.9705042117366492,
+            "min": 0.9111394223753775,
+            "max": 1.2005983470125696
+          },
+          "eod": {
+            "runs": 8,
+            "mean": 0.03114495766286296,
+            "min": -0.005071693458732596,
+            "max": 0.08442518792963538
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 1
         }
       },
       "trained_without_historical_bias": {
@@ -5274,6 +7570,22 @@
           "eod_interval_below_zero": 0,
           "eod_interval_above_zero": 3
         },
+        "top_5_meeting_minimum:40_and_over": {
+          "ratio": {
+            "runs": 8,
+            "mean": 1.0518740553389032,
+            "min": 0.9556822487856971,
+            "max": 1.3013297401611217
+          },
+          "eod": {
+            "runs": 8,
+            "mean": 0.04300490845578439,
+            "min": 0.0019398236016523462,
+            "max": 0.08722690876800837
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 1
+        },
         "top_10:woman": {
           "ratio": {
             "runs": 8,
@@ -5321,6 +7633,22 @@
           },
           "eod_interval_below_zero": 0,
           "eod_interval_above_zero": 3
+        },
+        "top_10_meeting_minimum:40_and_over": {
+          "ratio": {
+            "runs": 8,
+            "mean": 0.9900780852633495,
+            "min": 0.930344652939519,
+            "max": 1.1648769948757636
+          },
+          "eod": {
+            "runs": 8,
+            "mean": 0.04475760057240473,
+            "min": -0.00832569198185551,
+            "max": 0.08932988381265627
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 2
         }
       },
       "drop_proxy_terms": {
@@ -5378,6 +7706,22 @@
           "eod_interval_below_zero": 0,
           "eod_interval_above_zero": 1
         },
+        "top_5_meeting_minimum:40_and_over": {
+          "ratio": {
+            "runs": 8,
+            "mean": 1.0275708032228343,
+            "min": 0.877672695854514,
+            "max": 1.3322452091247667
+          },
+          "eod": {
+            "runs": 8,
+            "mean": 0.031838600573385764,
+            "min": -0.01794685720665401,
+            "max": 0.10439242463677145
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 1
+        },
         "top_10:woman": {
           "ratio": {
             "runs": 8,
@@ -5422,6 +7766,22 @@
             "mean": 0.0409685288203573,
             "min": -0.01969576528400052,
             "max": 0.08564182598517367
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 2
+        },
+        "top_10_meeting_minimum:40_and_over": {
+          "ratio": {
+            "runs": 8,
+            "mean": 0.9684018914580261,
+            "min": 0.8781626654985799,
+            "max": 1.1493724250263484
+          },
+          "eod": {
+            "runs": 8,
+            "mean": 0.02943646964650598,
+            "min": -0.0327509676791119,
+            "max": 0.07565881833861465
           },
           "eod_interval_below_zero": 0,
           "eod_interval_above_zero": 2
@@ -5490,6 +7850,22 @@
           "eod_interval_below_zero": 0,
           "eod_interval_above_zero": 1
         },
+        "top_5_meeting_minimum:40_and_over": {
+          "ratio": {
+            "runs": 8,
+            "mean": 1.019838094556289,
+            "min": 0.8852388397842942,
+            "max": 1.3898314412289048
+          },
+          "eod": {
+            "runs": 8,
+            "mean": 0.02995946353608605,
+            "min": -0.015727922295411423,
+            "max": 0.12771254037999297
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 1
+        },
         "top_10:woman": {
           "ratio": {
             "runs": 8,
@@ -5537,6 +7913,22 @@
           },
           "eod_interval_below_zero": 0,
           "eod_interval_above_zero": 3
+        },
+        "top_10_meeting_minimum:40_and_over": {
+          "ratio": {
+            "runs": 8,
+            "mean": 0.9795113966559845,
+            "min": 0.8853188933265765,
+            "max": 1.1872473314819638
+          },
+          "eod": {
+            "runs": 8,
+            "mean": 0.03104130547689221,
+            "min": -0.03806204506909672,
+            "max": 0.0928262003128636
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 2
         },
         "ndcg_at_10_minus_unmitigated": {
           "runs": 8,
@@ -5602,6 +7994,22 @@
           "eod_interval_below_zero": 0,
           "eod_interval_above_zero": 1
         },
+        "top_5_meeting_minimum:40_and_over": {
+          "ratio": {
+            "runs": 8,
+            "mean": 1.0166121314015988,
+            "min": 0.8744499074976432,
+            "max": 1.3357557366850428
+          },
+          "eod": {
+            "runs": 8,
+            "mean": 0.027463692145131467,
+            "min": -0.02090543708831083,
+            "max": 0.11072461993049276
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 1
+        },
         "top_10:woman": {
           "ratio": {
             "runs": 8,
@@ -5650,6 +8058,22 @@
           "eod_interval_below_zero": 0,
           "eod_interval_above_zero": 4
         },
+        "top_10_meeting_minimum:40_and_over": {
+          "ratio": {
+            "runs": 8,
+            "mean": 0.9772736453879477,
+            "min": 0.8764814351243005,
+            "max": 1.1472939458965068
+          },
+          "eod": {
+            "runs": 8,
+            "mean": 0.03766608248358229,
+            "min": -0.030438275461929898,
+            "max": 0.0861979062211704
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 2
+        },
         "ndcg_at_10_minus_unmitigated": {
           "runs": 8,
           "mean": 0.0018939598171707293,
@@ -5657,6 +8081,150 @@
           "max": 0.00585700547640612,
           "interval_below_zero": 0,
           "interval_above_zero": 1
+        }
+      },
+      "served_without_experience_surplus": {
+        "ndcg_at_10": {
+          "runs": 8,
+          "mean": 0.8068566591288724,
+          "min": 0.7979745915368963,
+          "max": 0.8214625353844973
+        },
+        "top_5:woman": {
+          "ratio": {
+            "runs": 8,
+            "mean": 0.9777589115498369,
+            "min": 0.8762140076569186,
+            "max": 1.1335543902189633
+          },
+          "eod": {
+            "runs": 8,
+            "mean": -0.014967891638322614,
+            "min": -0.05671636953953396,
+            "max": 0.012503050307599461
+          },
+          "eod_interval_below_zero": 1,
+          "eod_interval_above_zero": 0
+        },
+        "top_5:nonbinary": {
+          "ratio": {
+            "runs": 8,
+            "mean": 0.9746751111393113,
+            "min": 0.7702518431526065,
+            "max": 1.1757312614259596
+          },
+          "eod": {
+            "runs": 8,
+            "mean": -0.037349844887908566,
+            "min": -0.10928872122901978,
+            "max": 0.04284834193699144
+          },
+          "eod_interval_below_zero": 1,
+          "eod_interval_above_zero": 0
+        },
+        "top_5:40_and_over": {
+          "ratio": {
+            "runs": 8,
+            "mean": 1.2956226578694574,
+            "min": 1.1577932064468526,
+            "max": 1.7439873673981698
+          },
+          "eod": {
+            "runs": 8,
+            "mean": 0.019692082480145263,
+            "min": -0.007800307063734746,
+            "max": 0.10975341081897266
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 1
+        },
+        "top_5_meeting_minimum:40_and_over": {
+          "ratio": {
+            "runs": 8,
+            "mean": 0.9693638916848203,
+            "min": 0.8625404079949534,
+            "max": 1.2995724042931756
+          },
+          "eod": {
+            "runs": 8,
+            "mean": 0.006152003394758208,
+            "min": -0.024882773249972068,
+            "max": 0.09956060443682346
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 1
+        },
+        "top_10:woman": {
+          "ratio": {
+            "runs": 8,
+            "mean": 0.9888216484291119,
+            "min": 0.9347739962319814,
+            "max": 1.1258357848109626
+          },
+          "eod": {
+            "runs": 8,
+            "mean": -0.012717840899404198,
+            "min": -0.03487790649220768,
+            "max": 0.010141062191204697
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 0
+        },
+        "top_10:nonbinary": {
+          "ratio": {
+            "runs": 8,
+            "mean": 1.0508048951124138,
+            "min": 0.9103934233705226,
+            "max": 1.142835923470858
+          },
+          "eod": {
+            "runs": 8,
+            "mean": -0.020028056032775604,
+            "min": -0.07275652073997474,
+            "max": 0.04414863053054974
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 0
+        },
+        "top_10:40_and_over": {
+          "ratio": {
+            "runs": 8,
+            "mean": 1.2295860860246224,
+            "min": 1.1243401287651746,
+            "max": 1.4667196768027975
+          },
+          "eod": {
+            "runs": 8,
+            "mean": 0.02777735618258434,
+            "min": -0.030448764272293705,
+            "max": 0.06926978600798339
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 2
+        },
+        "top_10_meeting_minimum:40_and_over": {
+          "ratio": {
+            "runs": 8,
+            "mean": 0.9669762165161615,
+            "min": 0.8826776406425314,
+            "max": 1.1379303498537772
+          },
+          "eod": {
+            "runs": 8,
+            "mean": 0.018142925682883185,
+            "min": -0.042650913310558036,
+            "max": 0.06122564945917397
+          },
+          "eod_interval_below_zero": 0,
+          "eod_interval_above_zero": 2
+        },
+        "ndcg_at_10_minus_unmitigated": {
+          "runs": 8,
+          "mean": 0.0007609017852222554,
+          "min": -0.005104280180253737,
+          "max": 0.003738208256659019,
+          "interval_below_zero": 0,
+          "interval_above_zero": 0
         }
       },
       "lines_swapped": {

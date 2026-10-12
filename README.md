@@ -111,19 +111,19 @@ pytest --cov --cov-report=term-missing:skip-covered
 Coverage counts lines and branches in `backend/app` and in `scripts`, the
 command-line entry points that train, evaluate and audit the matcher and write
 the sample reports. Scripts the tests run as a subprocess are counted only
-where a test also calls them in-process. Measured on 2026-10-11 over the whole
-suite (1,630 tests, every one passing, with the embeddings extra installed so
+where a test also calls them in-process. Measured on 2026-10-12 over the whole
+suite (1,658 tests, every one passing, with the embeddings extra installed so
 the real models load):
 
 | Area | Lines | Branches | Covered |
 | ---- | ----- | -------- | ------- |
-| `app/ml` (features, training, ranking, retrieval, fairness) | 1,169 of 1,169 | 264 of 264 | 100% |
-| `app/services` (scoring, reports, resumes, embeddings) | 394 of 395 | 85 of 86 | 99.6% |
+| `app/ml` (features, training, ranking, retrieval, fairness) | 1,185 of 1,185 | 266 of 266 | 100% |
+| `app/services` (scoring, reports, resumes, embeddings, requirements) | 438 of 439 | 103 of 104 | 99.6% |
 | `app/api` (routes, body limit, errors) | 582 of 582 | 125 of 126 | 99.9% |
-| `app/schemas` | 274 of 276 | 15 of 18 | 98.3% |
+| `app/schemas` | 280 of 282 | 15 of 18 | 98.3% |
 | `app/db`, `app/models` and top level | 357 of 357 | 14 of 14 | 100% |
-| `scripts` | 1,069 of 1,099 | 218 of 226 | 97.1% |
-| **Total** | **3,845 of 3,878** | **721 of 734** | **99.0%** |
+| `scripts` | 1,110 of 1,140 | 224 of 232 | 97.2% |
+| **Total** | **3,952 of 3,985** | **747 of 760** | **99.0%** |
 
 Of the 33 lines missed, 7 are the calls to `main()` under the scripts'
 `if __name__ == "__main__"`, and 18 are six scripts' handling of an output
@@ -752,11 +752,21 @@ reweighing alone only about halves the gap.
 
 Two things the audit does not remove. Gaps of a few points either way
 remain, as they do for a model fitted on the generator's ground truth. And
-over-40s are shortlisted more often than under-40s in some runs, under every
-model including that one, because younger candidates more often fall short
-of a job's minimum years of experience. The definitions, every group's
-figures, how the configuration was chosen, and what an audit on generated
-data can and cannot establish are in
+over-40s are shortlisted more often than under-40s (+0.042 at k = 5 and
++0.045 at k = 10 over the fresh runs), under every model including that one.
+Mostly that is the jobs' minimum years: 9.1% of qualified under-40s' pairs
+fall short of them in the main run, no over-40s'. The matcher prices a
+shortfall more gently than the generator does (0.153 in log-odds for a year
+short, against 0.4). Among candidates who meet the minimum a smaller gap is
+left (+0.025 and +0.033), part of it the matcher paying for experience past
+the minimum, which the ground truth never does. Trained without that input,
+the matcher brings it to about what the ground-truth model shows at no
+measurable ranking cost, but on one fresh run its top-5 interval for women
+then falls just below zero, so by the rule fixed before those runs were read
+the served matcher is unchanged. Jobs whose minimum is long for their level
+are flagged to the recruiter instead (see *PDF reports*). The definitions,
+every group's figures, how each configuration was chosen, and what an audit on
+generated data can and cannot establish are in
 [`docs/fairness_audit.md`](docs/fairness_audit.md).
 
 ## Embeddings
@@ -1072,21 +1082,47 @@ no score for the job, is a 409 naming the scoring endpoint, rather than an
 empty report that reads as if nobody fitted. A missing job or candidate is
 a 404, and a matcher that cannot be loaded is the same 503 scoring gives.
 
-Text is drawn in DejaVu Sans 2.37, embedded in each PDF (regular and bold,
-unmodified, with its licence and checksums in
-[`backend/app/assets/fonts`](backend/app/assets/fonts)). It draws Latin with
-its accents (`Łukasz Šimić`, `Nguyễn Văn Đức`), Greek, Cyrillic, Armenian
-and Georgian, and those names read back from the PDF as typed, so they can
-be copied and searched. Characters it lacks are drawn without their accents
-where that leaves one it has, and as `?` otherwise: Chinese, Japanese,
-Korean, Devanagari and Thai names, and emoji (DejaVu has some, but ReportLab
-cannot map characters past U+FFFF for copying). Hebrew and Arabic are drawn
-as `?` too: the font has their letters, but ReportLab lays text out left to
-right and does not join Arabic letters, so drawing them would misspell the
-name. Accents typed as separate combining marks are composed onto their
-letter first. Zero-width spaces, direction marks and control characters are
-left out, except that whitespace controls such as tabs and line breaks read
-as spaces. Long skill lists run onto further pages.
+Text is drawn in fonts embedded in each PDF, all unmodified, with their
+sources, licences and checksums in
+[`backend/app/assets/fonts`](backend/app/assets/fonts). Each character takes
+the first that has it:
+
+| Font | Draws |
+| ---- | ----- |
+| DejaVu Sans 2.37 | Latin with its accents (`Łukasz Šimić`, `Nguyễn Văn Đức`), Greek, Cyrillic, Armenian, Georgian, Hebrew, Arabic |
+| Droid Sans Fallback | Chinese characters, Japanese kana (`李雷`, `陳淑芬`, `山田さくら`) |
+| Nanum Square | Korean (`김민준`) |
+
+Names in these scripts read back from the PDF as typed, so they can be copied
+and searched, with one exception. ReportLab lays every line out left to right
+and does not join Arabic letters, so a name with Hebrew or Arabic in it is put
+into the order it is seen in first (`python-bidi`), Arabic in the joined forms
+its letters take (`arabic-reshaper`). It reads correctly on the page, but
+copied out of the PDF those letters can come out reversed, so a search may
+not find the name; and a name long enough to wrap in its table cell has its
+lines in the wrong order, the end of the name on the first line.
+
+Characters no embedded font has are drawn without their accents where that
+leaves one a font has, and as `?` otherwise: Devanagari and Thai, and emoji
+(DejaVu has some, but ReportLab cannot map characters past U+FFFF for
+copying). Devanagari and Thai also need shaping, letters that combine and
+change place: ReportLab can shape through the optional `uharfbuzz` package,
+and with it the conjuncts come out right, but the shaped letters read back
+from the PDF as private-use characters, so they are not drawn yet. Accents
+typed as separate combining marks are composed onto their letter first.
+Zero-width spaces, direction marks and control characters are left out,
+except that whitespace controls such as tabs and line breaks read as spaces.
+Long skill lists run onto further pages.
+
+A job whose minimum experience is above what its level usually asks for gets
+a note under its line on the shortlist, marked "Check:", the same one the API
+gives in the job's `requirement_notes`. A long minimum rules out candidates who
+could do the job and falls hardest on younger ones; where the law protects
+every age (in the UK and the EU, for instance) it has to be justified. The
+usual maxima are the tops of the ranges the synthetic jobs are drawn from
+(0, 1, 3, 6, 9 and 12 years from intern to principal, in
+[`app/services/requirements.py`](backend/app/services/requirements.py)); a
+deployment should set its own. The note informs; it changes no score.
 
 [`docs/samples/shortlist.pdf`](docs/samples/shortlist.pdf) and
 [`docs/samples/scorecard.pdf`](docs/samples/scorecard.pdf) were made by

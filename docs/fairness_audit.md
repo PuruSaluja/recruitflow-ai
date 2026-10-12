@@ -9,12 +9,12 @@ Every number below is copied from one of two JSON files the script wrote:
 matcher's configuration was chosen on, and
 [`fairness_audit_fresh.json`](fairness_audit_fresh.json), eight runs that
 played no part in the choice. A second run of the first wrote the same JSON.
-There are five exceptions, each marked where it appears: the single-split
+There are four exceptions, each marked where it appears: the single-split
 figure in *Why out of fold*, the share of women's resumes carrying the planted
 line, the fit of qualified men and women in *Where the women's gap comes
-from*, the word weights in *How the configuration was chosen*, and the
-experience figures in *Other groups*. To regenerate both (about 13 minutes
-each on a laptop):
+from*, and the word weights in *How the configuration was chosen*. To
+regenerate both (over an hour each on a laptop, most of it the counterfactual
+scoring in *Over-40s and the job's minimum years*):
 
 ```
 python scripts/audit_fairness.py
@@ -316,20 +316,70 @@ the nine runs share one corpus, so this reads as the corpora's small
 nonbinary group rather than anything the matcher learned. On the eight fresh
 runs no nonbinary interval excludes zero.
 
-**Over-40s are shortlisted more often** than under-40s in some runs, under
-every model, including the one fitted on ground truth: at k = 10, in 5 of the
-nine runs for the served matcher and 2 of the eight fresh ones, against 1
-and 3 for the ground-truth model. A separate check, not in the JSON, shows
-why. Among qualified pairs, under-40s fall short of the job's minimum years
-of experience in 9.1% to 11.9% of pairs on corpora 42, 6 and 8, and over-40s
-in 0% to 0.4%. Their mean ground-truth fit is correspondingly higher (0.582
-to 0.618 against 0.559 to 0.570). The generator's ground truth counts a
-shortfall in years against a candidate, so "qualified" over-40s are more
-often the stronger fits. This gap follows the jobs' own experience
-requirements. Removing it would mean ranking candidates who fall short of a
-job's minimum years above ones who meet it; that is a decision about the jobs'
-requirements, not something this matcher learned from biased decisions, and
-it has not been made here.
+**Over-40s are shortlisted more often** than under-40s, under every model,
+the one fitted on ground truth included. The next section takes it apart.
+
+## Over-40s and the job's minimum years
+
+Equal-opportunity difference for qualified over-40s against under-40s,
+averaged over runs (in brackets, runs whose interval is above zero; none is
+below):
+
+| | 9 runs, k = 5 | k = 10 | 8 fresh runs, k = 5 | k = 10 |
+| --- | --- | --- | --- | --- |
+| Served matcher, every qualified pair | +0.053 (2) | +0.057 (5) | +0.042 (1) | +0.045 (2) |
+| Served matcher, pairs meeting the job's minimum | +0.037 (1) | +0.044 (1) | +0.025 (1) | +0.033 (2) |
+| Fitted on ground truth, every qualified pair | +0.036 (2) | +0.040 (1) | +0.036 (1) | +0.050 (3) |
+| Fitted on ground truth, meeting the minimum | +0.012 (0) | +0.019 (1) | +0.014 (1) | +0.031 (1) |
+| Served without `experience_surplus`, meeting the minimum | +0.016 (0) | +0.026 (0) | +0.006 (1) | +0.018 (2) |
+
+**Most of it is the jobs' minimum years.** In the main run, 9.1% of the
+1,487 qualified pairs with an under-40 fall short of the job's minimum, and
+none of the 212 with an over-40; over-40s who meet it go 7.4 years past it on
+average, under-40s 2.8 (`experience` in the JSON). The generator's ground
+truth counts a shortfall against a candidate, and so does every model, so
+"qualified" over-40s are more often the stronger fits. Removing that part
+would mean ranking candidates who fall short of a job's stated minimum above
+ones who meet it.
+
+**The matcher prices a shortfall more gently than the generator does.**
+With everything else on the profile held fixed, and the resume's stated
+years rewritten to match, a candidate 1 year short of the minimum scores
+0.153 lower in log-odds than one exactly at it, 3 years short 0.421 lower and
+5 years short 0.669 lower. The generator's ground truth takes 0.4, 1.2 and
+2.0 (`matcher_price_of_years`, main run, the 3,000 pairs whose job asks for 5
+years or more). One year short does not cost as much as five, and the
+matcher is, if anything, more lenient than the rule it learns from.
+
+**The requirement does not explain all of it.** Among qualified candidates
+who meet the minimum, the served matcher still favours over-40s, by more than
+the model fitted on ground truth does. Part of what is left is real in the
+generator: a candidate's age follows their education's starting age plus
+their years, so older candidates more often hold the education a job asks
+for, which the ground truth rewards. Part is the matcher's own: it pays for
+experience past the minimum, +0.157 in log-odds at 3 years past, +0.210 at 5
+and +0.215 at 10 (the feature stops at 5), which the ground truth never does.
+Over-40s have more of it.
+
+**Without that input.** The served configuration trained without the
+`experience_surplus` feature (`served_without_experience_surplus`) closes
+the gap among candidates who meet the minimum to about what the ground-truth
+model shows, at an NDCG@10 cost of 0.0004 on the nine runs (0.8055 against
+0.8059) and 0.0011 on the fresh ones (0.8069 against 0.8080). It was chosen on
+corpora 42 and 1 to 4 before any fresh run was read, with a rule fixed then:
+adopt it only if, on the fresh runs, its mean gap among candidates meeting the
+minimum is below the served matcher's and no more than 0.01 above the
+ground-truth model's at both cut-offs, its mean NDCG@10 is less than 0.005
+lower, and no run's interval for women excludes zero. The first two held. The
+third did not: on corpus 6, its top-5 interval for women runs from −0.107 to
+−0.006, where the served matcher's runs from −0.103 to +0.0003. So the served
+matcher is unchanged, and whether to adopt this configuration anyway is left
+as a decision.
+
+**The requirement itself** is where an age gap enters hiring. Where the law
+protects every age (in the UK and the EU, for instance), a long minimum has
+to be justified. The API flags a job whose minimum is above what its level
+usually asks for (`requirement_notes`), and its shortlist prints the note.
 
 ## What this audit can and cannot establish
 
@@ -359,9 +409,9 @@ It cannot establish anything about real candidates or real hiring:
   the legal and consent questions that raises.
 - **The groups are coarse and few.** There are three genders and two age
   bands, with no race or ethnicity, no disability, and no intersections.
-- **Many comparisons are made.** The main run reports 49 equal-opportunity
+- **Many comparisons are made.** The main run reports 71 equal-opportunity
   intervals for groups other than the reference. If there were no gap at
-  all, two or three would exclude zero by chance. Five do. Three are women's
+  all, three or four would exclude zero by chance. Five do. Three are women's
   gaps with a known cause: the record, and at k = 5 the unmitigated matcher
   and the one with the proxy terms dropped. The other two have no mechanism in
   the generator and are best read as that noise: nonbinary candidates at
