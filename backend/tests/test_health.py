@@ -106,6 +106,31 @@ def test_process_wide_engine_is_also_bound_to_the_test_database() -> None:
     assert database.endswith("_test")
 
 
+def test_an_app_built_without_settings_serves_requests_from_the_process_wide_engine(
+    engine,
+) -> None:
+    """The path uvicorn runs: no override, so ``get_db`` builds the shared session factory
+    on first use, and each request's session goes back to the pool when it is done."""
+    app = create_app()
+    assert get_db not in app.dependency_overrides
+
+    with TestClient(app) as default_client:
+        response = default_client.get(f"{get_settings().api_prefix}/health")
+
+    assert response.status_code == 200
+    assert response.json()["database"] == "ok"
+    assert get_engine().pool.checkedout() == 0
+
+    sessions = get_db()
+    session = next(sessions)
+    try:
+        assert session.execute(text("SELECT current_database()")).scalar_one().endswith("_test")
+        assert get_engine().pool.checkedout() == 1
+    finally:
+        sessions.close()
+    assert get_engine().pool.checkedout() == 0
+
+
 # --- which database errors are an outage ------------------------------------
 # Was: every SQLAlchemy error but IntegrityError answered 503 "Database
 # unavailable", so a bug in a query told the client, and whoever read the

@@ -284,6 +284,17 @@ def test_it_writes_the_json_and_prints_each_stage(
     assert all(stage in printed for stage in script.STAGES)
 
 
+def test_an_out_path_it_cannot_write_exits_2_naming_it(
+    recorder: _Recorder, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "out").write_text("a file where the folder should be", encoding="utf-8")
+
+    code, out = _main(tmp_path, _evaluation(), "--repeats", "1", "--jobs", "1")
+
+    assert code == 2
+    assert f"cannot write {out}" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize(
     ("extra", "message"),
     [(["--repeats", "0"], "--repeats must be at least 1"), (["--jobs", "0"], "--jobs must be")],

@@ -284,6 +284,25 @@ def test_unusable_uploads_are_rejected(filename: str, data: bytes, message: str)
         extract_text(filename, data)
 
 
+def test_a_pdf_with_no_pages_is_rejected_by_name() -> None:
+    from pypdf import PdfWriter
+
+    buffer = io.BytesIO()
+    PdfWriter().write(buffer)
+
+    with pytest.raises(ResumeIngestError, match="The PDF has no pages"):
+        extract_text("resume.pdf", buffer.getvalue())
+
+
+def test_bytes_no_accepted_encoding_can_decode_are_rejected_naming_all_three() -> None:
+    # 0x81 starts no UTF-8 sequence and is one of the five bytes Windows-1252 leaves
+    # undefined, so neither decoder takes the file.
+    data = b"Senior data engineer, eight years \x81 Python and SQL pipelines."
+
+    with pytest.raises(ResumeIngestError, match="not valid UTF-8, UTF-16 or Windows-1252"):
+        extract_text("resume.txt", data)
+
+
 def test_upload_exactly_at_the_size_limit_is_accepted() -> None:
     # Padded with trailing spaces, which normalising strips, so the file sits
     # on the byte limit while its text sits on the character limit.

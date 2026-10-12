@@ -456,6 +456,20 @@ def test_the_sample_script_refuses_a_limit_before_creating_anything(
     assert f"--limit must be 1 to {MAX_SHORTLIST}" in capsys.readouterr().err
 
 
+def test_the_sample_script_exits_1_when_the_api_cannot_be_reached(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Nothing listens on port 9: the connection error is printed, not raised, and no
+    folder is created for reports that were never written."""
+    out = tmp_path / "samples"
+
+    status = _load_script().main(["--base-url", "http://127.0.0.1:9/api/v1", "--out", str(out)])
+
+    assert status == 1
+    assert capsys.readouterr().err.startswith("error: ")
+    assert not out.exists()
+
+
 def test_the_conflict_names_the_scoring_path_under_the_configured_prefix(
     clean_db: Engine, trained: Path, corpus
 ) -> None:
