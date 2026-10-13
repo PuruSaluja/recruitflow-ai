@@ -146,7 +146,7 @@ describe("job detail", () => {
     // Required skills held: 50% for the first, all of them for the second.
     expect(within(rows[0]!).getAllByRole("cell")[3]?.textContent).toBe("50%");
     expect(within(rows[1]!).getAllByRole("cell")[3]?.textContent).toBe("100%");
-    expect(within(rows[1]!).getByRole("link", { name: "PDF" }).getAttribute("href")).toBe(
+    expect(within(rows[1]!).getByRole("link", { name: "Scorecard for Wei Chen" }).getAttribute("href")).toBe(
       "/api/v1/jobs/1/candidates/11/scorecard.pdf",
     );
     expect(screen.getByRole("link", { name: "Shortlist PDF" }).getAttribute("href")).toBe(
@@ -321,6 +321,31 @@ describe("regressions", () => {
     expect(api.calls("GET /jobs").at(-1)?.url.searchParams.get("offset")).toBe("20");
   });
 
+  it("does not claim rows on a ranking page past the last candidate", async () => {
+    const ranking = [makeRanked(26, { id: 36, full_name: "Last Candidate" }, 0.1)];
+    const api = fakeApi({
+      ...HEALTH,
+      "GET /jobs/1": () => ({ body: makeJob() }),
+      "GET /jobs/1/matches": (url) => {
+        const offset = Number(url.searchParams.get("offset"));
+        return {
+          body: { ...page(offset >= 26 ? [] : ranking, 26, 25, offset), job_id: 1, model_version: MODEL },
+        };
+      },
+    });
+    renderAt("/jobs/1?offset=50", api.client);
+
+    expect(await screen.findByText("No candidates on this page.")).toBeTruthy();
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryByText("26–26 of 26")).toBeNull();
+    expect(screen.getByText("Past the last of 26")).toBeTruthy();
+
+    await userEvent.click(screen.getByRole("button", { name: "Previous" }));
+
+    expect(await screen.findByRole("link", { name: "Last Candidate" })).toBeTruthy();
+    expect(api.calls("GET /jobs/1/matches").at(-1)?.url.searchParams.get("offset")).toBe("25");
+  });
+
   it("draws a skill listed twice without a duplicate-key error", async () => {
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
     const api = fakeApi({
@@ -335,5 +360,51 @@ describe("regressions", () => {
     expect(screen.getAllByText("SQL")).toHaveLength(2);
     expect(screen.getAllByText("sql")).toHaveLength(1);
     expect(errors.mock.calls.flat().join(" ")).not.toMatch(/same key/);
+  });
+
+  it("links the shortlist PDF only once there is a ranking to print", async () => {
+    let scored = false;
+    const api = fakeApi({
+      ...HEALTH,
+      "GET /jobs/1": () => ({ body: makeJob() }),
+      "GET /jobs/1/matches": () => ({
+        body: {
+          ...page(scored ? [makeRanked(1, {}, 0.5)] : [], scored ? 1 : 0, 25),
+          job_id: 1,
+          model_version: MODEL,
+        },
+      }),
+      "POST /jobs/1/score": () => {
+        scored = true;
+        return { body: { job_id: 1, model_version: MODEL, scored_count: 1, elapsed_ms: 3, results: [] } };
+      },
+    });
+    renderAt("/jobs/1", api.client);
+    await screen.findByText(/No candidate has been scored/);
+
+    // The API answers 409 for an unscored job's shortlist.
+    expect(screen.queryByRole("link", { name: "Shortlist PDF" })).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "Score all candidates" }));
+
+    expect(await screen.findByRole("link", { name: "Shortlist PDF" })).toBeTruthy();
+    expect(screen.getByText("Scored 1 candidate in 3 ms.")).toBeTruthy();
+  });
+
+  it("says so when there is no candidate on file to score", async () => {
+    const api = fakeApi({
+      ...HEALTH,
+      "GET /jobs/1": () => ({ body: makeJob() }),
+      "GET /jobs/1/matches": () => ({ body: { ...page([], 0, 25), job_id: 1, model_version: MODEL } }),
+      "POST /jobs/1/score": () => ({
+        body: { job_id: 1, model_version: MODEL, scored_count: 0, elapsed_ms: 1.2, results: [] },
+      }),
+    });
+    renderAt("/jobs/1", api.client);
+    await screen.findByText(/No candidate has been scored/);
+
+    await userEvent.click(screen.getByRole("button", { name: "Score all candidates" }));
+
+    expect(await screen.findByText("There is no candidate on file to score.")).toBeTruthy();
   });
 });

@@ -89,7 +89,12 @@ function RankedTable({ jobId, rows }: { jobId: number; rows: RankedCandidate[] }
             <td>{years(row.candidate.years_experience)}</td>
             <td>{label(row.candidate.seniority)}</td>
             <td>
-              <a href={client.scorecardPdfUrl(jobId, row.candidate.id)}>PDF</a>
+              <a
+                href={client.scorecardPdfUrl(jobId, row.candidate.id)}
+                aria-label={`Scorecard for ${row.candidate.full_name}`}
+              >
+                PDF
+              </a>
             </td>
           </tr>
         ))}
@@ -140,7 +145,10 @@ function Shortlist({ jobId }: { jobId: number }) {
       <header className="section-head">
         <h2 id="shortlist-heading">Ranked candidates</h2>
         <div className="actions">
-          <a href={client.shortlistPdfUrl(jobId)}>Shortlist PDF</a>
+          {/* The API refuses a shortlist for a job with nothing scored (409). */}
+          {matches.state === "ok" && matches.data.total > 0 && (
+            <a href={client.shortlistPdfUrl(jobId)}>Shortlist PDF</a>
+          )}
           <button type="button" onClick={score} disabled={scoring}>
             {scoring ? "Scoring…" : "Score all candidates"}
           </button>
@@ -148,7 +156,9 @@ function Shortlist({ jobId }: { jobId: number }) {
       </header>
       {lastRun && (
         <p className="muted" role="status">
-          Scored {lastRun.count} candidates in {Math.round(lastRun.ms)} ms.
+          {lastRun.count === 0
+            ? "There is no candidate on file to score."
+            : `Scored ${lastRun.count} ${lastRun.count === 1 ? "candidate" : "candidates"} in ${Math.round(lastRun.ms)} ms.`}
         </p>
       )}
       {scoreError && <ErrorMessage error={scoreError} />}
@@ -166,7 +176,11 @@ function Shortlist({ jobId }: { jobId: number }) {
                 A score is the matcher&apos;s estimate that a recruiter would advance the candidate,
                 as of when it was scored. Matcher {page.model_version.slice(0, 12)}.
               </p>
-              <RankedTable jobId={jobId} rows={page.items} />
+              {page.items.length === 0 ? (
+                <p className="muted">No candidates on this page.</p>
+              ) : (
+                <RankedTable jobId={jobId} rows={page.items} />
+              )}
               <Pager total={page.total} limit={MATCHES_PAGE_SIZE} offset={offset} onChange={goTo} />
             </>
           )
