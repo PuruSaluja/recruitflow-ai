@@ -32,6 +32,9 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
+  /* An email address or a pasted link is one long word; on a phone it has to
+     break rather than push the page sideways. */
+  overflow-wrap: break-word;
 }
 
 a {
@@ -196,7 +199,8 @@ button:disabled {
 
 .facts {
   display: grid;
-  grid-template-columns: max-content 1fr;
+  /* minmax(0, ...): a long email narrows to the page and wraps, not widens it. */
+  grid-template-columns: max-content minmax(0, 1fr);
   gap: 0.25rem 1.5rem;
   margin: 1rem 0;
 }

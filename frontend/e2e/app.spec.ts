@@ -46,7 +46,8 @@ async function seed(request: APIRequestContext): Promise<Created> {
       await request.post(`${API}/candidates`, {
         data: {
           full_name: person.name,
-          email: `e2e.${RUN}.${index}@example.com`,
+          // As long as real addresses get: one unbreakable word on a phone.
+          email: `imani.clarke.okonkwo.${RUN}.${index}@peopleoperations.example.com`,
           current_title: person.title,
           years_experience: person.years,
           seniority: person.seniority,
