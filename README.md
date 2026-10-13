@@ -4,19 +4,83 @@ A full-stack recruiting platform: FastAPI backend, PostgreSQL data layer, React
 frontend, and a scikit-learn matching layer that scores applicants against job
 descriptions.
 
-> **Status:** in development. The data layer and the job, candidate and
-> application APIs are in place, including resume file ingestion and the
-> pipeline stage-history trail, as is the matching layer: the skills taxonomy,
-> the synthetic corpus the matcher trains on, its features, the calibrated
-> classifier, endpoints that score a job's candidate pool and cache the
-> ranking, a held-out evaluation, sentence-transformer embeddings of every
-> candidate and job, cached in PostgreSQL, a measured comparison of lexical,
-> dense and hybrid retrieval, a measured cross-encoder re-rank of the
-> hybrid's shortlist, and a fairness audit of the matcher's shortlists, whose
-> findings the served matcher is now trained to counter, and PDF reports of a
-> job's shortlist and a candidate's scorecard, and a web client that lists
-> jobs, shows a job's ranked candidates and scores them, and shows a
-> candidate with their applications.
+Recruiters keep requisitions, candidates and applications, upload resumes
+(PDF, plain text or Markdown), and move each application through a hiring
+pipeline whose every step is recorded. For any job, the matcher scores the whole
+candidate pool, caches the ranking with the eight features behind each score,
+and turns it into a shortlist PDF and per-candidate scorecards. Around the
+served matcher sit measured comparisons of lexical, dense and hybrid
+retrieval and of a cross-encoder re-rank, and a fairness audit whose findings
+the served matcher is trained to counter.
+
+**The data is synthetic.** Every job, candidate, resume and past hiring
+decision the matcher learns from or is measured on comes from a seeded
+generator in this repository, which also plants a bias against women in the
+past decisions so that the audit has something real to find. What the
+generator controls is set out under [Synthetic corpus](#synthetic-corpus).
+The figures below say how the code behaves on that corpus, not how it would
+do on real applicants.
+
+## Results
+
+Every figure comes from a run of the committed code, the model's on the
+default corpus (seed 42: 200 jobs, 4,000 candidates, 10,000 labelled pairs).
+The sections linked give the method, the intervals and what each figure
+cannot show.
+
+| | Measured | Where |
+| --- | --- | --- |
+| Ranking, 50 held-out jobs | NDCG@10 **0.8110** (95% CI 0.7754–0.8444), P@5 **0.7960**; random ranking 0.1638, required-skill coverage alone 0.6533 | [Ranking quality](#ranking-quality-on-held-out-jobs) |
+| Over ten train/test splits | NDCG@10 0.8102 ± 0.0198, P@5 0.8084 ± 0.0199 | same |
+| Held-out ROC-AUC | 0.7832 against the past decisions it was trained on | [Training pipeline](#measured-on-the-default-corpus-2) |
+| Retrieval without training, all 200 jobs | NDCG@10: BM25 0.5333, dense embeddings 0.6566, hybrid (RRF) 0.6392. Fusion does not beat dense here | [Retrieval](#lexical-dense-and-hybrid-retrieval) |
+| Cross-encoder re-rank of the hybrid's top 20 | NDCG@10 falls to 0.5611 and takes 1.6–1.8 s per slate on a laptop CPU, so the API does not use it | [Re-rank](#cross-encoder-re-rank) |
+| Fairness, qualified women against men, top 5 | Equal-opportunity gap −0.140 in the past decisions, −0.050 for a matcher trained plainly on them, **−0.011** for the served matcher, whose interval includes zero in all 17 audit runs | [Fairness audit](#fairness-audit) |
+| Fairness, what remains | Over-40s shortlisted more often than under-40s (+0.042 at top 5 over 8 fresh runs), mostly through the jobs' minimum years; disclosed, and long minimums are flagged to the recruiter | same |
+| Scoring 4,000 candidates for a job | 3,061 ms median server time, the ranking cached, measured before the matcher was reweighed (about 3% slower since); a page of 50 read back in 25.8 ms | [Scoring](#measured-on-the-default-corpus-4) |
+| Tests | 1,711 backend tests and 41 client tests; 99.0% of lines and branches covered when last measured in full; end-to-end in Chromium, Firefox, WebKit and a phone-sized Chromium on every push | [Tests](#tests) |
+
+## Architecture
+
+```mermaid
+flowchart LR
+    UI["React client<br/>frontend/"] -->|"JSON and PDFs over /api/v1"| API
+    subgraph API["FastAPI app — backend/app"]
+        direction TB
+        MW["middleware<br/>CORS · body cap · JSON 500s"] --> R["routers — api/v1<br/>jobs · candidates · applications<br/>matches · reports"]
+        R --> S["services<br/>pipeline · resume · matching<br/>reports · embeddings"]
+    end
+    S -->|"SQLAlchemy 2.0"| DB[("PostgreSQL 16<br/>7 tables")]
+    S -->|"loads"| M[["matcher.joblib<br/>+ manifest"]]
+    subgraph Offline["Offline — scripts/ over app/ml"]
+        T["train_matcher"]
+        E["evaluate_matcher<br/>audit_fairness<br/>time_rerank"] --> J["docs/*.json"]
+    end
+    T -->|"writes"| M
+```
+
+- **Client** (`frontend/`): React 19 and React Router, typed from the API's
+  own OpenAPI schema, so a change to the API that the client has not caught
+  up with fails CI. In development Vite proxies `/api` to the API; built, it
+  is served by the API itself from one origin.
+- **API** (`backend/app/api`): FastAPI routers over Pydantic v2 schemas. Three
+  middlewares sit in front: CORS, a request body cap enforced while the body
+  streams in, and a handler that turns anything unexpected into a
+  logged, JSON 500 the browser can read.
+- **Services** (`backend/app/services`): the pipeline's allowed moves and
+  their history, resume extraction, scoring a pool and caching it, the PDF
+  reports, and the embeddings cache. Writes that can race hold a row lock
+  from read to commit rather than comparing version columns, and a scoring
+  run that loses a race to another is retried, up to three attempts.
+- **Data** (`backend/app/models`, `backend/alembic`): seven tables with
+  native enums and JSONB skill lists, built only by Alembic migrations; the
+  suite checks the migrations build exactly the schema the models describe.
+- **Matching** (`backend/app/ml`): skills taxonomy, corpus generator, eight
+  engineered features beside TF-IDF, a calibrated logistic regression trained
+  on reweighed pairs, and the evaluation, retrieval, re-rank and fairness
+  code. Training and measuring run offline from `scripts/`; the API only
+  loads the persisted matcher, and its version (a hash of the file) keys
+  every cached score, so a retrained matcher never mixes with old rows.
 
 ## Tech stack
 
