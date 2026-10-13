@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApiClient } from "./api/client";
 import { ApiProvider } from "./api/context";
@@ -292,5 +292,48 @@ describe("layout", () => {
     renderAt("/nowhere", fakeApi(HEALTH).client);
 
     expect(await screen.findByText("API 0.1.0, database ok")).toBeTruthy();
+  });
+});
+
+describe("regressions", () => {
+  const MODEL = "3f9a1c2b7d4e5f60718293a4b5c6d7e8";
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("offers a way back from a job list offset past the last job", async () => {
+    const api = fakeApi({
+      ...HEALTH,
+      "GET /jobs": (url) => {
+        const offset = Number(url.searchParams.get("offset"));
+        return { body: page(offset >= 21 ? [] : [makeJob({ id: 21, title: "Role 21" })], 21, 20, offset) };
+      },
+    });
+    renderAt("/jobs?offset=100", api.client);
+
+    expect(await screen.findByText("No jobs on this page.")).toBeTruthy();
+    expect(screen.getByText("Past the last of 21")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Previous" }));
+
+    // To the start of the last page, not 20 back from a page that was empty.
+    expect(await screen.findByRole("link", { name: "Role 21" })).toBeTruthy();
+    expect(api.calls("GET /jobs").at(-1)?.url.searchParams.get("offset")).toBe("20");
+  });
+
+  it("draws a skill listed twice without a duplicate-key error", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const api = fakeApi({
+      ...HEALTH,
+      "GET /jobs/1": () => ({ body: makeJob({ required_skills: ["SQL", "SQL", "sql"] }) }),
+      "GET /jobs/1/matches": () => ({ body: { ...page([], 0, 25), job_id: 1, model_version: MODEL } }),
+    });
+    renderAt("/jobs/1", api.client);
+    await screen.findByText(/No candidate has been scored/);
+
+    // Jobs keep their skills as sent, repeats included, and show them that way.
+    expect(screen.getAllByText("SQL")).toHaveLength(2);
+    expect(screen.getAllByText("sql")).toHaveLength(1);
+    expect(errors.mock.calls.flat().join(" ")).not.toMatch(/same key/);
   });
 });

@@ -35,6 +35,10 @@ export function JobsPage() {
     setParams(next);
   }
 
+  function goTo(next: number) {
+    update({ offset: next ? String(next) : undefined });
+  }
+
   function onSearch(event: FormEvent) {
     event.preventDefault();
     update({ q: search.trim() || undefined, offset: undefined });
@@ -69,7 +73,10 @@ export function JobsPage() {
       <Loaded value={jobs} what="jobs" retry={reload}>
         {(page) =>
           page.items.length === 0 ? (
-            <p className="muted">{offset > 0 ? "No jobs on this page." : "No jobs match."}</p>
+            <>
+              <p className="muted">{offset > 0 ? "No jobs on this page." : "No jobs match."}</p>
+              <Pager total={page.total} limit={JOBS_PAGE_SIZE} offset={offset} onChange={goTo} />
+            </>
           ) : (
             <>
               <table className="table">
@@ -100,12 +107,7 @@ export function JobsPage() {
                   ))}
                 </tbody>
               </table>
-              <Pager
-                total={page.total}
-                limit={JOBS_PAGE_SIZE}
-                offset={offset}
-                onChange={(next) => update({ offset: next ? String(next) : undefined })}
-              />
+              <Pager total={page.total} limit={JOBS_PAGE_SIZE} offset={offset} onChange={goTo} />
             </>
           )
         }
