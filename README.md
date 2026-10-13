@@ -37,8 +37,8 @@ cannot show.
 | Cross-encoder re-rank of the hybrid's top 20 | NDCG@10 falls to 0.5611 and takes 1.6–1.8 s per slate on a laptop CPU, so the API does not use it | [Re-rank](#cross-encoder-re-rank) |
 | Fairness, qualified women against men, top 5 | Equal-opportunity gap −0.140 in the past decisions, −0.050 for a matcher trained plainly on them, **−0.011** for the served matcher, whose interval includes zero in all 17 audit runs | [Fairness audit](#fairness-audit) |
 | Fairness, what remains | Over-40s shortlisted more often than under-40s (+0.042 at top 5 over 8 fresh runs), mostly through the jobs' minimum years; disclosed, and long minimums are flagged to the recruiter | same |
-| Scoring 4,000 candidates for a job | 3,061 ms median server time, the ranking cached, measured before the matcher was reweighed (about 3% slower since); a page of 50 read back in 25.8 ms | [Scoring](#measured-on-the-default-corpus-4) |
-| Tests | 1,711 backend tests and 41 client tests; 99.0% of lines and branches covered when last measured in full; end-to-end in Chromium, Firefox, WebKit and a phone-sized Chromium on every push | [Tests](#tests) |
+| Scoring 4,000 candidates for a job | 3,061 ms median for a first scoring, the ranking cached, timed before the matcher was reweighed (about 3% slower since); a page of 50 read back in 25.8 ms median | [Scoring](#measured-on-the-default-corpus-4) |
+| Tests | 1,711 backend tests and 41 client tests; 99.0% of lines and branches covered when last measured in full; end-to-end in Chromium, Firefox, WebKit and a phone-sized Chromium on every push to `main` and every pull request | [Tests](#tests) |
 
 ## Architecture
 
@@ -69,9 +69,11 @@ flowchart LR
   logged, JSON 500 the browser can read.
 - **Services** (`backend/app/services`): the pipeline's allowed moves and
   their history, resume extraction, scoring a pool and caching it, the PDF
-  reports, and the embeddings cache. Writes that can race hold a row lock
-  from read to commit rather than comparing version columns, and a scoring
-  run that loses a race to another is retried, up to three attempts.
+  reports, and the embeddings cache. A write to a job or candidate that
+  depends on the row as it stands locks it from read to commit; an
+  application carries a version column, so an update that raced another is
+  refused with a 409 rather than overwriting it; and a scoring run that
+  loses a race to another is retried, up to three attempts.
 - **Data** (`backend/app/models`, `backend/alembic`): seven tables with
   native enums and JSONB skill lists, built only by Alembic migrations; the
   suite checks the migrations build exactly the schema the models describe.
@@ -91,7 +93,7 @@ flowchart LR
 | ML       | scikit-learn (TF-IDF + engineered features); sentence-transformers (embeddings, optional) |
 | Reports  | ReportLab |
 | Frontend | React 19, React Router 8, Vite 8, TypeScript 5.9; API types generated from the OpenAPI schema |
-| Tests    | pytest, httpx2; Vitest for the web client |
+| Tests    | pytest, httpx2; Vitest for the web client; Playwright and axe-core end to end |
 
 ## Data model
 
@@ -127,7 +129,7 @@ alembic upgrade head
 
 Train the matcher the scoring endpoints load (a few seconds; see
 [Training pipeline](#training-pipeline)). Without it the API runs, and
-scoring and the reports answer 503 naming this command:
+scoring, the rankings and the reports answer 503 naming this command:
 
 ```bash
 python scripts/train_matcher.py
