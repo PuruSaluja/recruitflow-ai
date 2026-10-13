@@ -1,5 +1,6 @@
 # Lint and the full test suite on a clean install, against a real PostgreSQL,
-# the encoder tests against the real sentence-transformer, and the web client.
+# the encoder tests against the real sentence-transformer, and the web client,
+# on its own and end to end in real browsers.
 #
 # Everything comes from pyproject.toml alone, so a pass here shows it declares
 # enough; the local virtualenv has also shared Anaconda's site-packages.
@@ -74,6 +75,12 @@ jobs:
   frontend:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # The oldest version package.json allows (React Router 8 needs it), and
+        # the one used locally.
+        node-version: ["22.22.0", "24"]
     defaults:
       run:
         working-directory: frontend
@@ -83,7 +90,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: "24"
+          node-version: ${{ matrix.node-version }}
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -100,6 +107,85 @@ jobs:
 
       - name: Type-check and build
         run: npm run build
+
+  # The built client served by the API, with a migrated database and a trained
+  # matcher, driven in Chromium, Firefox, WebKit and a phone-sized Chromium.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: recruitflow
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      RECRUITFLOW_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/recruitflow
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: |
+          python -m pip install -e ".[dev]"
+          cd frontend && npm ci
+
+      - name: Migrate, train the matcher, build the client
+        run: |
+          alembic upgrade head
+          python scripts/train_matcher.py
+          cd frontend && npm run build
+
+      - name: Start the API
+        run: |
+          nohup uvicorn app.main:app --app-dir backend --port 8000 > uvicorn.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8000/api/v1/health && exit 0
+            sleep 1
+          done
+          cat uvicorn.log
+          exit 1
+
+      - name: Install the browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: End-to-end tests
+        working-directory: frontend
+        run: npm run e2e
+
+      - name: Server log
+        if: failure()
+        run: cat uvicorn.log
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-traces
+          path: frontend/test-results/
+          retention-days: 7
 
   # The embeddings extra brings torch, which the main job leaves out, so the
   # tests that load the real models skip there. This job installs it (the CPU
