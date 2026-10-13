@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
 
     model_path: str = "backend/app/ml/artifacts/matcher.joblib"
+    #: The built web client (``npm run build`` in ``frontend/``), served at ``/``
+    #: when it holds an ``index.html``. Empty turns serving it off.
+    web_client_dir: str = "frontend/dist"
     random_seed: int = 42
 
     #: The lowest level of the app's own log records that reach stderr.
@@ -67,6 +70,14 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:
         """CORS origins as a list; the env var is a comma-separated string."""
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def resolved_web_client_dir(self) -> Path | None:
+        """Absolute path to the built web client, or None when serving it is turned off."""
+        if not self.web_client_dir:
+            return None
+        path = Path(self.web_client_dir)
+        return path if path.is_absolute() else REPO_ROOT / path
 
     @property
     def resolved_model_path(self) -> Path:

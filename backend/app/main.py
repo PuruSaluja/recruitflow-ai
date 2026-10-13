@@ -25,6 +25,7 @@ from app import __version__
 from app.api.body_limit import BodySizeLimit, RequestTooLarge, too_large_response
 from app.api.server_errors import UnexpectedErrors, internal_error_response
 from app.api.v1 import api_router
+from app.api.web_client import WebClient, built_client
 from app.config import Settings, get_settings
 from app.db.session import get_db, make_session_factory
 from app.logging_setup import configure_logging
@@ -82,6 +83,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     app.include_router(api_router, prefix=settings.api_prefix)
+    # Last, so every API route and the docs are matched before it.
+    dist = built_client(settings.resolved_web_client_dir)
+    if dist is not None:
+        app.mount("/", WebClient(dist, settings.api_prefix), name="web-client")
 
     if explicit_settings:
         # Bind this app instance to its own engine. Without this the app would

@@ -50,6 +50,9 @@ _UNSAFE = _unsafe_reason(_configured.test_database_url, _configured.database_url
 
 if _UNSAFE is None:
     os.environ["RECRUITFLOW_DATABASE_URL"] = _configured.test_database_url
+    # Whether a client build happens to sit in frontend/dist must not change what
+    # an unknown path answers; tests of the client serving build their own app.
+    os.environ["RECRUITFLOW_WEB_CLIENT_DIR"] = ""
     get_settings.cache_clear()
 
 
