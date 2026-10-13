@@ -84,6 +84,20 @@ flowchart LR
   loads the persisted matcher, and its version (a hash of the file) keys
   every cached score, so a retrained matcher never mixes with old rows.
 
+## Limits
+
+- **No authentication or user accounts.** Every endpoint is open to whoever
+  can reach the API, and `changed_by` on a pipeline move is free text. Run it
+  only where that is acceptable, or behind something that authenticates.
+- **Synthetic data only.** The matcher has been trained and measured on
+  generated candidates and jobs, never on real applicants.
+- **Scoring runs inside the request.** A job's whole pool is scored before
+  the response returns (about 3 s for 4,000 candidates); there is no
+  background queue.
+- **Embeddings and the cross-encoder are measured, not served.** On this
+  corpus both rank below the trained matcher, so the API ranks with the
+  matcher alone.
+
 ## Tech stack
 
 | Layer    | Choice |
@@ -451,7 +465,7 @@ Every move — including the opening one at creation — appends a row to
 `application_stage_events`, retrievable through
 `GET /api/v1/applications/{id}/stage-events`. A `changed_by` string can
 accompany the `POST` that opens an application, a status-changing `PATCH` or a
-reopen, to record who acted; there is no user system yet, so it is free text
+reopen, to record who acted; there are no user accounts, so it is free text
 rather than a foreign key, and it is only ever attached to a stage event, never
 stored on the application itself.
 A move that is refused or a no-op (resending the current status, a PATCH that
@@ -933,7 +947,8 @@ generated data can and cannot establish are in
 
 Every candidate and job can also be embedded by a pretrained
 sentence-transformer. The evaluation above measures them as a retrieval
-scorer; the API does not rank with them yet.
+scorer; the API does not rank with them, since they trail the trained
+matcher there.
 
 - **Encoder** (`app/ml/encoder.py`): all-MiniLM-L6-v2, 384 dimensions,
   pinned to one revision on the Hugging Face Hub. Its name, model id plus
