@@ -119,10 +119,18 @@ pip install -e ".[dev]"
 cp .env.example .env          # then edit the connection strings
 ```
 
-Create the schema:
+Create the database named in `RECRUITFLOW_DATABASE_URL`, then the schema:
 
 ```bash
 alembic upgrade head
+```
+
+Train the matcher the scoring endpoints load (a few seconds; see
+[Training pipeline](#training-pipeline)). Without it the API runs, and
+scoring and the reports answer 503 naming this command:
+
+```bash
+python scripts/train_matcher.py
 ```
 
 Run the API:
@@ -131,7 +139,12 @@ Run the API:
 uvicorn app.main:app --reload --app-dir backend
 ```
 
-Interactive docs are then at `http://localhost:8000/docs`.
+Interactive docs are then at `http://localhost:8000/docs`. To have something
+to look at, `scripts/sample_reports.py` (see [PDF reports](#pdf-reports))
+creates one synthetic job and its 50 candidates through the API, scores them,
+and saves the two PDFs. The `embeddings` extra (`pip install -e
+".[dev,embeddings]"`, with torch's CPU build installed first) is needed only
+for `scripts/embed.py` and the dense and re-rank measurements.
 
 Run the web client (Node 22.22 or later, which React Router 8 needs) beside
 it:
