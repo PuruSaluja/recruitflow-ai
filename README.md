@@ -102,8 +102,24 @@ python scripts/export_openapi.py
 cd frontend && npm run gen:api
 ```
 
-The suite fails while `openapi.json` lags the API, and CI fails while
-`schema.ts` lags `openapi.json`.
+The suite fails while `openapi.json` lags the API in anything the types are
+generated from (a reworded description is only a warning, so a new FastAPI or
+pydantic release cannot fail it), and CI fails while `schema.ts` lags
+`openapi.json`.
+
+Without the dev server, build the client and the API serves it:
+
+```bash
+cd frontend && npm run build && cd ..
+uvicorn app.main:app --app-dir backend
+```
+
+The app is then at `http://localhost:8000`. Built files are sent as they are,
+hashed assets with a year-long cache; every other page address (`/jobs/12`)
+gets `index.html`, so a reload or a shared link works. The API and its docs
+are matched first, and an unknown API path or a missing file is still a JSON
+404. `RECRUITFLOW_WEB_CLIENT_DIR` points at another build, or, empty, turns
+serving it off; with no build in `frontend/dist` nothing is served at `/`.
 
 The app's own log lines go to stderr as `time LEVEL logger: message`, from
 `RECRUITFLOW_LOG_LEVEL` up (default `INFO`); uvicorn's lines keep their own
@@ -131,6 +147,26 @@ cd frontend
 npm test
 npm run build      # type-checks, then builds
 ```
+
+The end-to-end tests drive the built client in a real browser against a
+running API: build it, serve it with uvicorn as above (a migrated database
+and a trained matcher), then
+
+```bash
+cd frontend
+E2E_CHANNEL=msedge npm run e2e -- --project=chromium --project=mobile
+```
+
+`E2E_CHANNEL` uses an installed Edge or Chrome (`chrome`); without it, run
+`npx playwright install` first for Playwright's own browsers. They create a
+job, three candidates and an application through the API and delete them
+afterwards, and check: finding the job, scoring its candidates, that both PDF
+links return PDFs, opening a candidate, reloading a page address, the
+not-found pages, no serious or critical accessibility findings from axe-core
+in light or dark, and no sideways scroll, at desktop and phone sizes
+(`E2E_BASE_URL` points them at another server). CI runs them in Chromium,
+Firefox, WebKit and a phone-sized Chromium, and the client's own job on Node
+22.22.0 and 24.
 
 The resume normaliser's unit tests need no database:
 
