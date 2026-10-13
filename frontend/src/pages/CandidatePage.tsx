@@ -21,12 +21,14 @@ function Applications({ candidateId }: { candidateId: number }) {
         { candidate_id: candidateId, limit: APPLICATIONS_SHOWN },
         { signal },
       );
-      // One read per distinct job, for its title; a job deleted in between is shown by id.
+      // The jobs' titles in one read, however many applications there are. A job
+      // deleted in between, or a failed read, leaves its application shown by job id.
       const ids = [...new Set(page.items.map((application) => application.job_id))];
-      const jobs = await Promise.all(
-        ids.map((id) => api.getJob(id, { signal }).catch(() => null)),
-      );
-      const byId = new Map(ids.map((id, index) => [id, jobs[index] ?? null]));
+      const jobs =
+        ids.length === 0
+          ? null
+          : await api.listJobs({ id: ids, limit: APPLICATIONS_SHOWN }, { signal }).catch(() => null);
+      const byId = new Map((jobs?.items ?? []).map((job) => [job.id, job]));
       return {
         rows: page.items.map((application) => ({
           application,

@@ -238,10 +238,14 @@ describe("candidate detail", () => {
         body: page([
           makeApplication({ id: 100, job_id: 1, status: "interview" }),
           makeApplication({ id: 101, job_id: 2, status: "rejected", source: null }),
+          makeApplication({ id: 102, job_id: 1, status: "withdrawn" }),
         ]),
       }),
-      "GET /jobs/1": () => ({ body: makeJob() }),
-      "GET /jobs/2": () => ({ status: 404, body: { detail: "Job 2 not found" } }),
+      // Job 2 has been deleted, so the id filter leaves it out.
+      "GET /jobs": (url) => {
+        const ids = url.searchParams.getAll("id").map(Number);
+        return { body: page([makeJob({ id: 1 })].filter((job) => ids.includes(job.id))) };
+      },
     });
     renderAt("/candidates/10", api.client);
 
@@ -250,12 +254,39 @@ describe("candidate detail", () => {
     expect(screen.getByText("Six years building Python services on PostgreSQL.")).toBeTruthy();
     expect(screen.getByText("Kubernetes")).toBeTruthy();
 
-    const first = await screen.findByRole("link", { name: "Backend Engineer" });
-    expect(first.getAttribute("href")).toBe("/jobs/1");
+    const titled = await screen.findAllByRole("link", { name: "Backend Engineer" });
+    expect(titled.map((link) => link.getAttribute("href"))).toEqual(["/jobs/1", "/jobs/1"]);
     expect(screen.getByRole("link", { name: "Job 2" }).getAttribute("href")).toBe("/jobs/2");
     expect(screen.getByText("Interview")).toBeTruthy();
     expect(screen.getByText("Rejected")).toBeTruthy();
     expect(api.calls("GET /applications")[0]?.url.search).toBe("?candidate_id=10&limit=200");
+    // Every job's title in one request, each job asked for once.
+    expect(api.calls("GET /jobs").map(({ url }) => url.search)).toEqual(["?id=1&id=2&limit=200"]);
+  });
+
+  it("still lists the applications when the jobs cannot be read", async () => {
+    const api = fakeApi({
+      ...HEALTH,
+      "GET /candidates/10": () => ({ body: makeCandidate() }),
+      "GET /applications": () => ({ body: page([makeApplication({ job_id: 7 })]) }),
+      "GET /jobs": () => ({ status: 503, body: { detail: "Database unavailable", code: "db_unavailable" } }),
+    });
+    renderAt("/candidates/10", api.client);
+
+    expect((await screen.findByRole("link", { name: "Job 7" })).getAttribute("href")).toBe("/jobs/7");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("asks for no jobs when there are no applications", async () => {
+    const api = fakeApi({
+      ...HEALTH,
+      "GET /candidates/10": () => ({ body: makeCandidate() }),
+      "GET /applications": () => ({ body: page([]) }),
+    });
+    renderAt("/candidates/10", api.client);
+
+    expect(await screen.findByText("No applications on file.")).toBeTruthy();
+    expect(api.calls("GET /jobs")).toHaveLength(0);
   });
 
   it("says how many applications are not shown", async () => {
@@ -263,7 +294,7 @@ describe("candidate detail", () => {
       ...HEALTH,
       "GET /candidates/10": () => ({ body: makeCandidate() }),
       "GET /applications": () => ({ body: page([makeApplication()], 201, 200) }),
-      "GET /jobs/1": () => ({ body: makeJob() }),
+      "GET /jobs": () => ({ body: page([makeJob()]) }),
     });
     renderAt("/candidates/10", api.client);
 

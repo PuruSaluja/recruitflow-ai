@@ -23,6 +23,11 @@ describe("buildQuery", () => {
       .toBe("?q=C%2B%2B+%26+Go&limit=20&offset=0");
   });
 
+  it("repeats a list's values, as the API's repeatable parameters expect", () => {
+    expect(buildQuery({ id: [3, 1, 3], limit: 200 })).toBe("?id=3&id=1&id=3&limit=200");
+    expect(buildQuery({ id: [] })).toBe("");
+  });
+
   it("is empty when nothing is set", () => {
     expect(buildQuery()).toBe("");
     expect(buildQuery({ q: undefined })).toBe("");

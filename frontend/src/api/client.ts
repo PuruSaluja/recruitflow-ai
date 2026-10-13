@@ -87,8 +87,11 @@ export function buildQuery(params?: object): string {
   if (!params) return "";
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== "") {
-      search.append(key, String(value));
+    // A list is the API's repeatable parameter: ?id=1&id=2.
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (item !== undefined && item !== null && item !== "") {
+        search.append(key, String(item));
+      }
     }
   }
   const text = search.toString();
