@@ -1029,6 +1029,8 @@ export interface operations {
                 department?: string | null;
                 /** @description Case-insensitive substring match on title */
                 q?: string | null;
+                /** @description Repeatable; only these jobs. An id with no job is left out, so a page of applications can fetch its jobs in one request */
+                id?: number[] | null;
                 /** @description Maximum rows to return */
                 limit?: number;
                 /** @description Rows to skip */

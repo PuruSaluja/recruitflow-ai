@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi import status as http_status
+from pydantic import Field
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 
@@ -25,6 +28,9 @@ from app.schemas.job import JobCreate, JobRead, JobUpdate
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
+#: Most ids one listing may name: the largest page, so every job asked for fits on it.
+MAX_JOB_IDS = 200
+
 
 def _get_or_404(db: Session, job_id: int, *, lock: bool | dict[str, bool] = False) -> Job:
     job = db.get(Job, job_id, with_for_update=lock)
@@ -43,6 +49,7 @@ def _apply_filters(
     employment_type: EmploymentType | None,
     department: str | None,
     q: str | None,
+    ids: list[int] | None = None,
 ) -> Select:
     """Apply the same predicates to both the page query and the count query.
 
@@ -59,6 +66,8 @@ def _apply_filters(
         stmt = stmt.where(Job.department == department)
     if q:
         stmt = stmt.where(Job.title.ilike(contains_pattern(q), escape="\\"))
+    if ids is not None:
+        stmt = stmt.where(Job.id.in_(sorted(set(ids))))
     return stmt
 
 
@@ -71,6 +80,14 @@ def list_jobs(
     employment_type: EmploymentType | None = Query(None, description="Filter by employment type"),
     department: str | None = Query(None, description="Exact department match"),
     q: str | None = Query(None, description="Case-insensitive substring match on title"),
+    id: list[Annotated[int, Field(gt=0, le=MAX_ID)]] | None = Query(
+        None,
+        max_length=MAX_JOB_IDS,
+        description=(
+            "Repeatable; only these jobs. An id with no job is left out, so a page of "
+            "applications can fetch its jobs in one request"
+        ),
+    ),
 ) -> Page[JobRead]:
     filters = {
         "status": status,
@@ -78,6 +95,7 @@ def list_jobs(
         "employment_type": employment_type,
         "department": department,
         "q": q,
+        "ids": id,
     }
 
     jobs, total = read_page(

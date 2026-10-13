@@ -12,7 +12,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
+from app.api.v1.jobs import MAX_JOB_IDS
 from app.models import Application, Job, MatchScore
+from app.schemas.common import MAX_ID
 
 Factory = Callable[..., dict[str, Any]]
 
@@ -177,6 +179,42 @@ def test_title_search_is_a_case_insensitive_substring(
 
     assert _titles(client, q="data eng") == ["Senior Data Engineer"]
     assert _titles(client, q="DESIGN") == ["Product Designer"]
+
+
+def test_id_filter_lists_only_the_jobs_named(client: TestClient, make_job: Factory) -> None:
+    first = make_job(title="First")["id"]
+    make_job(title="Second")
+    third = make_job(title="Third", status="draft")["id"]
+    missing = third + 1000
+
+    page = client.get("/jobs", params={"id": [first, third, first, missing]}).json()
+
+    # Repeats and an id with no job are not errors; the total counts what was found.
+    assert [job["title"] for job in page["items"]] == ["Third", "First"]
+    assert page["total"] == 2
+    assert _titles(client, id=[first, third], status="draft") == ["Third"]
+    assert client.get("/jobs", params={"id": [missing]}).json()["total"] == 0
+
+
+@pytest.mark.parametrize(
+    "ids",
+    [["0"], [str(MAX_ID + 1)], ["abc"], [str(n) for n in range(1, MAX_JOB_IDS + 2)]],
+    ids=["zero", "past-max-id", "not-a-number", "one-too-many"],
+)
+def test_id_filter_refuses_ids_no_job_could_have(client: TestClient, ids: list[str]) -> None:
+    response = client.get("/jobs", params={"id": ids})
+
+    assert response.status_code == 422
+
+
+def test_id_filter_takes_the_largest_page_of_ids(client: TestClient, make_job: Factory) -> None:
+    job = make_job()["id"]
+    ids = [job, *range(job + 1, job + MAX_JOB_IDS)]
+
+    page = client.get("/jobs", params={"id": ids, "limit": 200}).json()
+
+    assert len(ids) == MAX_JOB_IDS
+    assert [item["id"] for item in page["items"]] == [job]
 
 
 def test_filtered_total_counts_all_matches_not_just_the_page(
