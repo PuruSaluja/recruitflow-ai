@@ -67,11 +67,68 @@ def test_a_crlf_copy_counts_as_current(tmp_path: Path) -> None:
     assert export_openapi.main(["--out", str(out), "--check"]) == 0
 
 
-def test_a_one_character_change_counts_as_stale(tmp_path: Path) -> None:
+def test_a_changed_type_counts_as_stale(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    schema = json.loads(export_openapi.render_schema())
+    schema["components"]["schemas"]["JobRead"]["properties"]["min_years_experience"]["type"] = (
+        "string"
+    )
     out = tmp_path / "openapi.json"
-    out.write_text(export_openapi.render_schema().replace("Fetch", "Fetsh", 1), encoding="utf-8")
+    out.write_text(json.dumps(schema, indent=2) + "\n", encoding="utf-8")
 
     assert export_openapi.main(["--out", str(out), "--check"]) == 1
+    assert "is out of date" in capsys.readouterr().err
+
+
+def test_a_removed_property_counts_as_stale(tmp_path: Path) -> None:
+    schema = json.loads(export_openapi.render_schema())
+    del schema["components"]["schemas"]["JobRead"]["properties"]["title"]
+    out = tmp_path / "openapi.json"
+    out.write_text(json.dumps(schema, indent=2) + "\n", encoding="utf-8")
+
+    assert export_openapi.main(["--out", str(out), "--check"]) == 1
+
+
+def test_reworded_descriptions_and_limits_only_warn(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A newer FastAPI or pydantic rewording these must not fail CI: the types are unchanged."""
+    schema = json.loads(export_openapi.render_schema())
+    job = schema["components"]["schemas"]["JobRead"]
+    job["description"] = "Reworded."
+    job["properties"]["title"]["maxLength"] = 999
+    schema["paths"]["/api/v1/jobs"]["get"]["summary"] = "Reworded too"
+    # Parameters are a list, so the keywords inside lists count too.
+    schema["paths"]["/api/v1/jobs"]["get"]["parameters"][0]["description"] = "And this"
+    out = tmp_path / "openapi.json"
+    out.write_text(json.dumps(schema, indent=2) + "\n", encoding="utf-8")
+
+    assert export_openapi.main(["--out", str(out), "--check"]) == 0
+    assert "differs from the API only in descriptions" in capsys.readouterr().err
+
+
+def test_a_committed_file_that_is_not_json_counts_as_stale(tmp_path: Path) -> None:
+    out = tmp_path / "openapi.json"
+    out.write_text("<<<<<<< HEAD\n", encoding="utf-8")
+
+    assert export_openapi.main(["--out", str(out), "--check"]) == 1
+
+
+def test_the_type_view_keeps_properties_named_like_keywords() -> None:
+    """A job's ``title`` and ``description`` are properties; a schema's are documentation."""
+    schema = {
+        "title": "JobRead",
+        "description": "A job.",
+        "properties": {
+            "title": {"type": "string", "title": "Title", "maxLength": 200},
+            "description": {"type": "string", "description": "What the job is."},
+        },
+        "required": ["title", "description"],
+    }
+
+    assert export_openapi.type_view(schema) == {
+        "properties": {"title": {"type": "string"}, "description": {"type": "string"}},
+        "required": ["title", "description"],
+    }
 
 
 def test_validation_patterns_are_left_out_and_a_property_named_pattern_is_kept() -> None:
