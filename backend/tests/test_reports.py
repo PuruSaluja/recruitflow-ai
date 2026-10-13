@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import io
+import subprocess
+import sys
 from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
@@ -12,6 +14,7 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.pdfmetrics import stringWidth
 
+from app.config import REPO_ROOT
 from app.ml.corpus import CorpusConfig, generate_corpus
 from app.ml.features import FEATURE_NAMES, feature_dict
 from app.models import Candidate, Job
@@ -224,9 +227,110 @@ def test_hebrew_and_arabic_are_drawn_in_the_order_they_are_read(name: str, drawn
 
 
 @pytest.mark.parametrize(
+    ("name", "face"),
+    [
+        # Vowel signs and the virama are combining marks; they are kept, not dropped.
+        ("प्रिया कृष्णन", "NotoSansDevanagari"),
+        ("ณัฐวุฒิ ศรีสุข", "NotoSansThai"),
+    ],
+)
+def test_devanagari_and_thai_are_drawn_in_their_own_faces(name: str, face: str) -> None:
+    words = name.split()
+    assert drawable(name) == " ".join(f'<font face="{face}">{word}</font>' for word in words)
+    assert drawable(name, bold=True).startswith(f'<font face="{face}-Bold">')
+
+    job = _job()
+    pdf = shortlist_pdf(
+        job,
+        [_ranked(_candidate(full_name=name), job, 1, 0.5)],
+        total=1,
+        model_version="v",
+        generated_at=GENERATED_AT,
+    )
+    assert f"{face}-Regular" in _fonts(pdf)
+
+
+def test_devanagari_is_shaped_into_its_conjuncts() -> None:
+    """Shaped, a conjunct or a reph is a glyph of its own, which the PDF can only map
+    back to a private-use character; drawn letter by letter, every one would map back
+    to itself. Copying such a name out of the PDF does not give it back exactly."""
+    job = _job()
+    pdf = shortlist_pdf(
+        job,
+        [_ranked(_candidate(full_name="शर्मा"), job, 1, 0.5)],
+        total=1,
+        model_version="v",
+        generated_at=GENERATED_AT,
+    )
+    text = _text(pdf)
+
+    assert any("" <= char <= "" for char in text)
+
+
+@pytest.mark.parametrize(
+    ("font", "shaped"),
+    [
+        ("NotoSansDevanagari", True),
+        ("NotoSansDevanagari-Bold", True),
+        ("NotoSansThai", True),  # Thai marks sit right only when positioned by HarfBuzz
+        ("NotoSansThai-Bold", True),
+        ("DejaVuSans", False),
+        ("DejaVuSans-Bold", False),
+        ("DroidSansFallback", False),
+        ("NanumSquare", False),
+        ("NanumSquare-Bold", False),
+    ],
+)
+def test_only_the_scripts_that_need_it_are_shaped(font: str, shaped: bool) -> None:
+    registered = pdfmetrics.getFont(font)
+
+    if shaped:
+        assert registered.hbFont(9) is not None
+    else:
+        with pytest.raises(AttributeError, match="is not shaped"):
+            registered.hbFont(9)
+
+
+def test_latin_beside_a_shaped_script_is_not_joined_into_ligatures() -> None:
+    """A shaped paragraph shapes every word; DejaVu's are left as they are, so
+    "Shortlist" is not drawn, or copied out, as "Shortliﬆ", nor "Rafiq" as "Raﬁq"."""
+    job = _job(title="Data विश्लेषक")
+    pdf = shortlist_pdf(
+        job,
+        [_ranked(_candidate(full_name="Rafiq สมชาย"), job, 1, 0.5)],
+        total=1,
+        model_version="v",
+        generated_at=GENERATED_AT,
+    )
+    text = _text(pdf)
+
+    assert "Shortlist: Data" in text
+    assert "Rafiq" in text
+    assert not any("ﬀ" <= char <= "ﬆ" for char in text)
+
+
+def test_without_harfbuzz_devanagari_and_thai_are_marked_missing() -> None:
+    """ReportLab shapes only when uharfbuzz imports; unshaped, these scripts would be
+    drawn wrong, so they are drawn as "?" instead. Run in a fresh interpreter, as
+    the fonts are registered when the module is imported."""
+    code = (
+        "import sys; sys.modules['uharfbuzz'] = None\n"
+        "from app.services.reports import drawable, _FACES\n"
+        "print([face.family for face in _FACES]); print(drawable('राम ไทย').encode())"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True, cwd=REPO_ROOT
+    )
+
+    families, drawn = result.stdout.splitlines()
+    assert families == "['DejaVuSans', 'DroidSansFallback', 'NanumSquare']"
+    assert drawn == "b'??? ???'"
+
+
+@pytest.mark.parametrize(
     ("value", "drawn"),
     [
-        ("राम", "???"),  # Devanagari
+        ("ሰላም", "???"),  # Ethiopic: no embedded face has it
         ("Sam \U0001f600", "Sam ?"),  # in the font, but past U+FFFF it cannot be mapped
         ("\U0001d400lpha", "Alpha"),  # mathematical bold A folds to A
         ("Jose\u0301 Garci\u0301a", "Jos\u00e9 Garc\u00eda"),  # accents composed first

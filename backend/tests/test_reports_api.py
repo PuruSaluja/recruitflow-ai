@@ -388,7 +388,7 @@ def test_names_with_markup_and_letters_outside_the_font_still_make_a_report(
 ) -> None:
     job = make_job(**(corpus.jobs[0].api_payload() | {"title": "R&D <Lead>"}))
     candidate = make_candidate(
-        **(corpus.candidates[0].api_payload() | {"full_name": "Łukasz <b>Šimić 李 क"})
+        **(corpus.candidates[0].api_payload() | {"full_name": "Łukasz <b>Šimić 李 ሰ"})
     )
     _scored(client, job["id"])
 
@@ -396,7 +396,7 @@ def test_names_with_markup_and_letters_outside_the_font_still_make_a_report(
     scorecard = _text(client.get(f"/jobs/{job['id']}/candidates/{candidate['id']}/scorecard.pdf"))
 
     assert "Shortlist: R&D <Lead>" in shortlist
-    # Chinese from the fallback face; Devanagari, which no embedded font draws, as "?".
+    # Chinese from the fallback face; Ethiopic, which no embedded font draws, as "?".
     assert "Łukasz <b>Šimić 李 ?" in shortlist
     assert "Scorecard: Łukasz <b>Šimić 李 ?" in scorecard
 

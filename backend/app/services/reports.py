@@ -17,9 +17,12 @@ hosts the two clocks have to agree.
 Text is drawn in fonts embedded in each PDF (``app/assets/fonts``): DejaVu
 Sans for Latin with its accents (Polish, Turkish, Vietnamese...), Greek,
 Cyrillic, Armenian, Georgian, Hebrew and Arabic; Droid Sans Fallback for
-Chinese characters and Japanese kana; Nanum Square for Korean. A character no
-face has is drawn without its accents where that leaves one a face has, and as
-``"?"`` otherwise (Devanagari, Thai, emoji). ReportLab lays every line out left
+Chinese characters and Japanese kana; Nanum Square for Korean; Noto Sans
+Devanagari and Noto Sans Thai for theirs. Those two scripts are shaped through
+HarfBuzz, so their letters join and their vowel signs sit where they belong;
+copied out of the PDF, a conjunct comes back as a private-use character. A
+character no face has is drawn without its accents where that leaves one a
+face has, and as ``"?"`` otherwise (Tamil, Ethiopic, emoji). ReportLab lays every line out left
 to right and does not join Arabic letters, so a value with Hebrew or Arabic in
 it is put into the order it is seen in, Arabic in its joined forms, before it is
 drawn; copied out of the PDF, those letters can come out reversed. Accents typed
@@ -38,6 +41,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import NoReturn
 from xml.sax.saxutils import escape
 
 import arabic_reshaper
@@ -78,18 +82,35 @@ class _Face:
     glyphs: frozenset[int]
 
 
-def _register(family: str, regular_file: str, bold_file: str | None = None) -> _Face:
+class _UnshapedTTFont(TTFont):
+    """A font whose words are drawn as they are, even in a paragraph that is shaped.
+
+    ReportLab shapes every word of a shaped paragraph, and HarfBuzz would then
+    join Latin letters into DejaVu's ligatures: "Shortlist" beside a Hindi title
+    was drawn, and copied out, as "Shortliﬆ". ReportLab leaves a word unshaped
+    when its font has no HarfBuzz font to give, which this says.
+    """
+
+    def hbFont(self, fontSize: float = 10) -> NoReturn:  # noqa: N802 -- ReportLab's name
+        raise AttributeError(f"{self.fontName} is not shaped")
+
+
+def _register(
+    family: str, regular_file: str, bold_file: str | None = None, *, shaped: bool = False
+) -> _Face:
     """Register ``family`` and its bold face with ReportLab.
 
     A family with one weight draws bold text in that weight. The reports use no italics.
+    Only a ``shaped`` family's words are ever shaped.
     """
-    regular = TTFont(family, str(_FONT_DIR / regular_file))
+    font_class = TTFont if shaped else _UnshapedTTFont
+    regular = font_class(family, str(_FONT_DIR / regular_file))
     pdfmetrics.registerFont(regular)
     glyphs = frozenset(regular.face.charToGlyph)
     bold_name = family
     if bold_file is not None:
         bold_name = f"{family}-Bold"
-        bold = TTFont(bold_name, str(_FONT_DIR / bold_file))
+        bold = font_class(bold_name, str(_FONT_DIR / bold_file))
         pdfmetrics.registerFont(bold)
         glyphs &= frozenset(bold.face.charToGlyph)
     pdfmetrics.registerFontFamily(
@@ -98,13 +119,33 @@ def _register(family: str, regular_file: str, bold_file: str | None = None) -> _
     return _Face(family, bold_name, glyphs)
 
 
+#: Devanagari and Thai letters take different forms beside their neighbours, and
+#: their vowel signs sit above, below or before the letter they follow: a line
+#: in these faces has to be shaped (by HarfBuzz, through uharfbuzz) to be drawn
+#: right. ReportLab shapes only when uharfbuzz imports, so without it these faces
+#: are left out and those characters are drawn as "?" rather than drawn wrong.
+_SHAPED = ("NotoSansDevanagari", "NotoSansThai")
+
 #: Tried in order for each character; the first that has it draws it. DejaVu Sans
 #: draws the reports' own text, Droid Sans Fallback Chinese characters and Japanese
-#: kana, Nanum Square Korean Hangul.
+#: kana, Nanum Square Korean Hangul, Noto Sans Devanagari and Noto Sans Thai theirs.
 _FACES = (
     _register(FONT, "DejaVuSans.ttf", "DejaVuSans-Bold.ttf"),
     _register("DroidSansFallback", "DroidSansFallbackFull.ttf"),
     _register("NanumSquare", "NanumSquareR.ttf", "NanumSquareB.ttf"),
+    *(
+        (
+            _register(
+                _SHAPED[0],
+                "NotoSansDevanagari-Regular.ttf",
+                "NotoSansDevanagari-Bold.ttf",
+                shaped=True,
+            ),
+            _register(_SHAPED[1], "NotoSansThai-Regular.ttf", "NotoSansThai-Bold.ttf", shaped=True),
+        )
+        if pdfmetrics.getFont(FONT).shapable
+        else ()
+    ),
 )
 #: Right-to-left letters. ReportLab lays every line out left to right, so a value
 #: holding any is put into the order it is seen in before it is drawn.
@@ -160,9 +201,11 @@ def drawable(value: object, *, bold: bool = False) -> str:
             if char.isspace():
                 runs.append((_FACES[0], " "))
             continue
-        if category in _INVISIBLE:
-            continue
         face = _face_for(char)
+        # A vowel sign or virama is a combining mark, but in a shaped script it is
+        # part of the word, drawn onto the letter before it.
+        if category in _INVISIBLE and not (face is not None and face.family in _SHAPED):
+            continue
         if face is not None:
             runs.append((face, char))
             continue
@@ -217,7 +260,21 @@ def skill_breakdown(wanted: Iterable[str], held: Iterable[str]) -> SkillBreakdow
     return SkillBreakdown(met=met, missing=missing)
 
 
+_SHAPING_STYLES: dict[str, ParagraphStyle] = {}
+
+
 def _para(text: str, style: ParagraphStyle = _BODY) -> Paragraph:
+    """A paragraph of ``drawable`` markup, shaped only when it holds a shaped script.
+
+    Shaping also applies kerning and ligatures to the rest of the line, so every
+    other paragraph is left exactly as it was drawn before.
+    """
+    if any(f'<font face="{family}' in text for family in _SHAPED):
+        if style.name not in _SHAPING_STYLES:
+            _SHAPING_STYLES[style.name] = ParagraphStyle(
+                f"{style.name}-shaped", parent=style, shaping=1
+            )
+        style = _SHAPING_STYLES[style.name]
     return Paragraph(text, style)
 
 

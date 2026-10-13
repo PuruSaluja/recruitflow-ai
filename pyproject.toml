@@ -22,11 +22,14 @@ dependencies = [
     "pandas>=2.2",
     "scipy>=1.13",
     "joblib>=1.4",
-    "reportlab>=4.2",
+    "reportlab>=5.0",
     # Hebrew and Arabic in the PDF reports: ReportLab lays text out left to right
     # and does not join Arabic letters, so names are put in display order first.
     "python-bidi>=0.6",
     "arabic-reshaper>=3.0",
+    # Devanagari and Thai in the PDF reports: ReportLab shapes text through HarfBuzz
+    # when it can import it, which those scripts need to be drawn at all.
+    "uharfbuzz>=0.56",
 ]
 
 [project.optional-dependencies]

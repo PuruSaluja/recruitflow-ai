@@ -1137,9 +1137,11 @@ the first that has it:
 | DejaVu Sans 2.37 | Latin with its accents (`Łukasz Šimić`, `Nguyễn Văn Đức`), Greek, Cyrillic, Armenian, Georgian, Hebrew, Arabic |
 | Droid Sans Fallback | Chinese characters, Japanese kana (`李雷`, `陳淑芬`, `山田さくら`) |
 | Nanum Square | Korean (`김민준`) |
+| Noto Sans Devanagari 2.007 | Devanagari (`प्रिया कृष्णन`), shaped |
+| Noto Sans Thai 2.002 | Thai (`ณัฐวุฒิ ศรีสุข`), shaped |
 
 Names in these scripts read back from the PDF as typed, so they can be copied
-and searched, with one exception. ReportLab lays every line out left to right
+and searched, with two exceptions. ReportLab lays every line out left to right
 and does not join Arabic letters, so a name with Hebrew or Arabic in it is put
 into the order it is seen in first (`python-bidi`), Arabic in the joined forms
 its letters take (`arabic-reshaper`). It reads correctly on the page, but
@@ -1147,13 +1149,21 @@ copied out of the PDF those letters can come out reversed, so a search may
 not find the name; and a name long enough to wrap in its table cell has its
 lines in the wrong order, the end of the name on the first line.
 
+Devanagari and Thai need shaping: letters combine into conjuncts, and vowel
+signs sit before, above or below the letter they follow. A paragraph holding
+either is shaped through HarfBuzz (`uharfbuzz`), and only the words in those
+two fonts, so Latin beside them keeps its plain letters (no `ﬆ` or `ﬁ`
+ligatures). They read correctly on the page, but a conjunct or a reph is a
+glyph of its own, which the PDF maps back to a private-use character, so
+copied out of the PDF such a name does not come back exactly and a search may
+not find it. Without `uharfbuzz` (it is a declared dependency) ReportLab
+cannot shape, so these two fonts are left out and the names are drawn as `?`
+rather than drawn wrong.
+
 Characters no embedded font has are drawn without their accents where that
-leaves one a font has, and as `?` otherwise: Devanagari and Thai, and emoji
-(DejaVu has some, but ReportLab cannot map characters past U+FFFF for
-copying). Devanagari and Thai also need shaping, letters that combine and
-change place: ReportLab can shape through the optional `uharfbuzz` package,
-and with it the conjuncts come out right, but the shaped letters read back
-from the PDF as private-use characters, so they are not drawn yet. Accents
+leaves one a font has, and as `?` otherwise: Tamil, Ethiopic and other
+scripts without a font here, and emoji (DejaVu has some, but ReportLab
+cannot map characters past U+FFFF for copying). Accents
 typed as separate combining marks are composed onto their letter first.
 Zero-width spaces, direction marks and control characters are left out,
 except that whitespace controls such as tabs and line breaks read as spaces.
