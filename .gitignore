@@ -33,3 +33,7 @@ reports/*.pdf
 Thumbs.db
 .DS_Store
 desktop.ini
+
+# Playwright output
+frontend/test-results/
+frontend/playwright-report/
