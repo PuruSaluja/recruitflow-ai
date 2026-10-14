@@ -4,6 +4,9 @@
 #
 # Everything comes from pyproject.toml alone, so a pass here shows it declares
 # enough; the local virtualenv has also shared Anaconda's site-packages.
+#
+# Every job runs on ubuntu-24.04 by name rather than ubuntu-latest, so the
+# runner image changes only when this file does.
 
 name: CI
 
@@ -21,7 +24,7 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -73,7 +76,7 @@ jobs:
   # match the committed ones (the test job checks the schema against the API),
   # then its tests and a production build.
   frontend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -111,7 +114,7 @@ jobs:
   # The built client served by the API, with a migrated database and a trained
   # matcher, driven in Chromium, Firefox, WebKit and a phone-sized Chromium.
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     services:
@@ -192,7 +195,7 @@ jobs:
   # build) and sets RECRUITFLOW_REQUIRE_ENCODER, so a model that fails to load
   # fails the job instead of skipping.
   embeddings:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     env:
