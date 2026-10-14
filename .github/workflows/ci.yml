@@ -3,7 +3,7 @@
 # on its own and end to end in real browsers.
 #
 # Everything comes from pyproject.toml alone, so a pass here shows it declares
-# enough; the local virtualenv has also shared Anaconda's site-packages.
+# enough.
 #
 # Every job runs on ubuntu-24.04 by name rather than ubuntu-latest, so the
 # runner image changes only when this file does.
