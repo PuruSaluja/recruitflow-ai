@@ -21,6 +21,17 @@ export type MatchPage = Schemas["MatchPage"];
 // a request may leave them out and take the server's default.
 export type ScoreJobRequest = Partial<Schemas["ScoreJobRequest"]>;
 export type ScoreJobResponse = Schemas["ScoreJobResponse"];
+export type ApplicationStatus = Schemas["ApplicationStatus"];
+export type ResumePreview = Schemas["ResumePreview"];
+// The same for the create bodies: what the API requires, and the rest left to
+// its defaults.
+export type NewJob = Partial<Schemas["JobCreate"]> &
+  Pick<Schemas["JobCreate"], "title" | "description">;
+export type NewCandidate = Partial<Schemas["CandidateCreate"]> &
+  Pick<Schemas["CandidateCreate"], "full_name" | "email" | "resume_text">;
+export type NewApplication = Partial<Schemas["ApplicationCreate"]> &
+  Pick<Schemas["ApplicationCreate"], "job_id" | "candidate_id">;
+export type ApplicationChange = Schemas["ApplicationUpdate"];
 export type Page<T> = { items: T[]; total: number; limit: number; offset: number };
 
 type QueryOf<P extends keyof paths> = paths[P] extends {
@@ -109,16 +120,19 @@ export function createClient(fetchImpl: Fetch = (...args) => fetch(...args), bas
     path: string,
     { signal, body }: RequestOptions & { body?: unknown } = {},
   ): Promise<T> {
+    // A file goes as multipart form data, whose Content-Type (with its
+    // boundary) the browser writes; anything else goes as JSON.
+    const form = body instanceof FormData;
     let response: Response;
     try {
       response = await fetchImpl(`${base}${path}`, {
         method,
         signal,
-        headers: body === undefined ? { Accept: "application/json" } : {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        body: body === undefined ? undefined : JSON.stringify(body),
+        headers:
+          body === undefined || form
+            ? { Accept: "application/json" }
+            : { Accept: "application/json", "Content-Type": "application/json" },
+        body: body === undefined ? undefined : form ? body : JSON.stringify(body),
       });
     } catch (error) {
       // An abort is the caller's own doing; pass it through untouched.
@@ -146,6 +160,13 @@ export function createClient(fetchImpl: Fetch = (...args) => fetch(...args), bas
   }
 
   const get = <T>(path: string, options?: RequestOptions) => request<T>("GET", path, options);
+  const send = <T>(method: string, path: string, body: unknown, options?: RequestOptions) =>
+    request<T>(method, path, { ...options, body });
+  const file = (resume: File) => {
+    const form = new FormData();
+    form.append("file", resume);
+    return form;
+  };
 
   return {
     health: (options?: RequestOptions) => get<Health>("/health", options),
@@ -153,14 +174,28 @@ export function createClient(fetchImpl: Fetch = (...args) => fetch(...args), bas
     listJobs: (query?: JobQuery, options?: RequestOptions) =>
       get<Page<Job>>(`/jobs${buildQuery(query)}`, options),
     getJob: (jobId: number, options?: RequestOptions) => get<Job>(`/jobs/${jobId}`, options),
+    createJob: (job: NewJob, options?: RequestOptions) => send<Job>("POST", "/jobs", job, options),
 
     listCandidates: (query?: CandidateQuery, options?: RequestOptions) =>
       get<Page<Candidate>>(`/candidates${buildQuery(query)}`, options),
     getCandidate: (candidateId: number, options?: RequestOptions) =>
       get<Candidate>(`/candidates/${candidateId}`, options),
+    createCandidate: (candidate: NewCandidate, options?: RequestOptions) =>
+      send<Candidate>("POST", "/candidates", candidate, options),
+    /** The text and skills the API reads from a resume file, storing nothing. */
+    previewResume: (resume: File, options?: RequestOptions) =>
+      send<ResumePreview>("POST", "/candidates/resume-preview", file(resume), options),
+    uploadResume: (candidateId: number, resume: File, options?: RequestOptions) =>
+      send<Candidate>("PUT", `/candidates/${candidateId}/resume`, file(resume), options),
 
     listApplications: (query?: ApplicationQuery, options?: RequestOptions) =>
       get<Page<Application>>(`/applications${buildQuery(query)}`, options),
+    createApplication: (application: NewApplication, options?: RequestOptions) =>
+      send<Application>("POST", "/applications", application, options),
+    updateApplication: (applicationId: number, change: ApplicationChange, options?: RequestOptions) =>
+      send<Application>("PATCH", `/applications/${applicationId}`, change, options),
+    reopenApplication: (applicationId: number, options?: RequestOptions) =>
+      send<Application>("POST", `/applications/${applicationId}/reopen`, {}, options),
 
     listMatches: (jobId: number, query?: MatchQuery, options?: RequestOptions) =>
       get<MatchPage>(`/jobs/${jobId}/matches${buildQuery(query)}`, options),

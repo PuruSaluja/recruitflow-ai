@@ -167,4 +167,87 @@ describe("createClient", () => {
     expect(client.shortlistPdfUrl(4, 15)).toBe("/x/jobs/4/report.pdf?limit=15");
     expect(client.scorecardPdfUrl(4, 12)).toBe("/x/jobs/4/candidates/12/scorecard.pdf");
   });
+
+  it("sends each create as JSON to its collection", async () => {
+    const fetchImpl = respond(201, { id: 1 });
+    const client = createClient(fetchImpl);
+
+    await client.createJob({ title: "Data Engineer", description: "Run the nightly loads." });
+    await client.createCandidate({ full_name: "Ana Diaz", email: "ana@example.com", resume_text: "x".repeat(20) });
+    await client.createApplication({ job_id: 3, candidate_id: 4, source: "referral" });
+
+    const sent = (fetchImpl.mock.calls as unknown as [string, RequestInit][]).map(([url, init]) => [
+      url,
+      init.method,
+      init.body,
+      new Headers(init.headers).get("Content-Type"),
+    ]);
+    expect(sent).toEqual([
+      ["/api/v1/jobs", "POST", '{"title":"Data Engineer","description":"Run the nightly loads."}', "application/json"],
+      [
+        "/api/v1/candidates",
+        "POST",
+        `{"full_name":"Ana Diaz","email":"ana@example.com","resume_text":"${"x".repeat(20)}"}`,
+        "application/json",
+      ],
+      ["/api/v1/applications", "POST", '{"job_id":3,"candidate_id":4,"source":"referral"}', "application/json"],
+    ]);
+  });
+
+  it("moves and reopens an application", async () => {
+    const fetchImpl = respond(200, { id: 8 });
+    const client = createClient(fetchImpl);
+
+    await client.updateApplication(8, { status: "screening" });
+    await client.reopenApplication(8);
+
+    const sent = (fetchImpl.mock.calls as unknown as [string, RequestInit][]).map(([url, init]) => [
+      url,
+      init.method,
+      init.body,
+    ]);
+    expect(sent).toEqual([
+      ["/api/v1/applications/8", "PATCH", '{"status":"screening"}'],
+      ["/api/v1/applications/8/reopen", "POST", "{}"],
+    ]);
+  });
+
+  it("sends a resume as a multipart file and leaves its Content-Type to the browser", async () => {
+    const fetchImpl = respond(200, { id: 5 });
+    const client = createClient(fetchImpl);
+    const resume = new File(["Python and SQL"], "cv.txt", { type: "text/plain" });
+
+    await client.previewResume(resume);
+    await client.uploadResume(5, resume);
+
+    const calls = fetchImpl.mock.calls as unknown as [string, RequestInit][];
+    expect(calls.map(([url, init]) => [url, init.method])).toEqual([
+      ["/api/v1/candidates/resume-preview", "POST"],
+      ["/api/v1/candidates/5/resume", "PUT"],
+    ]);
+    for (const [, init] of calls) {
+      expect(init.body).toBeInstanceOf(FormData);
+      expect((init.body as FormData).get("file")).toBe(resume);
+      // Set by hand it would lack the boundary, and the API could not read the parts.
+      expect(new Headers(init.headers).get("Content-Type")).toBeNull();
+    }
+  });
+
+  it("reads a refused create's field errors into one message", async () => {
+    const client = createClient(
+      respond(422, {
+        detail: [
+          { loc: ["body", "title"], msg: "String should have at least 2 characters" },
+          { loc: ["body", "salary_max"], msg: "Input should be greater than or equal to 0" },
+        ],
+      }),
+    );
+
+    const error = await caught(client.createJob({ title: " ", description: "x".repeat(20) }));
+
+    expect(error.status).toBe(422);
+    expect(error.message).toBe(
+      "title: String should have at least 2 characters; salary_max: Input should be greater than or equal to 0",
+    );
+  });
 });
