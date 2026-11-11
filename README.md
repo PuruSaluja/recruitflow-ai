@@ -38,7 +38,7 @@ cannot show.
 | Fairness, qualified women against men, top 5 | Equal-opportunity gap −0.140 in the past decisions, −0.050 for a matcher trained plainly on them, **−0.011** for the served matcher, whose interval includes zero in all 17 audit runs | [Fairness audit](#fairness-audit) |
 | Fairness, what remains | Over-40s shortlisted more often than under-40s (+0.042 at top 5 over 8 fresh runs), mostly through the jobs' minimum years; disclosed, and long minimums are flagged to the recruiter | same |
 | Scoring 4,000 candidates for a job | 3,061 ms median for a first scoring, the ranking cached, timed before the matcher was reweighed (about 3% slower since); a page of 50 read back in 25.8 ms median | [Scoring](#measured-on-the-default-corpus-4) |
-| Tests | 1,711 backend tests and 41 client tests; 99.0% of lines and branches covered when last measured in full; end-to-end in Chromium, Firefox, WebKit and a phone-sized Chromium on every push to `main` and every pull request | [Tests](#tests) |
+| Tests | 1,764 backend tests and 41 client tests; 99.0% of lines and branches covered when last measured in full; end-to-end in Chromium, Firefox, WebKit and a phone-sized Chromium on every push to `main` and every pull request | [Tests](#tests) |
 
 ## Architecture
 
@@ -285,21 +285,21 @@ pytest --cov --cov-report=term-missing:skip-covered
 Coverage counts lines and branches in `backend/app` and in `scripts`, the
 command-line entry points that train, evaluate and audit the matcher and write
 the sample reports. Scripts the tests run as a subprocess are counted only
-where a test also calls them in-process. Measured on 2026-10-12 over the whole
-suite (1,658 tests, every one passing, with the embeddings extra installed so
+where a test also calls them in-process. Measured on 2026-11-11 over the whole
+suite (1,764 tests, every one passing, with the embeddings extra installed so
 the real models load):
 
 | Area | Lines | Branches | Covered |
 | ---- | ----- | -------- | ------- |
-| `app/ml` (features, training, ranking, retrieval, fairness) | 1,185 of 1,185 | 266 of 266 | 100% |
-| `app/services` (scoring, reports, resumes, embeddings, requirements) | 438 of 439 | 103 of 104 | 99.6% |
-| `app/api` (routes, body limit, errors) | 582 of 582 | 125 of 126 | 99.9% |
-| `app/schemas` | 280 of 282 | 15 of 18 | 98.3% |
-| `app/db`, `app/models` and top level | 357 of 357 | 14 of 14 | 100% |
-| `scripts` | 1,110 of 1,140 | 224 of 232 | 97.2% |
-| **Total** | **3,952 of 3,985** | **747 of 760** | **99.0%** |
+| `app/ml` (features, training, ranking, retrieval, fairness) | 1,219 of 1,219 | 284 of 284 | 100% |
+| `app/services` (scoring, reports, resumes, embeddings, requirements) | 449 of 450 | 107 of 108 | 99.6% |
+| `app/api` (routes, body limit, errors) | 635 of 635 | 145 of 146 | 99.9% |
+| `app/schemas` | 301 of 303 | 17 of 20 | 98.5% |
+| `app/db`, `app/models` and top level | 368 of 368 | 18 of 18 | 100% |
+| `scripts` | 1,170 of 1,201 | 241 of 250 | 97.2% |
+| **Total** | **4,142 of 4,176** | **812 of 826** | **99.0%** |
 
-Of the 33 lines missed, 7 are the calls to `main()` under the scripts'
+Of the 34 lines missed, 8 are the calls to `main()` under the scripts'
 `if __name__ == "__main__"`, and 18 are six scripts' handling of an output
 that turns unwritable during a run: each checks its output path before it
 starts (`app/cli.py`), and the tests cover that check. The rest are conditions
