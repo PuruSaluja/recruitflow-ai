@@ -218,6 +218,14 @@ are matched first, and an unknown API path or a missing file is still a JSON
 404. `RECRUITFLOW_WEB_CLIENT_DIR` points at another build, or, empty, turns
 serving it off; with no build in `frontend/dist` nothing is served at `/`.
 
+The README's three pictures, in [`images/`](images), are of that built client
+served this way, in Chromium at a width of 1,280 pixels, not edited. Its
+database was empty but for what was posted through the API from the default
+[synthetic corpus](#synthetic-corpus) (seed 42): the first twelve jobs, the fifty candidates paired with the first job,
+one scoring run of that job, and applications from its five highest-ranked
+candidates moved to different stages. The resume file in the third picture is
+the resume text of another corpus candidate, and the form was not submitted.
+
 The app's own log lines go to stderr as `time LEVEL logger: message`, from
 `RECRUITFLOW_LOG_LEVEL` up (default `INFO`); uvicorn's lines keep their own
 format.
