@@ -128,6 +128,8 @@ export function makeApplication(overrides: Partial<Application> = {}): Applicati
     applied_at: STAMP,
     created_at: STAMP,
     updated_at: STAMP,
+    next_statuses: ["offer", "rejected", "withdrawn"],
+    reopenable: false,
     ...overrides,
   };
 }

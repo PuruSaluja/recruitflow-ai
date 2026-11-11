@@ -1696,6 +1696,21 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "next_statuses": {
+            "items": {
+              "$ref": "#/components/schemas/ApplicationStatus"
+            },
+            "type": "array",
+            "title": "Next Statuses",
+            "description": "The stages a PATCH can move this application to, in pipeline order.\n\nTaken from the rules the PATCH itself checks, so a client offers only\nmoves the API accepts; empty once the application is finished.",
+            "readOnly": true
+          },
+          "reopenable": {
+            "type": "boolean",
+            "title": "Reopenable",
+            "description": "Whether the application is finished in a way a reopen can undo.\n\nThe reopen still needs its job to be open, which only the reopen checks.",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -1708,7 +1723,9 @@
           "notes",
           "applied_at",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "next_statuses",
+          "reopenable"
         ],
         "title": "ApplicationRead"
       },

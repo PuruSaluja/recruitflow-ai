@@ -158,6 +158,67 @@ def test_the_full_path_to_hired(
     assert final["status"] == "hired"
 
 
+# Each stage the application passes through, the moves it then offers, and
+# whether it can be reopened. Written out, not derived from the rules, so a
+# change to the rules has to change this table too.
+OFFERED = [
+    ((), ["screening", "rejected", "withdrawn"], False),
+    (("screening",), ["interview", "rejected", "withdrawn"], False),
+    (("screening", "interview"), ["offer", "rejected", "withdrawn"], False),
+    (("screening", "interview", "offer"), ["hired", "rejected", "withdrawn"], False),
+    (("screening", "interview", "offer", "hired"), [], False),
+    (("rejected",), [], True),
+    (("screening", "withdrawn"), [], True),
+]
+
+
+@pytest.mark.parametrize(("stages", "offered", "reopenable"), OFFERED)
+def test_an_application_lists_the_moves_it_can_make(
+    client: TestClient,
+    application: dict[str, Any],
+    advance: Factory,
+    stages: tuple[str, ...],
+    offered: list[str],
+    reopenable: bool,
+) -> None:
+    moved = advance(application["id"], *stages) if stages else application
+
+    for body in (moved, client.get(f"/applications/{application['id']}").json()):
+        assert body["next_statuses"] == offered
+        assert body["reopenable"] is reopenable
+
+
+def test_every_move_an_application_lists_is_accepted(
+    client: TestClient, make_job: Factory, make_candidate: Factory, make_application: Factory
+) -> None:
+    """Walk every listed move from every live stage on a fresh application."""
+    paths = [(), ("screening",), ("screening", "interview"), ("screening", "interview", "offer")]
+    for stages in paths:
+        start = make_application(job_id=make_job()["id"], candidate_id=make_candidate()["id"])
+        for stage in stages:
+            client.patch(f"/applications/{start['id']}", json={"status": stage})
+        listed = client.get(f"/applications/{start['id']}").json()["next_statuses"]
+        for target in listed:
+            trial = make_application(job_id=make_job()["id"], candidate_id=make_candidate()["id"])
+            for stage in stages:
+                client.patch(f"/applications/{trial['id']}", json={"status": stage})
+            response = client.patch(f"/applications/{trial['id']}", json={"status": target})
+            assert response.status_code == 200, (stages, target, response.text)
+
+
+def test_a_listed_reopen_is_accepted(
+    client: TestClient, application: dict[str, Any], advance: Factory
+) -> None:
+    rejected = advance(application["id"], "rejected")
+    assert rejected["reopenable"] is True
+
+    reopened = client.post(f"/applications/{application['id']}/reopen", json={})
+
+    assert reopened.status_code == 200, reopened.text
+    assert reopened.json()["status"] == "applied"
+    assert reopened.json()["next_statuses"] == ["screening", "rejected", "withdrawn"]
+
+
 @pytest.mark.parametrize(
     ("stages", "target"),
     [

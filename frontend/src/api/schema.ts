@@ -461,6 +461,21 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /**
+             * Next Statuses
+             * @description The stages a PATCH can move this application to, in pipeline order.
+             *
+             *     Taken from the rules the PATCH itself checks, so a client offers only
+             *     moves the API accepts; empty once the application is finished.
+             */
+            readonly next_statuses: components["schemas"]["ApplicationStatus"][];
+            /**
+             * Reopenable
+             * @description Whether the application is finished in a way a reopen can undo.
+             *
+             *     The reopen still needs its job to be open, which only the reopen checks.
+             */
+            readonly reopenable: boolean;
         };
         /**
          * ApplicationReopen

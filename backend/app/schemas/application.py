@@ -5,10 +5,18 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 from app.models.enums import ApplicationStatus
 from app.schemas.common import MAX_ID, reject_null_fields
+from app.services.pipeline import REOPENABLE_STATUSES, next_statuses
 
 #: Columns the database declares NOT NULL, so a PATCH may omit them but must
 #: never send an explicit null. ``source`` and ``notes`` are nullable and can
@@ -94,6 +102,26 @@ class ApplicationRead(BaseModel):
     applied_at: datetime
     created_at: datetime
     updated_at: datetime
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def next_statuses(self) -> list[ApplicationStatus]:
+        """The stages a PATCH can move this application to, in pipeline order.
+
+        Taken from the rules the PATCH itself checks, so a client offers only
+        moves the API accepts; empty once the application is finished.
+        """
+        onward = next_statuses(self.status)
+        return [status for status in ApplicationStatus if status in onward]
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def reopenable(self) -> bool:
+        """Whether the application is finished in a way a reopen can undo.
+
+        The reopen still needs its job to be open, which only the reopen checks.
+        """
+        return self.status in REOPENABLE_STATUSES
 
 
 class ApplicationStageEventRead(BaseModel):
