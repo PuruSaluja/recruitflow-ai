@@ -797,7 +797,7 @@ def _advance_chance(fit: float) -> float:
 class CorpusSummary:
     """What a generated corpus actually contains, measured rather than assumed.
 
-    The README's synthetic-data disclosure and the fairness audit both quote
+    The guide's synthetic-data disclosure and the fairness audit both quote
     these, so they are computed from the corpus in hand and never written down
     by hand.
     """
