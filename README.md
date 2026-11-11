@@ -321,13 +321,13 @@ the 21 tests that load the real models skip there and it misses more lines.
 | `POST` | `/api/v1/jobs/{id}/close` | Close a requisition (idempotent) |
 | `DELETE` | `/api/v1/jobs/{id}` | Delete, cascading to applications and scores |
 | `GET` | `/api/v1/candidates` | List with pagination and filters |
-| `POST` | `/api/v1/candidates` | Create a candidate |
+| `POST` | `/api/v1/candidates` | Create a candidate; without skills, those the resume names |
 | `GET` | `/api/v1/candidates/{id}` | Fetch one |
 | `PATCH` | `/api/v1/candidates/{id}` | Partial update |
 | `DELETE` | `/api/v1/candidates/{id}` | Delete, cascading to applications and scores |
 | `GET` | `/api/v1/candidates/{id}/resume` | Stored resume text, as `text/plain` |
-| `PUT` | `/api/v1/candidates/{id}/resume` | Upload a resume file, replacing the text |
-| `POST` | `/api/v1/candidates/resume-preview` | Parse a resume file without storing it |
+| `PUT` | `/api/v1/candidates/{id}/resume` | Upload a resume file, replacing the text; fills an empty skill list |
+| `POST` | `/api/v1/candidates/resume-preview` | Parse a resume file without storing it, with the skills it names |
 | `GET` | `/api/v1/applications` | List with pagination and filters |
 | `POST` | `/api/v1/applications` | Apply a candidate to a job |
 | `GET` | `/api/v1/applications/{id}` | Fetch one |
@@ -516,6 +516,31 @@ in it becomes a token for the matching layer downstream:
 Failures are 400s with a message written for the uploader — an encrypted PDF,
 a `.docx` (zip-based formats are rejected with a pointer to export as PDF),
 or a scan with no text layer each say so specifically.
+
+### Skills from the resume
+
+A candidate stored with no skills gets the ones their resume names: on a
+create without `skills`, on a `PATCH` that sends `resume_text`, and on an
+upload. Skills someone entered are never replaced, and skills cleared with
+`{"skills": []}` stay empty until new resume text arrives.
+`POST /api/v1/candidates/resume-preview` returns the skills it would fill.
+
+Only the taxonomy's 75 skills can be found, under any of their 130
+spellings and in any case, except 22 spellings that are also ordinary
+words, letters or file extensions (`React`, `Excel`, `Go`, `R`, `TS`; see
+`WRITTEN_AS` in `app/ml/taxonomy.py`), which count only as listed: "react to
+incidents" is not React. Case is all there is to go by, so "Go" opening a
+sentence still reads as the language. Names inside longer names are skipped
+(Java in JavaScript, SQL in PostgreSQL), and where spellings overlap the
+longest wins ("ML Ops" is MLOps alone).
+
+On the generated corpus (seeds 42, 5 and 7, 4,000 resumes each), 70.8% to
+71.2% of the skills on a candidate's list are named in their resume; of
+those, 98.1% to 98.2% were found. All 941 misses were case-bound spellings
+the generator writes in lower case ("ts", "airflow"). The generated resumes
+also name skills the list leaves out, so the corpus cannot say how often a
+found skill is wrong. A resume at the 100,000-character cap is read in 270
+to 295 ms on a laptop CPU.
 
 ## Synthetic corpus
 
