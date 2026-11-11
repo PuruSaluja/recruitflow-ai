@@ -63,6 +63,25 @@ flowchart LR
 - **Resumes:** PDF, plain text or Markdown up to 2 MB, normalised for
   matching; an empty skill list is filled from the skills the resume names.
 
+## In the browser
+
+The client on a database holding twelve jobs and fifty candidates from the
+synthetic corpus. A job's page ranks the candidates on file, each with its
+score, the share of the required skills held and a scorecard PDF (the first
+ten of fifty for a Senior Data Engineer job):
+
+![A table of ranked candidates: rank, name and title, a score bar from 73% down to 33%, required skills held, experience, seniority and a PDF link](docs/images/job-ranking.png)
+
+A candidate's page has the resume, the skills, and each application with the
+stages it can move to next:
+
+![The page of one candidate: contact details, five skills, the resume text, a control to replace the resume file, and an application at the offer stage with a "Move to" list](docs/images/candidate.png)
+
+Adding a candidate from a resume file: the file's text fills the resume, and
+the skills it names fill the skills box before anything is saved.
+
+![The add-candidate form after a text file was chosen: a line saying which skills the file names, the skills box filled with them, and the resume text below](docs/images/add-candidate.png)
+
 ## Run it
 
 Needs Python 3.11+, Node 22.22+ and PostgreSQL 16.
