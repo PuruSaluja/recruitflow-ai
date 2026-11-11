@@ -2,11 +2,31 @@
 
 from __future__ import annotations
 
-from typing import Any, Generic, TypeVar
+from typing import Annotated, Any, Generic, TypeVar
 
-from pydantic import BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field, StringConstraints
 
 T = TypeVar("T")
+
+#: A name or a title in a request: surrounding whitespace is trimmed before the
+#: length is checked, so "   " is refused rather than stored as a blank name
+#: that every listing, ranking and PDF then shows as nothing.
+Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=200)]
+
+
+def _has_text(minimum: int) -> AfterValidator:
+    def check(value: str) -> str:
+        if len(value.strip()) < minimum:
+            raise ValueError(f"must hold at least {minimum} characters besides spaces")
+        return value
+
+    return AfterValidator(check)
+
+
+#: A job description or resume in a request. Its minimum is counted without
+#: surrounding whitespace, so twenty spaces are not a description; the text
+#: itself is stored as sent.
+LongText = Annotated[str, _has_text(20)]
 
 #: The largest id any table can hold: every primary key is a PostgreSQL
 #: ``INTEGER``. Every id the API accepts, in a path, a body or a query, is

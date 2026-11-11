@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validat
 
 from app.models.enums import EducationLevel, EmploymentType, JobStatus, SeniorityLevel
 from app.schemas.candidate import MAX_SKILL_CHARS
-from app.schemas.common import reject_null_fields
+from app.schemas.common import LongText, Name, reject_null_fields
 from app.services.requirements import experience_requirement_note
 
 #: The longest job description accepted: as long as a normal job description
@@ -84,7 +84,8 @@ class JobCreate(JobBase):
     # The caps sit on the request models, not on ``JobBase``, because
     # ``JobRead`` inherits the base: a row stored before the caps existed must
     # still be readable rather than failing every response.
-    description: str = Field(min_length=20, max_length=MAX_DESCRIPTION_CHARS)
+    title: Name
+    description: LongText = Field(min_length=20, max_length=MAX_DESCRIPTION_CHARS)
     required_skills: list[SkillName] = Field(default_factory=list, max_length=MAX_SKILLS_PER_LIST)
     preferred_skills: list[SkillName] = Field(default_factory=list, max_length=MAX_SKILLS_PER_LIST)
     status: JobStatus = JobStatus.OPEN
@@ -100,14 +101,16 @@ class JobUpdate(BaseModel):
     def _reject_required_nulls(cls, data: Any) -> Any:
         return reject_null_fields(data, REQUIRED_JOB_FIELDS)
 
-    title: str | None = Field(default=None, min_length=2, max_length=200)
+    title: Name | None = None
     department: str | None = Field(default=None, max_length=100)
     location: str | None = Field(default=None, max_length=150)
     employment_type: EmploymentType | None = None
     seniority: SeniorityLevel | None = None
     education_required: EducationLevel | None = None
     min_years_experience: int | None = Field(default=None, ge=0, le=50)
-    description: str | None = Field(default=None, min_length=20, max_length=MAX_DESCRIPTION_CHARS)
+    description: LongText | None = Field(
+        default=None, min_length=20, max_length=MAX_DESCRIPTION_CHARS
+    )
     required_skills: list[SkillName] | None = Field(default=None, max_length=MAX_SKILLS_PER_LIST)
     preferred_skills: list[SkillName] | None = Field(default=None, max_length=MAX_SKILLS_PER_LIST)
     salary_min: Decimal | None = Field(

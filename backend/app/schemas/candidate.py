@@ -8,7 +8,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from app.models.enums import EducationLevel, SeniorityLevel
-from app.schemas.common import reject_null_fields
+from app.schemas.common import LongText, Name, reject_null_fields
 from app.services.resume import MAX_RESUME_CHARS
 
 #: The longest single skill accepted, measured after tidying. The taxonomy's
@@ -28,6 +28,17 @@ REQUIRED_CANDIDATE_FIELDS = frozenset(
         "skills",
     }
 )
+
+
+def fold_email(email: str) -> str:
+    """The stored form of an email address: lower case throughout.
+
+    Mail providers treat the part before the @ without regard to case, so
+    "Ana@example.com" and "ana@example.com" reach the same person. Folding
+    on the way in lets the unique index on the column refuse the second as
+    the duplicate it is, where it used to create a second candidate.
+    """
+    return email.lower()
 
 
 def _tidy_skills(value: list[str] | None) -> list[str] | None:
@@ -90,12 +101,18 @@ class CandidateCreate(CandidateBase):
     # The length caps sit on the request models, not on ``CandidateBase``,
     # because ``CandidateRead`` inherits the base: a row stored before the caps
     # existed must still be readable rather than failing every response.
-    resume_text: str = Field(min_length=20, max_length=MAX_RESUME_CHARS)
+    full_name: Name
+    resume_text: LongText = Field(min_length=20, max_length=MAX_RESUME_CHARS)
 
     @field_validator("skills")
     @classmethod
     def _cap_skill_length(cls, value: list[str]) -> list[str]:
         return _check_skill_lengths(value) or []
+
+    @field_validator("email")
+    @classmethod
+    def _fold_email(cls, value: str) -> str:
+        return fold_email(value)
 
 
 class CandidateUpdate(BaseModel):
@@ -108,7 +125,7 @@ class CandidateUpdate(BaseModel):
     def _reject_required_nulls(cls, data: Any) -> Any:
         return reject_null_fields(data, REQUIRED_CANDIDATE_FIELDS)
 
-    full_name: str | None = Field(default=None, min_length=2, max_length=200)
+    full_name: Name | None = None
     email: EmailStr | None = None
     phone: str | None = Field(default=None, max_length=40)
     location: str | None = Field(default=None, max_length=150)
@@ -116,13 +133,18 @@ class CandidateUpdate(BaseModel):
     years_experience: int | None = Field(default=None, ge=0, le=60)
     seniority: SeniorityLevel | None = None
     education_level: EducationLevel | None = None
-    resume_text: str | None = Field(default=None, min_length=20, max_length=MAX_RESUME_CHARS)
+    resume_text: LongText | None = Field(default=None, min_length=20, max_length=MAX_RESUME_CHARS)
     skills: list[str] | None = Field(default=None, max_length=100)
 
     @field_validator("skills")
     @classmethod
     def _normalise_skills(cls, value: list[str] | None) -> list[str] | None:
         return _tidy_skills(_check_skill_lengths(value))
+
+    @field_validator("email")
+    @classmethod
+    def _fold_email(cls, value: str | None) -> str | None:
+        return None if value is None else fold_email(value)
 
 
 class CandidateRead(CandidateBase):

@@ -2567,3 +2567,115 @@ def test_the_page_is_ordered_again_after_it_is_joined_to_its_total(
     (statement,) = statements
     after_the_join = statement.rsplit("ON true", 1)[1]
     assert after_the_join.strip().startswith("ORDER BY")
+
+
+# --- 14. blank names, and an email given again in other capitals ------------
+#
+# Was: a job titled "   " and a candidate named "   " were stored, because the
+# minimum length counted the spaces, and showed as nothing in every listing,
+# ranking and PDF; twenty spaces passed for a description or a resume. And
+# "ana@example.com" and "Ana@Example.com" were stored as two candidates, though
+# they reach the same person. Names and titles are now trimmed before they are
+# measured, long texts must hold their minimum besides spaces, and emails are
+# stored in lower case so the unique index refuses the second.
+
+BLANK_TEXT = [
+    pytest.param("/jobs", "title", "   ", id="job-title-spaces"),
+    pytest.param("/jobs", "title", " \t\n ", id="job-title-whitespace"),
+    pytest.param("/jobs", "title", " x ", id="job-title-one-character-padded"),
+    pytest.param("/jobs", "description", " " * 30, id="job-description-spaces"),
+    pytest.param("/candidates", "full_name", "   ", id="candidate-name-spaces"),
+    pytest.param("/candidates", "full_name", " x ", id="candidate-name-one-character-padded"),
+    pytest.param("/candidates", "resume_text", "\n" * 25, id="candidate-resume-newlines"),
+]
+
+VALID_BODY = {
+    "/jobs": {
+        "title": "Data Analyst",
+        "description": "Own the weekly metrics review and the dashboards behind it.",
+    },
+    "/candidates": {
+        "full_name": "Ana Diaz",
+        "email": "ana@example.com",
+        "resume_text": "Built reporting pipelines in SQL and Python for a retail team.",
+    },
+}
+
+
+@pytest.mark.parametrize(("path", "field", "value"), BLANK_TEXT)
+def test_blank_text_is_refused_on_create(
+    client: TestClient, path: str, field: str, value: str
+) -> None:
+    response = client.post(path, json={**VALID_BODY[path], field: value})
+
+    assert response.status_code == 422
+    assert field in {error["loc"][-1] for error in response.json()["detail"]}
+    assert client.get(path).json()["total"] == 0
+
+
+@pytest.mark.parametrize(("path", "field", "value"), BLANK_TEXT)
+def test_blank_text_is_refused_on_update(
+    client: TestClient, path: str, field: str, value: str
+) -> None:
+    created = client.post(path, json=VALID_BODY[path]).json()
+
+    response = client.patch(f"{path}/{created['id']}", json={field: value})
+
+    assert response.status_code == 422
+    assert field in {error["loc"][-1] for error in response.json()["detail"]}
+    assert client.get(f"{path}/{created['id']}").json()[field] == created[field]
+
+
+@pytest.mark.parametrize(("path", "field"), [("/jobs", "title"), ("/candidates", "full_name")])
+def test_names_are_stored_without_surrounding_whitespace(
+    client: TestClient, path: str, field: str
+) -> None:
+    created = client.post(path, json={**VALID_BODY[path], field: "  Padded  Name \n"}).json()
+    assert created[field] == "Padded  Name"
+
+    patched = client.patch(f"{path}/{created['id']}", json={field: "\tRenamed "}).json()
+    assert patched[field] == "Renamed"
+
+
+def test_long_text_is_stored_as_sent_once_it_holds_enough(client: TestClient) -> None:
+    """The guard against over-correcting: only the minimum ignores spaces."""
+    description = "  Own the weekly metrics review.\n\n"
+
+    created = client.post("/jobs", json={**VALID_BODY["/jobs"], "description": description})
+
+    assert created.status_code == 201
+    assert created.json()["description"] == description
+
+
+def test_an_email_is_stored_in_lower_case(client: TestClient) -> None:
+    body = {**VALID_BODY["/candidates"], "email": "Ana.Diaz@Example.COM"}
+
+    created = client.post("/candidates", json=body).json()
+    patched = client.patch(f"/candidates/{created['id']}", json={"email": "ANA@example.com"})
+
+    assert created["email"] == "ana.diaz@example.com"
+    assert patched.json()["email"] == "ana@example.com"
+
+
+def test_an_email_in_other_capitals_is_a_duplicate_on_create(client: TestClient) -> None:
+    client.post("/candidates", json=VALID_BODY["/candidates"])
+
+    response = client.post(
+        "/candidates",
+        json={**VALID_BODY["/candidates"], "full_name": "Ana Again", "email": "ANA@Example.com"},
+    )
+
+    assert response.status_code == 409
+    assert client.get("/candidates").json()["total"] == 1
+
+
+def test_an_email_in_other_capitals_is_a_duplicate_on_update(
+    client: TestClient, make_candidate: Factory
+) -> None:
+    make_candidate(email="ana@example.com")
+    other = make_candidate(email="ben@example.com")
+
+    response = client.patch(f"/candidates/{other['id']}", json={"email": "Ana@Example.com"})
+
+    assert response.status_code == 409
+    assert client.get(f"/candidates/{other['id']}").json()["email"] == "ben@example.com"
