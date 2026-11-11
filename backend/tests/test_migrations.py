@@ -116,3 +116,56 @@ def test_upgrade_downgrade_upgrade_on_one_database(scratch_database: Engine) -> 
     command.upgrade(config, "head")
     assert "applications" in _table_names(scratch_database)
     assert _enum_type_count(scratch_database) == 5
+
+
+EMAIL_FOLD = "5ecadaa0a907"
+
+
+def _insert_candidates(engine: Engine, *emails: str) -> None:
+    with engine.begin() as conn:
+        for n, email in enumerate(emails, 1):
+            conn.execute(
+                text(
+                    "INSERT INTO candidates (full_name, email, years_experience, seniority,"
+                    " education_level, resume_text, skills, created_at, updated_at)"
+                    " VALUES (:name, :email, 0, 'mid', 'bachelor', 'resume', '[]', now(), now())"
+                ),
+                {"name": f"Candidate {n}", "email": email},
+            )
+
+
+def _emails(engine: Engine) -> list[str]:
+    with engine.connect() as conn:
+        return list(conn.execute(text("SELECT email FROM candidates ORDER BY id")).scalars())
+
+
+def test_upgrade_folds_stored_emails_to_lower_case(scratch_database: Engine) -> None:
+    from alembic import command
+
+    config = _alembic_config()
+    command.upgrade(config, f"{EMAIL_FOLD}-1")
+    _insert_candidates(scratch_database, "Ana@Example.com", "ben@example.com", "İpek@example.com")
+
+    command.upgrade(config, EMAIL_FOLD)
+
+    # Folded as the API folds, so U+0130 becomes "i" and a combining dot.
+    assert _emails(scratch_database) == [
+        "ana@example.com",
+        "ben@example.com",
+        "i̇pek@example.com",
+    ]
+    command.downgrade(config, f"{EMAIL_FOLD}-1")
+    assert _emails(scratch_database)[0] == "ana@example.com"
+
+
+def test_upgrade_stops_on_emails_that_differ_only_in_case(scratch_database: Engine) -> None:
+    from alembic import command
+
+    config = _alembic_config()
+    command.upgrade(config, f"{EMAIL_FOLD}-1")
+    _insert_candidates(scratch_database, "Ana@Example.com", "ben@example.com", "ana@example.com")
+
+    with pytest.raises(RuntimeError, match=r"ana@example\.com: candidates \[1, 3\]"):
+        command.upgrade(config, EMAIL_FOLD)
+
+    assert _emails(scratch_database) == ["Ana@Example.com", "ben@example.com", "ana@example.com"]
