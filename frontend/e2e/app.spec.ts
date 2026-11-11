@@ -160,7 +160,10 @@ test("posts a job, adds a candidate from a resume file and moves their applicati
   try {
     await page.goto("/jobs");
     await page.getByRole("link", { name: "New job" }).click();
-    await page.getByLabel("Title").fill(title);
+    // The jobs list has a search box named "Search job titles": wait for the
+    // form, and match its label whole, or the search box takes the title.
+    await expect(page.getByRole("heading", { name: "New job" })).toBeVisible();
+    await page.getByLabel("Title", { exact: true }).fill(title);
     await page.getByLabel("Required skills").fill("Python, Kubernetes");
     await page.getByLabel("Description").fill("Run the clusters every service is deployed to.");
     await page.getByRole("button", { name: "Create job" }).click();
@@ -168,6 +171,7 @@ test("posts a job, adds a candidate from a resume file and moves their applicati
     jobId = Number(new URL(page.url()).pathname.split("/").at(-1));
 
     await page.getByRole("link", { name: "Add candidate" }).click();
+    await expect(page.getByRole("heading", { name: "Add a candidate" })).toBeVisible();
     await page.getByLabel("Resume file").setInputFiles({
       name: "noor.txt",
       mimeType: "text/plain",
@@ -235,8 +239,13 @@ for (const colorScheme of ["light", "dark"] as const) {
 
     await page.goto(`/candidates/${created.applicant.id}`);
     await expect(page.getByRole("link", { name: JOB_TITLE })).toBeVisible();
+    expect(await seriousViolations(page)).toEqual([]);
+
+    // A seeded candidate who has not applied, so the job is offered to them
+    // whatever else the database holds.
+    await page.goto(`/candidates/${created.candidates[1]}`);
     await page.getByRole("button", { name: "Apply to a job" }).click();
-    await expect(page.getByLabel("Job", { exact: true })).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Job", exact: true })).toBeVisible();
     expect(await seriousViolations(page)).toEqual([]);
 
     for (const path of ["/jobs/new", "/candidates/new"]) {
