@@ -8,6 +8,7 @@ is still evidence.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 
@@ -165,3 +166,86 @@ def normalise_skills(spellings: Iterable[str]) -> list[str]:
             seen.add(key)
             result.append(name)
     return result
+
+
+#: Spellings that are also ordinary words, letters or file extensions. In
+#: running text they count only written as listed: "React" is the library and
+#: "react to incidents" is not, "R" is the language and "r" is not. Case is all
+#: there is to go by, so one opening a sentence ("Go to the ...") still counts,
+#: as it must where it opens a line of skills.
+WRITTEN_AS: dict[str, tuple[str, ...]] = {
+    "airflow": ("Airflow",),
+    "azure": ("Azure",),
+    "excel": ("Excel",),
+    "flask": ("Flask",),
+    "go": ("Go",),
+    "jest": ("Jest",),
+    "js": ("JS",),
+    "looker": ("Looker",),
+    "ml": ("ML",),
+    "mongo": ("Mongo",),
+    "node": ("Node",),
+    "prometheus": ("Prometheus",),
+    "r": ("R",),
+    "react": ("React",),
+    "rest": ("REST",),
+    "agile": ("Agile",),
+    "snowflake": ("Snowflake",),
+    "spark": ("Spark",),
+    "spring": ("Spring",),
+    "torch": ("Torch",),
+    "ts": ("TS",),
+    "vue": ("Vue",),
+}
+
+# A spelling must not run on into a neighbouring word or name: "Go" in
+# "Google", "R" in "R&D", "ts" in "index.ts" or "Java" in "JavaScript".
+_BEFORE = r"(?<![\w+#./&@-])"
+_AFTER = r"(?![\w+#/&@-])"
+
+
+def _spelling_pattern(spelling: str, *, ignore_case: bool) -> re.Pattern[str]:
+    words = r"\s+".join(re.escape(word) for word in spelling.split())
+    return re.compile(_BEFORE + words + _AFTER, re.IGNORECASE if ignore_case else 0)
+
+
+def _text_patterns(skills: Iterable[Skill]) -> list[tuple[re.Pattern[str], str]]:
+    patterns: list[tuple[re.Pattern[str], str]] = []
+    for skill in skills:
+        for spelling in (skill.name, *skill.aliases):
+            written = WRITTEN_AS.get(spelling_key(spelling))
+            if written is None:
+                patterns.append((_spelling_pattern(spelling, ignore_case=True), skill.name))
+            else:
+                for form in written:
+                    patterns.append((_spelling_pattern(form, ignore_case=False), skill.name))
+    return patterns
+
+
+_TEXT_PATTERNS = _text_patterns(SKILLS)
+
+
+def skills_in_text(text: str) -> list[str]:
+    """The taxonomy's skills named in free text, canonical names in order of first mention.
+
+    Where spellings overlap, the longest wins, so "ML Ops" is MLOps and not
+    also Machine Learning, and "Spring Boot" is read once. Only skills the
+    taxonomy knows are found; a resume's other skills have to be entered.
+    """
+    found: list[tuple[int, int, str]] = []
+    for pattern, name in _TEXT_PATTERNS:
+        found.extend((m.start(), m.end(), name) for m in pattern.finditer(text))
+    found.sort(key=lambda span: (span[0] - span[1], span[0]))
+    # Characters already read as part of a longer spelling. Checked span by
+    # span, so a resume naming one skill thousands of times stays linear.
+    used = bytearray(len(text))
+    taken: list[tuple[int, str]] = []
+    for start, end, name in found:
+        if not any(used[start:end]):
+            used[start:end] = bytes([1]) * (end - start)
+            taken.append((start, name))
+    names: list[str] = []
+    for _, name in sorted(taken):
+        if name not in names:
+            names.append(name)
+    return names
