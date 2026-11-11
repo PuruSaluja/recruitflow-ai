@@ -1,11 +1,7 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { ApiClient } from "./api/client";
-import { ApiProvider } from "./api/context";
-import { AppRoutes } from "./App";
 import {
   fakeApi,
   makeApplication,
@@ -14,18 +10,7 @@ import {
   makeRanked,
   page,
 } from "./test/fakeApi";
-
-const HEALTH = { "GET /health": () => ({ body: { status: "ok", version: "0.1.0", database: "ok" } }) };
-
-function renderAt(path: string, client: ApiClient) {
-  return render(
-    <ApiProvider client={client}>
-      <MemoryRouter initialEntries={[path]}>
-        <AppRoutes />
-      </MemoryRouter>
-    </ApiProvider>,
-  );
-}
+import { HEALTH, renderAt } from "./test/render";
 
 describe("job list", () => {
   it("lists jobs with links to each and pages through them", async () => {

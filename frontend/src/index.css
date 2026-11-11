@@ -5,6 +5,7 @@
   --muted: #5f6370;
   --border: #dfe1e6;
   --accent: #2f5bd3;
+  --on-accent: #ffffff;
   --danger: #b42318;
 
   color-scheme: light dark;
@@ -20,6 +21,7 @@
     --muted: #9a9ea8;
     --border: #2f323a;
     --accent: #7c9cf0;
+    --on-accent: #15161a;
     --danger: #f97066;
   }
 }
@@ -98,7 +100,8 @@ h2 {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
   color: inherit;
   background: var(--surface);
@@ -114,6 +117,64 @@ button {
 button:disabled {
   cursor: default;
   opacity: 0.5;
+}
+
+button.primary,
+.button-link {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.button-link {
+  display: inline-block;
+  border-radius: 6px;
+  padding: 0.375rem 0.75rem;
+  text-decoration: none;
+}
+
+.form {
+  display: grid;
+  gap: 1rem;
+  max-width: 48rem;
+  margin-top: 1rem;
+}
+
+.form-row {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+}
+
+.field {
+  display: grid;
+  gap: 0.25rem;
+  /* A grid item's minimum is its content; zero lets a long value wrap. */
+  min-width: 0;
+}
+
+.field label {
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+}
+
+.hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 
 .filters {

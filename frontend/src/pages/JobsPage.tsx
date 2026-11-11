@@ -46,7 +46,12 @@ export function JobsPage() {
 
   return (
     <section>
-      <h1>Jobs</h1>
+      <header className="page-head">
+        <h1>Jobs</h1>
+        <Link to="/jobs/new" className="button-link">
+          New job
+        </Link>
+      </header>
       <form className="filters" onSubmit={onSearch} role="search">
         <input
           type="search"

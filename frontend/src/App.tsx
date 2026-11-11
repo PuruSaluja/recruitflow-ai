@@ -5,6 +5,7 @@ import { useLoad } from "./api/context";
 import { CandidatePage } from "./pages/CandidatePage";
 import { JobDetailPage } from "./pages/JobDetailPage";
 import { JobsPage } from "./pages/JobsPage";
+import { NewJobPage } from "./pages/NewJobPage";
 import { NotFound } from "./pages/NotFound";
 
 function ApiStatus() {
@@ -35,6 +36,7 @@ export function AppRoutes() {
         <Routes>
           <Route path="/" element={<Navigate to="/jobs" replace />} />
           <Route path="/jobs" element={<JobsPage />} />
+          <Route path="/jobs/new" element={<NewJobPage />} />
           <Route path="/jobs/:jobId" element={<JobDetailPage />} />
           <Route path="/candidates/:candidateId" element={<CandidatePage />} />
           <Route path="*" element={<NotFound />} />
