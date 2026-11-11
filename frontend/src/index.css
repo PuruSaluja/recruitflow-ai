@@ -78,6 +78,11 @@ a {
   flex: 1;
 }
 
+.topbar nav {
+  display: flex;
+  gap: 1rem;
+}
+
 .topbar nav a {
   color: var(--text);
   text-decoration: none;

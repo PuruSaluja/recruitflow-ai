@@ -6,10 +6,7 @@ import { useApi } from "../api/context";
 import { Field, listFrom, optional, useSubmit } from "../components/Form";
 import { ErrorMessage } from "../components/Status";
 import { label } from "../format";
-
-export const EMPLOYMENT_TYPES = ["full_time", "part_time", "contract", "internship"] as const;
-export const SENIORITY_LEVELS = ["intern", "junior", "mid", "senior", "staff", "principal"] as const;
-export const EDUCATION_LEVELS = ["high_school", "associate", "bachelor", "master", "doctorate"] as const;
+import { EDUCATION_LEVELS, EMPLOYMENT_TYPES, SENIORITY_LEVELS } from "../options";
 /** A new requisition starts open, taking applications, or as a draft that does not yet. */
 const NEW_JOB_STATUSES = ["open", "draft"] as const;
 
