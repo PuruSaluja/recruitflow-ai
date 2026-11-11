@@ -162,6 +162,9 @@ class ResumePreview(BaseModel):
     characters: int = Field(description="Length of the extracted text")
     words: int = Field(description="Whitespace-delimited token count")
     text: str
+    skills: list[str] = Field(
+        description="Skills from the taxonomy the text names, as a candidate with none would get"
+    )
 
 
 class CandidateSummary(BaseModel):

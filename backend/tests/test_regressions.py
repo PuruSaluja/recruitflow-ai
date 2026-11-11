@@ -652,6 +652,10 @@ def _delete_candidate(ids: dict[str, int]) -> Any:
     return delete(Candidate).where(Candidate.id == ids["candidate"])
 
 
+def _set_candidate_skills(ids: dict[str, int]) -> Any:
+    return update(Candidate).where(Candidate.id == ids["candidate"]).values(skills=["Go"])
+
+
 BEFORE, AFTER = "before_commit", "after_commit"
 RACE_RESUME = "Built reporting pipelines in SQL and Python."
 GONE = "{} {{{}}} not found"
@@ -735,21 +739,41 @@ def test_a_write_that_lost_a_race_says_what_happened_not_that_the_database_is_do
     assert response.json()["detail"].startswith(detail.format(**ids))
 
 
-@pytest.mark.parametrize(
-    ("moment", "detail"), [(BEFORE, GONE), (AFTER, GONE_AFTER)], ids=["before", "after"]
-)
-def test_a_resume_upload_whose_row_was_deleted_is_a_404(
-    client: TestClient, clean_db: Engine, make_candidate: Factory, moment: str, detail: str
+def test_a_resume_upload_whose_row_was_deleted_just_after_is_a_404(
+    client: TestClient, clean_db: Engine, make_candidate: Factory
 ) -> None:
+    """A delete arriving before the upload commits waits for it instead: see
+    ``test_a_resume_upload_holds_its_row_from_reading_it_to_committing``."""
     ids = {"candidate": make_candidate()["id"]}
     upload = {"file": ("cv.txt", b"Built reporting pipelines in SQL and Python.", "text/plain")}
 
-    with _interloper(clean_db, moment, _delete_candidate(ids)) as fired:
+    with _interloper(clean_db, AFTER, _delete_candidate(ids)) as fired:
         response = client.put(f"/candidates/{ids['candidate']}/resume", files=upload)
 
     assert fired == ["ran"], f"the race was not replayed: {fired}"
     assert response.status_code == 404, response.text
-    assert response.json()["detail"] == detail.format("Candidate", "candidate").format(**ids)
+    assert response.json()["detail"] == GONE_AFTER.format("Candidate", "candidate").format(**ids)
+
+
+@pytest.mark.parametrize(
+    "interloper", [_delete_candidate, _set_candidate_skills], ids=["delete", "set-skills"]
+)
+def test_a_resume_upload_holds_its_row_from_reading_it_to_committing(
+    client: TestClient,
+    clean_db: Engine,
+    make_candidate: Factory,
+    interloper: Callable[[dict[str, int]], Any],
+) -> None:
+    """An upload may fill an empty skill list, so it holds the row: a write
+    arriving between the read and the commit waits, and the upload lands."""
+    ids = {"candidate": make_candidate()["id"]}
+    upload = {"file": ("cv.txt", b"Built reporting pipelines in SQL and Python.", "text/plain")}
+
+    with _interloper(clean_db, BEFORE, interloper(ids)) as fired:
+        response = client.put(f"/candidates/{ids['candidate']}/resume", files=upload)
+
+    assert fired == ["waited"], fired
+    assert response.status_code == 200, response.text
 
 
 @pytest.mark.parametrize("model", [Job, Candidate, Application], ids=lambda m: m.__name__)
@@ -1524,6 +1548,10 @@ HELD_ROWS = [
     pytest.param("delete", "/jobs/{job}", None, _delete_job, 204, id="delete-job"),
     pytest.param("delete", "/candidates/{candidate}", None, _delete_candidate, 204,
                  id="delete-candidate"),
+    pytest.param("patch", "/candidates/{candidate}", {"resume_text": RACE_RESUME},
+                 _delete_candidate, 200, id="patch-candidate-resume"),
+    pytest.param("patch", "/candidates/{candidate}", {"resume_text": RACE_RESUME},
+                 _set_candidate_skills, 200, id="patch-candidate-resume-against-skills"),
 ]
 # fmt: on
 

@@ -103,6 +103,8 @@ export interface paths {
         /**
          * Create a candidate
          * @description Create a candidate. A duplicate email is a 409, not a 500.
+         *
+         *     Without ``skills``, the candidate gets the skills their resume names.
          */
         post: operations["create_candidate_api_v1_candidates_post"];
         delete?: never;
@@ -172,7 +174,8 @@ export interface paths {
          * @description Ingest a PDF or plain-text resume into ``resume_text``.
          *
          *     PUT rather than POST: the stored text is replaced wholesale, so re-uploading
-         *     the same file twice leaves the candidate in the same state.
+         *     the same file twice leaves the candidate in the same state. A candidate
+         *     with no skills gets the ones the resume names.
          */
         put: operations["upload_resume_api_v1_candidates__candidate_id__resume_put"];
         post?: never;
@@ -926,6 +929,11 @@ export interface components {
             words: number;
             /** Text */
             text: string;
+            /**
+             * Skills
+             * @description Skills from the taxonomy the text names, as a candidate with none would get
+             */
+            skills: string[];
         };
         /**
          * ScoreJobRequest

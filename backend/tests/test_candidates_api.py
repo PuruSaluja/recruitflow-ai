@@ -88,7 +88,8 @@ def test_create_applies_the_documented_defaults(make_candidate: Factory) -> None
     assert candidate["years_experience"] == 0
     assert candidate["seniority"] == "mid"
     assert candidate["education_level"] == "bachelor"
-    assert candidate["skills"] == []
+    # The factory's resume names SQL and Python; see the skill fill below.
+    assert candidate["skills"] == ["SQL", "Python"]
     assert candidate["phone"] is None
     assert candidate["location"] is None
     assert candidate["current_title"] is None
@@ -607,6 +608,7 @@ def test_preview_parses_without_storing_anything(
         "characters": len(expected_text),
         "words": 6,
         "text": expected_text,
+        "skills": ["Python"],
     }
     assert client.get("/candidates").json()["total"] == 1
     assert client.get(f"/candidates/{candidate['id']}/resume").text == RESUME
@@ -616,3 +618,97 @@ def test_preview_rejects_unusable_files(client: TestClient) -> None:
     response = client.post("/candidates/resume-preview", files=_upload("x.exe", b"MZ nope"))
 
     assert response.status_code == 400
+
+
+# --- skills from the resume ---------------------------------------------------
+
+NAMED = "Five years of Python and PostgreSQL; deployed with Docker on AWS."
+
+
+def test_a_candidate_created_without_skills_gets_those_the_resume_names(
+    make_candidate: Factory,
+) -> None:
+    candidate = make_candidate(resume_text=NAMED)
+
+    assert candidate["skills"] == ["Python", "PostgreSQL", "Docker", "AWS"]
+
+
+def test_skills_sent_with_the_candidate_are_kept_as_sent(make_candidate: Factory) -> None:
+    candidate = make_candidate(resume_text=NAMED, skills=["Rust"])
+
+    assert candidate["skills"] == ["Rust"]
+
+
+def test_a_resume_naming_no_known_skill_leaves_the_list_empty(make_candidate: Factory) -> None:
+    candidate = make_candidate(resume_text="Ran the front desk of a busy clinic for years.")
+
+    assert candidate["skills"] == []
+
+
+def test_new_resume_text_fills_an_empty_skill_list(
+    client: TestClient, make_candidate: Factory
+) -> None:
+    candidate = make_candidate(resume_text="Ran the front desk of a busy clinic for years.")
+
+    patched = client.patch(f"/candidates/{candidate['id']}", json={"resume_text": NAMED})
+
+    assert patched.json()["skills"] == ["Python", "PostgreSQL", "Docker", "AWS"]
+
+
+def test_new_resume_text_leaves_entered_skills_alone(
+    client: TestClient, make_candidate: Factory
+) -> None:
+    candidate = make_candidate(skills=["Rust"])
+
+    patched = client.patch(f"/candidates/{candidate['id']}", json={"resume_text": NAMED})
+
+    assert patched.json()["skills"] == ["Rust"]
+
+
+def test_clearing_the_skills_does_not_refill_them(
+    client: TestClient, make_candidate: Factory
+) -> None:
+    candidate = make_candidate(resume_text=NAMED)
+
+    patched = client.patch(f"/candidates/{candidate['id']}", json={"skills": []})
+
+    assert patched.json()["skills"] == []
+
+
+def test_clearing_the_skills_with_new_resume_text_takes_them_from_it(
+    client: TestClient, make_candidate: Factory
+) -> None:
+    candidate = make_candidate(skills=["Rust"])
+
+    patched = client.patch(
+        f"/candidates/{candidate['id']}", json={"skills": [], "resume_text": NAMED}
+    )
+
+    assert patched.json()["skills"] == ["Python", "PostgreSQL", "Docker", "AWS"]
+
+
+def test_an_uploaded_resume_fills_an_empty_skill_list(
+    client: TestClient, make_candidate: Factory
+) -> None:
+    candidate = make_candidate(resume_text="Ran the front desk of a busy clinic for years.")
+
+    response = client.put(
+        f"/candidates/{candidate['id']}/resume",
+        files=_upload("cv.pdf", _pdf("Skills: Python, SQL, FastAPI, Docker"), "application/pdf"),
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["skills"] == ["Python", "SQL", "FastAPI", "Docker"]
+
+
+def test_an_uploaded_resume_leaves_entered_skills_alone(
+    client: TestClient, make_candidate: Factory
+) -> None:
+    candidate = make_candidate(skills=["Rust"])
+
+    response = client.put(
+        f"/candidates/{candidate['id']}/resume",
+        files=_upload("cv.txt", NAMED.encode()),
+    )
+
+    assert response.json()["skills"] == ["Rust"]

@@ -18,6 +18,7 @@ from app.api.deps import (
     refresh_row,
 )
 from app.db.session import get_db
+from app.ml.taxonomy import skills_in_text
 from app.models.candidate import Candidate
 from app.models.enums import EducationLevel, SeniorityLevel
 from app.models.match import MatchScore
@@ -38,6 +39,18 @@ def _get_or_404(
             detail=f"Candidate {candidate_id} not found",
         )
     return candidate
+
+
+def _fill_skills_from_resume(candidate: Candidate) -> None:
+    """Give a candidate with no skills the ones their resume names.
+
+    Skills drive the matcher's strongest features, so a candidate stored with
+    a resume but an empty list scored nothing on them. Only an empty list is
+    filled: skills someone entered are never replaced. The taxonomy knows
+    the skills it can find; others in the resume still have to be entered.
+    """
+    if not candidate.skills:
+        candidate.skills = skills_in_text(candidate.resume_text)
 
 
 def _has_skill(skill: str) -> object:
@@ -146,8 +159,12 @@ def list_candidates(
     summary="Create a candidate",
 )
 def create_candidate(payload: CandidateCreate, db: Session = Depends(get_db)) -> Candidate:
-    """Create a candidate. A duplicate email is a 409, not a 500."""
+    """Create a candidate. A duplicate email is a 409, not a 500.
+
+    Without ``skills``, the candidate gets the skills their resume names.
+    """
     candidate = Candidate(**payload.model_dump())
+    _fill_skills_from_resume(candidate)
     db.add(candidate)
     db.commit()
     refresh_row(db, candidate, Candidate, candidate.id)
@@ -170,6 +187,7 @@ async def preview_resume(file: UploadFile = File(...)) -> ResumePreview:
         characters=len(text),
         words=len(text.split()),
         text=text,
+        skills=skills_in_text(text),
     )
 
 
@@ -186,13 +204,19 @@ def update_candidate(
     candidate_id: int = Path(gt=0, le=MAX_ID),
     db: Session = Depends(get_db),
 ) -> Candidate:
-    candidate = _get_or_404(db, candidate_id)
-
     # exclude_unset distinguishes "field omitted" from "field set to null", so
     # a PATCH only touches what the caller actually sent.
     updates = payload.model_dump(exclude_unset=True)
+    # New resume text may fill an empty skill list, an answer that depends on
+    # the skills as they stand, so the row is held from this read to the
+    # commit: a request setting skills meanwhile waits, rather than having its
+    # skills replaced.
+    filling = "resume_text" in updates
+    candidate = _get_or_404(db, candidate_id, lock=WRITE_LOCK if filling else False)
     for field, value in updates.items():
         setattr(candidate, field, value)
+    if filling:
+        _fill_skills_from_resume(candidate)
 
     if updates:
         commit_row(db, Candidate, candidate_id)
@@ -244,10 +268,15 @@ async def upload_resume(
     """Ingest a PDF or plain-text resume into ``resume_text``.
 
     PUT rather than POST: the stored text is replaced wholesale, so re-uploading
-    the same file twice leaves the candidate in the same state.
+    the same file twice leaves the candidate in the same state. A candidate
+    with no skills gets the ones the resume names.
     """
-    candidate = _get_or_404(db, candidate_id)
-    candidate.resume_text = await _read_resume(file)
+    # The file is read and its text extracted before the row is, so the lock
+    # the skill fill needs is not held while a slow upload arrives.
+    text = await _read_resume(file)
+    candidate = _get_or_404(db, candidate_id, lock=WRITE_LOCK)
+    candidate.resume_text = text
+    _fill_skills_from_resume(candidate)
     commit_row(db, Candidate, candidate_id)
     refresh_row(db, candidate, Candidate, candidate_id)
     return candidate

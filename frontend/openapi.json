@@ -613,7 +613,7 @@
           "candidates"
         ],
         "summary": "Create a candidate",
-        "description": "Create a candidate. A duplicate email is a 409, not a 500.",
+        "description": "Create a candidate. A duplicate email is a 409, not a 500.\n\nWithout ``skills``, the candidate gets the skills their resume names.",
         "operationId": "create_candidate_api_v1_candidates_post",
         "requestBody": {
           "required": true,
@@ -871,7 +871,7 @@
           "candidates"
         ],
         "summary": "Upload a resume file, replacing the stored text",
-        "description": "Ingest a PDF or plain-text resume into ``resume_text``.\n\nPUT rather than POST: the stored text is replaced wholesale, so re-uploading\nthe same file twice leaves the candidate in the same state.",
+        "description": "Ingest a PDF or plain-text resume into ``resume_text``.\n\nPUT rather than POST: the stored text is replaced wholesale, so re-uploading\nthe same file twice leaves the candidate in the same state. A candidate\nwith no skills gets the ones the resume names.",
         "operationId": "upload_resume_api_v1_candidates__candidate_id__resume_put",
         "parameters": [
           {
@@ -3017,13 +3017,22 @@
           "text": {
             "type": "string",
             "title": "Text"
+          },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Skills",
+            "description": "Skills from the taxonomy the text names, as a candidate with none would get"
           }
         },
         "type": "object",
         "required": [
           "characters",
           "words",
-          "text"
+          "text",
+          "skills"
         ],
         "title": "ResumePreview",
         "description": "Result of parsing a resume upload without storing it."
