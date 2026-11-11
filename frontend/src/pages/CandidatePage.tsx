@@ -1,17 +1,162 @@
+import { type ChangeEvent, type FormEvent, useState } from "react";
 import { Link, useParams } from "react-router";
 
-import type { Application, Candidate, Job } from "../api/client";
-import { useLoad } from "../api/context";
+import type { Application, ApplicationStatus, Candidate, Job } from "../api/client";
+import { useApi, useLoad } from "../api/context";
+import { Field, optional, useSubmit } from "../components/Form";
 import { SkillList } from "../components/SkillList";
-import { Loaded } from "../components/Status";
+import { ErrorMessage, Loaded } from "../components/Status";
 import { date, label, years } from "../format";
 import { parseId } from "../params";
+import { RESUME_TYPES } from "./NewCandidatePage";
 import { NotFound } from "./NotFound";
 
 /** Most applications listed for one candidate; the API's largest page. */
 export const APPLICATIONS_SHOWN = 200;
 
+/** Most open jobs offered to apply to; the API's largest page. */
+export const OPEN_JOBS_SHOWN = 200;
+
 type ApplicationRow = { application: Application; job: Job | null };
+
+function jobTitle({ application, job }: ApplicationRow): string {
+  return job ? job.title : `Job ${application.job_id}`;
+}
+
+/**
+ * An application's stage, with the moves the API lists for it: the next
+ * stages, or a reopen for one rejected or withdrawn.
+ */
+function StageControls({ row, onChanged }: { row: ApplicationRow; onChanged: () => void }) {
+  const client = useApi();
+  const { application } = row;
+  const title = jobTitle(row);
+  const [target, setTarget] = useState<ApplicationStatus | "">("");
+  const { pending, error, run } = useSubmit();
+
+  async function move(event: FormEvent) {
+    event.preventDefault();
+    if (!target) return;
+    const moved = await run(() => client.updateApplication(application.id, { status: target }));
+    if (moved) {
+      setTarget("");
+      onChanged();
+    }
+  }
+
+  async function reopen() {
+    if (await run(() => client.reopenApplication(application.id))) onChanged();
+  }
+
+  return (
+    <div className="stage">
+      <span>{label(application.status)}</span>
+      {application.next_statuses.length > 0 && (
+        <form className="inline-form" onSubmit={move}>
+          <select
+            aria-label={`Next stage for ${title}`}
+            value={target}
+            onChange={(event) => setTarget(event.target.value as ApplicationStatus | "")}
+            disabled={pending}
+          >
+            <option value="">Move to…</option>
+            {application.next_statuses.map((status) => (
+              <option key={status} value={status}>
+                {label(status)}
+              </option>
+            ))}
+          </select>
+          <button type="submit" disabled={pending || !target} aria-label={`Move the application for ${title}`}>
+            Move
+          </button>
+        </form>
+      )}
+      {application.reopenable && (
+        <button
+          type="button"
+          onClick={reopen}
+          disabled={pending}
+          aria-label={`Reopen the application for ${title}`}
+        >
+          Reopen
+        </button>
+      )}
+      {error && <ErrorMessage error={error} />}
+    </div>
+  );
+}
+
+/** Applying to an open job. Shown only once asked for, so its jobs are read on demand. */
+function ApplyForm({
+  candidateId,
+  appliedTo,
+  onApplied,
+}: {
+  candidateId: number;
+  appliedTo: Set<number>;
+  onApplied: () => void;
+}) {
+  const client = useApi();
+  const [jobs, reload] = useLoad(`open-jobs:${candidateId}`, (api, signal) =>
+    api.listJobs({ status: "open", limit: OPEN_JOBS_SHOWN }, { signal }),
+  );
+  const [jobId, setJobId] = useState("");
+  const [source, setSource] = useState("");
+  const { pending, error, run } = useSubmit();
+
+  async function apply(event: FormEvent) {
+    event.preventDefault();
+    const applied = await run(() =>
+      client.createApplication({ job_id: Number(jobId), candidate_id: candidateId, source: optional(source) }),
+    );
+    if (applied) onApplied();
+  }
+
+  return (
+    <Loaded value={jobs} what="open jobs" retry={reload}>
+      {(page) => {
+        const open = page.items.filter((job) => !appliedTo.has(job.id));
+        if (open.length === 0) {
+          return <p className="muted">There is no open job this candidate has not applied to.</p>;
+        }
+        return (
+          <form className="form" onSubmit={apply}>
+            <div className="form-row">
+              <Field label="Job">
+                {(props) => (
+                  <select {...props} required value={jobId} onChange={(event) => setJobId(event.target.value)}>
+                    <option value="">Choose an open job</option>
+                    {open.map((job) => (
+                      <option key={job.id} value={job.id}>
+                        {job.title}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </Field>
+              <Field label="Source" hint="Where the application came from, such as a referral.">
+                {(props) => (
+                  <input {...props} maxLength={80} value={source} onChange={(event) => setSource(event.target.value)} />
+                )}
+              </Field>
+            </div>
+            {page.total > page.items.length && (
+              <p className="muted small">
+                Offering the newest {page.items.length} of {page.total} open jobs.
+              </p>
+            )}
+            {error && <ErrorMessage error={error} />}
+            <div className="form-actions">
+              <button type="submit" className="primary" disabled={pending || !jobId}>
+                {pending ? "Applying…" : "Apply"}
+              </button>
+            </div>
+          </form>
+        );
+      }}
+    </Loaded>
+  );
+}
 
 function Applications({ candidateId }: { candidateId: number }) {
   const [rows, reload] = useLoad<{ rows: ApplicationRow[]; total: number }>(
@@ -38,10 +183,29 @@ function Applications({ candidateId }: { candidateId: number }) {
       };
     },
   );
+  const [applying, setApplying] = useState(false);
+  const appliedTo = new Set(rows.state === "ok" ? rows.data.rows.map((row) => row.application.job_id) : []);
 
   return (
     <section aria-labelledby="applications-heading">
-      <h2 id="applications-heading">Applications</h2>
+      <header className="section-head">
+        <h2 id="applications-heading">Applications</h2>
+        <div className="actions">
+          <button type="button" aria-expanded={applying} onClick={() => setApplying((open) => !open)}>
+            {applying ? "Close" : "Apply to a job"}
+          </button>
+        </div>
+      </header>
+      {applying && rows.state === "ok" && (
+        <ApplyForm
+          candidateId={candidateId}
+          appliedTo={appliedTo}
+          onApplied={() => {
+            setApplying(false);
+            reload();
+          }}
+        />
+      )}
       <Loaded value={rows} what="applications" retry={reload}>
         {({ rows: items, total }) =>
           items.length === 0 ? (
@@ -58,16 +222,16 @@ function Applications({ candidateId }: { candidateId: number }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map(({ application, job }) => (
-                    <tr key={application.id}>
+                  {items.map((row) => (
+                    <tr key={row.application.id}>
                       <td>
-                        <Link to={`/jobs/${application.job_id}`}>
-                          {job ? job.title : `Job ${application.job_id}`}
-                        </Link>
+                        <Link to={`/jobs/${row.application.job_id}`}>{jobTitle(row)}</Link>
                       </td>
-                      <td>{label(application.status)}</td>
-                      <td>{application.source ?? "—"}</td>
-                      <td>{date(application.applied_at)}</td>
+                      <td>
+                        <StageControls row={row} onChanged={reload} />
+                      </td>
+                      <td>{row.application.source ?? "—"}</td>
+                      <td>{date(row.application.applied_at)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -85,7 +249,34 @@ function Applications({ candidateId }: { candidateId: number }) {
   );
 }
 
-function CandidateFacts({ candidate }: { candidate: Candidate }) {
+/** Replacing the stored resume with a file; the API fills an empty skill list from it. */
+function ResumeUpload({ candidateId, onUploaded }: { candidateId: number; onUploaded: () => void }) {
+  const client = useApi();
+  const { pending, error, run } = useSubmit();
+
+  async function upload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    // Cleared at once, so choosing the same file again uploads it again.
+    event.target.value = "";
+    if (file && (await run(() => client.uploadResume(candidateId, file)))) onUploaded();
+  }
+
+  return (
+    <div className="upload">
+      <Field label="Replace with a resume file" hint="PDF, plain text or Markdown, up to 2 MB.">
+        {(props) => <input {...props} type="file" accept={RESUME_TYPES} onChange={upload} disabled={pending} />}
+      </Field>
+      {pending && (
+        <p className="muted" role="status">
+          Uploading…
+        </p>
+      )}
+      {error && <ErrorMessage error={error} />}
+    </div>
+  );
+}
+
+function CandidateFacts({ candidate, onChanged }: { candidate: Candidate; onChanged: () => void }) {
   return (
     <>
       <header className="page-head">
@@ -123,6 +314,7 @@ function CandidateFacts({ candidate }: { candidate: Candidate }) {
 
       <h2>Resume</h2>
       <pre className="resume">{candidate.resume_text}</pre>
+      <ResumeUpload candidateId={candidate.id} onUploaded={onChanged} />
     </>
   );
 }
@@ -144,7 +336,7 @@ export function CandidatePage() {
         {(data) =>
           data && (
             <>
-              <CandidateFacts candidate={data} />
+              <CandidateFacts candidate={data} onChanged={reload} />
               <Applications candidateId={data.id} />
             </>
           )

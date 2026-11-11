@@ -176,6 +176,23 @@ button.primary,
   font-size: 0.875rem;
 }
 
+.stage {
+  display: grid;
+  gap: 0.375rem;
+  justify-items: start;
+}
+
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.upload {
+  margin-top: 0.75rem;
+  max-width: 32rem;
+}
+
 .form-actions {
   display: flex;
   align-items: center;

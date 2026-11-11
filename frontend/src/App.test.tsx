@@ -222,8 +222,15 @@ describe("candidate detail", () => {
       "GET /applications": () => ({
         body: page([
           makeApplication({ id: 100, job_id: 1, status: "interview" }),
-          makeApplication({ id: 101, job_id: 2, status: "rejected", source: null }),
-          makeApplication({ id: 102, job_id: 1, status: "withdrawn" }),
+          makeApplication({
+            id: 101,
+            job_id: 2,
+            status: "rejected",
+            source: null,
+            next_statuses: [],
+            reopenable: true,
+          }),
+          makeApplication({ id: 102, job_id: 1, status: "withdrawn", next_statuses: [], reopenable: true }),
         ]),
       }),
       // Job 2 has been deleted, so the id filter leaves it out.
@@ -242,8 +249,9 @@ describe("candidate detail", () => {
     const titled = await screen.findAllByRole("link", { name: "Backend Engineer" });
     expect(titled.map((link) => link.getAttribute("href"))).toEqual(["/jobs/1", "/jobs/1"]);
     expect(screen.getByRole("link", { name: "Job 2" }).getAttribute("href")).toBe("/jobs/2");
-    expect(screen.getByText("Interview")).toBeTruthy();
-    expect(screen.getByText("Rejected")).toBeTruthy();
+    // The stage as text; the same words also name the moves on offer.
+    const stages = screen.getAllByText(/^(Interview|Rejected|Withdrawn)$/, { selector: ".stage > span" });
+    expect(stages.map((stage) => stage.textContent)).toEqual(["Interview", "Rejected", "Withdrawn"]);
     expect(api.calls("GET /applications")[0]?.url.search).toBe("?candidate_id=10&limit=200");
     // Every job's title in one request, each job asked for once.
     expect(api.calls("GET /jobs").map(({ url }) => url.search)).toEqual(["?id=1&id=2&limit=200"]);
