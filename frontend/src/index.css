@@ -150,6 +150,8 @@ button.primary,
   display: grid;
   gap: 1rem;
   grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  /* Stretched, a field beside one with a hint grows its input to fill the row. */
+  align-items: start;
 }
 
 .field {
