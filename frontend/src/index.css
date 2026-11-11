@@ -154,11 +154,32 @@ button.primary,
   align-items: start;
 }
 
-.field {
+.field,
+.field-control {
   display: grid;
   gap: 0.25rem;
   /* A grid item's minimum is its content; zero lets a long value wrap. */
   min-width: 0;
+}
+
+/*
+ * The fields on one line of a row share a label track and a control track. A
+ * label that wraps to a second line then moves every control on its line down
+ * with its own, and a one-line label beside it sits just above its control.
+ */
+@supports (grid-template-rows: subgrid) {
+  .form-row > .field {
+    grid-row: span 2;
+    grid-template-rows: subgrid;
+  }
+
+  .form-row > .field > label {
+    align-self: end;
+  }
+
+  .form-row > .field > .field-control {
+    align-self: start;
+  }
 }
 
 .field label {

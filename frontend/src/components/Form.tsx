@@ -24,12 +24,15 @@ export function Field({
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      {children({ id, "aria-describedby": hint ? hintId : undefined })}
-      {hint && (
-        <p id={hintId} className="hint">
-          {hint}
-        </p>
-      )}
+      {/* One block under the label, so the fields on a line of a form row need two tracks. */}
+      <div className="field-control">
+        {children({ id, "aria-describedby": hint ? hintId : undefined })}
+        {hint && (
+          <p id={hintId} className="hint">
+            {hint}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
