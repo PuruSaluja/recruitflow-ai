@@ -38,7 +38,7 @@ cannot show.
 | Fairness, qualified women against men, top 5 | Equal-opportunity gap −0.140 in the past decisions, −0.050 for a matcher trained plainly on them, **−0.011** for the served matcher, whose interval includes zero in all 17 audit runs | [Fairness audit](#fairness-audit) |
 | Fairness, what remains | Over-40s shortlisted more often than under-40s (+0.042 at top 5 over 8 fresh runs), mostly through the jobs' minimum years; disclosed, and long minimums are flagged to the recruiter | same |
 | Scoring 4,000 candidates for a job | 3,061 ms median for a first scoring, the ranking cached, timed before the matcher was reweighed (about 3% slower since); a page of 50 read back in 25.8 ms median | [Scoring](#measured-on-the-default-corpus-4) |
-| Tests | 1,764 backend tests and 41 client tests; 99.0% of lines and branches covered when last measured in full; end-to-end in Chromium, Firefox, WebKit and a phone-sized Chromium on every push to `main` and every pull request | [Tests](#tests) |
+| Tests | 1,773 backend tests and 68 client tests; 99.0% of lines and branches covered when last measured in full; end-to-end in Chromium, Firefox, WebKit and a phone-sized Chromium on every push to `main` and every pull request | [Tests](#tests) |
 
 ## Architecture
 
@@ -177,9 +177,11 @@ the browser talks to one origin.
 
 | Page | Address | Shows |
 | ---- | ------- | ----- |
-| Jobs | `/jobs` | Every requisition, newest first, 20 a page; title search and a status filter, kept in the address |
+| Jobs | `/jobs` | Every requisition, newest first, 20 a page; title search and a status filter, kept in the address; **New job** |
+| New job | `/jobs/new` | A form for a requisition, opened once saved; blanks are left to the API's defaults |
 | Job | `/jobs/{id}` | The job's facts, skills and requirement notes, then its ranking under the current matcher, 25 a page: score, required skills held, experience, links to each scorecard and to the shortlist PDF. **Score all candidates** scores everyone on file and reloads the ranking |
-| Candidate | `/candidates/{id}` | Contact details, experience, skills, resume text, and their applications, latest first, linked to each job |
+| Add a candidate | `/candidates/new` | A form for a candidate; choosing a resume file fills the resume and, if empty, the skills from what the API reads in it |
+| Candidate | `/candidates/{id}` | Contact details, experience, skills, resume text with a file to replace it, and their applications, latest first, linked to each job. Each application offers the stages the API lists for it, and a reopen where it lists one; **Apply to a job** offers the open jobs not yet applied to |
 
 An error from the API is shown with its own message (a missing matcher, a
 database that is down, a scoring run that lost a race), with a button to
@@ -255,8 +257,11 @@ E2E_CHANNEL=msedge npm run e2e -- --project=chromium --project=mobile
 job, three candidates and an application through the API and delete them
 afterwards, and check: finding the job, scoring its candidates, that both PDF
 links return PDFs, opening a candidate, reloading a page address, the
-not-found pages, no serious or critical accessibility findings from axe-core
-in light or dark, and no sideways scroll, at desktop and phone sizes
+not-found pages, posting a job and adding a candidate from a resume file
+through the forms, then applying, moving, rejecting and reopening them and
+reading the stage trail the API kept, no serious or critical accessibility
+findings from axe-core in light or dark on every page and form, and no
+sideways scroll, at desktop and phone sizes
 (`E2E_BASE_URL` points them at another server). CI runs them in Chromium,
 Firefox, WebKit and a phone-sized Chromium, and the client's own job on Node
 22.22.0 and 24.
@@ -466,6 +471,12 @@ applications, and a candidate can apply to a given job only once. That second
 rule is enforced by a unique constraint rather than a pre-check, so two
 simultaneous requests cannot both succeed. Closing a job stops new applications
 but leaves the ones already in flight editable.
+
+Each application lists `next_statuses`, the stages a `PATCH` accepts from where
+it stands, in pipeline order, and `reopenable`, whether a reopen can undo how it
+finished (the reopen still checks that the job is open). Both come from the
+rules above, so a client offers only moves the API will take; the web client
+holds no copy of them.
 
 Every move — including the opening one at creation — appends a row to
 `application_stage_events`, retrievable through
