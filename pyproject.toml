@@ -15,8 +15,9 @@ dependencies = [
     "python-multipart>=0.0.12",
     # [crypto] pulls cryptography, which pypdf needs to open AES-encrypted
     # PDFs. Without it those uploads raise DependencyError instead of being
-    # reported to the uploader.
-    "pypdf[crypto]>=5.1",
+    # reported to the uploader. pypdf reads every uploaded PDF, so the floor is
+    # the first release with no published advisory against it.
+    "pypdf[crypto]>=6.21.4",
     "scikit-learn>=1.5",
     "numpy>=1.26",
     "pandas>=2.2",
