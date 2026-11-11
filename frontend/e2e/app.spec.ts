@@ -149,6 +149,70 @@ test("answers unknown records and addresses with not-found pages", async ({ page
   await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
 });
 
+test("posts a job, adds a candidate from a resume file and moves their application", async ({
+  page,
+  request,
+}) => {
+  const title = `Platform Engineer ${RUN}`;
+  const name = `Noor Haddad ${RUN}`;
+  let jobId: number | undefined;
+  let candidateId: number | undefined;
+  try {
+    await page.goto("/jobs");
+    await page.getByRole("link", { name: "New job" }).click();
+    await page.getByLabel("Title").fill(title);
+    await page.getByLabel("Required skills").fill("Python, Kubernetes");
+    await page.getByLabel("Description").fill("Run the clusters every service is deployed to.");
+    await page.getByRole("button", { name: "Create job" }).click();
+    await expect(page.getByRole("heading", { name: title })).toBeVisible();
+    jobId = Number(new URL(page.url()).pathname.split("/").at(-1));
+
+    await page.getByRole("link", { name: "Add candidate" }).click();
+    await page.getByLabel("Resume file").setInputFiles({
+      name: "noor.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("Site reliability engineer: Python, Kubernetes and Terraform for six years."),
+    });
+    await expect(page.getByText("Read noor.txt. It names Python, Kubernetes, Terraform.")).toBeVisible();
+    await page.getByLabel("Full name").fill(name);
+    await page.getByLabel("Email").fill(`noor.${RUN}@example.com`);
+    await page.getByRole("button", { name: "Add candidate" }).click();
+    await expect(page.getByRole("heading", { name })).toBeVisible();
+    candidateId = Number(new URL(page.url()).pathname.split("/").at(-1));
+    for (const skill of ["Python", "Kubernetes", "Terraform"]) {
+      await expect(page.locator(".tags").getByText(skill, { exact: true })).toBeVisible();
+    }
+
+    await page.getByRole("button", { name: "Apply to a job" }).click();
+    await page.getByLabel("Job", { exact: true }).selectOption({ label: title });
+    await page.getByLabel("Source").fill("careers page");
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
+    const stage = page.getByRole("row").filter({ hasText: title }).locator(".stage > span");
+    await expect(stage).toHaveText("Applied");
+
+    await page.getByRole("combobox", { name: `Next stage for ${title}` }).selectOption("screening");
+    await page.getByRole("button", { name: `Move the application for ${title}` }).click();
+    await expect(stage).toHaveText("Screening");
+    await page.getByRole("combobox", { name: `Next stage for ${title}` }).selectOption("rejected");
+    await page.getByRole("button", { name: `Move the application for ${title}` }).click();
+    await expect(stage).toHaveText("Rejected");
+    await page.getByRole("button", { name: `Reopen the application for ${title}` }).click();
+    await expect(stage).toHaveText("Applied");
+
+    // The trail the API kept of those moves.
+    const applications = await ok<{ items: { id: number }[] }>(
+      await request.get(`${API}/applications?candidate_id=${candidateId}`),
+    );
+    const events = await ok<{ from_status: string | null; to_status: string }[]>(
+      await request.get(`${API}/applications/${applications.items[0]!.id}/stage-events`),
+    );
+    expect(events.map((event) => event.to_status)).toEqual(["applied", "screening", "rejected", "applied"]);
+  } finally {
+    if (jobId) await request.delete(`${API}/jobs/${jobId}`);
+    if (candidateId) await request.delete(`${API}/candidates/${candidateId}`);
+  }
+});
+
 for (const colorScheme of ["light", "dark"] as const) {
   test(`has no serious accessibility violations on any page, ${colorScheme}`, async ({
     page,
@@ -171,12 +235,26 @@ for (const colorScheme of ["light", "dark"] as const) {
 
     await page.goto(`/candidates/${created.applicant.id}`);
     await expect(page.getByRole("link", { name: JOB_TITLE })).toBeVisible();
+    await page.getByRole("button", { name: "Apply to a job" }).click();
+    await expect(page.getByLabel("Job", { exact: true })).toBeVisible();
     expect(await seriousViolations(page)).toEqual([]);
+
+    for (const path of ["/jobs/new", "/candidates/new"]) {
+      await page.goto(path);
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      expect(await seriousViolations(page), path).toEqual([]);
+    }
   });
 }
 
 test("never scrolls the page sideways", async ({ page }) => {
-  for (const path of [`/jobs`, `/jobs/${created.job}`, `/candidates/${created.applicant.id}`]) {
+  for (const path of [
+    `/jobs`,
+    `/jobs/${created.job}`,
+    `/candidates/${created.applicant.id}`,
+    "/jobs/new",
+    "/candidates/new",
+  ]) {
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     const overflow = await page.evaluate(
