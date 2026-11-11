@@ -2,8 +2,8 @@
 # the encoder tests against the real sentence-transformer, and the web client,
 # on its own and end to end in real browsers.
 #
-# Everything comes from pyproject.toml alone, so a pass here shows it declares
-# enough.
+# The "newest" jobs install from pyproject.toml alone, so a pass there shows it
+# declares enough; the "pinned" one installs the versions in constraints.txt.
 #
 # Every job runs on ubuntu-24.04 by name rather than ubuntu-latest, so the
 # runner image changes only when this file does.
@@ -29,8 +29,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The oldest version pyproject.toml allows, and the one used locally.
+        # The oldest version pyproject.toml allows, and the one used locally,
+        # with the newest dependencies; and the local versions from
+        # constraints.txt.
         python-version: ["3.11", "3.14"]
+        versions: [newest]
+        include:
+          - python-version: "3.14"
+            versions: pinned
 
     services:
       postgres:
@@ -59,10 +65,18 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-          cache-dependency-path: pyproject.toml
+          cache-dependency-path: |
+            pyproject.toml
+            constraints.txt
 
       - name: Install
-        run: python -m pip install -e ".[dev]"
+        run: |
+          if [ "${{ matrix.versions }}" = pinned ]; then
+            python -m pip install -c constraints.txt -e ".[dev]"
+          else
+            python -m pip install -e ".[dev]"
+          fi
+          python -m pip freeze --exclude-editable
 
       - name: Lint
         run: |

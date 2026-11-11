@@ -131,7 +131,7 @@ Requires Python 3.11+ and a running PostgreSQL 16 instance.
 ```bash
 python -m venv .venv
 .venv/Scripts/activate        # Windows;  source .venv/bin/activate on Unix
-pip install -e ".[dev]"
+pip install -c constraints.txt -e ".[dev]"   # the tested versions; drop -c for the newest
 cp .env.example .env          # then edit the connection strings
 ```
 
