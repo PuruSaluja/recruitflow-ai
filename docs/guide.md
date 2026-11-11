@@ -272,7 +272,10 @@ through the forms, then applying, moving, rejecting and reopening them and
 reading the stage trail the API kept, no serious or critical accessibility
 findings from axe-core in light or dark on every page and form, and no
 sideways scroll, at desktop and phone sizes
-(`E2E_BASE_URL` points them at another server). CI runs them in Chromium,
+(`E2E_BASE_URL` points them at another server). Two more, in
+`e2e/forms.spec.ts`, need no data: on the new job form an input beside a
+field with a hint keeps its own height, and the controls on one line start
+level when a label wraps. CI runs them in Chromium,
 Firefox, WebKit and a phone-sized Chromium, and the client's own job on Node
 22.22.0 and 24.
 
