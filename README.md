@@ -363,6 +363,12 @@ Every timestamp is ISO 8601 in UTC, ending in `Z`, such as
 - A job's `description` holds at most 20,000 characters, and its
   `required_skills` and `preferred_skills` at most 100 entries each, of at
   most 100 characters as sent.
+- A job's `title` and a candidate's `full_name` are stored without
+  surrounding whitespace and must then hold 2 to 200 characters; a
+  `description` or `resume_text` must hold its 20 characters besides spaces,
+  and is stored as sent.
+- A candidate's `email` is stored in lower case, so one already on file in
+  other capitals is a **409** duplicate.
 - Salaries fit their `NUMERIC(10, 2)` columns: at most 99,999,999.99, in
   whole cents.
 - Text may not contain the NUL character (U+0000), which no PostgreSQL text
