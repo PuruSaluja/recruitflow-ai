@@ -212,6 +212,37 @@ describe("createClient", () => {
     ]);
   });
 
+  it("sends a change as a PATCH of the fields it names, a null among them", async () => {
+    const fetchImpl = respond(200, { id: 5 });
+    const client = createClient(fetchImpl);
+
+    await client.updateJob(5, { title: "Data Engineer II", salary_max: null });
+    await client.updateCandidate(9, { phone: null, skills: ["SQL"] });
+
+    const sent = (fetchImpl.mock.calls as unknown as [string, RequestInit][]).map(([url, init]) => [
+      url,
+      init.method,
+      init.body,
+      new Headers(init.headers).get("Content-Type"),
+    ]);
+    expect(sent).toEqual([
+      ["/api/v1/jobs/5", "PATCH", '{"title":"Data Engineer II","salary_max":null}', "application/json"],
+      ["/api/v1/candidates/9", "PATCH", '{"phone":null,"skills":["SQL"]}', "application/json"],
+    ]);
+  });
+
+  it("closes a job with a POST that carries no body", async () => {
+    const fetchImpl = respond(200, { id: 5, status: "closed" });
+    const client = createClient(fetchImpl);
+
+    const job = await client.closeJob(5);
+
+    expect(job.status).toBe("closed");
+    const [[url, init]] = fetchImpl.mock.calls as unknown as [[string, RequestInit]];
+    expect([url, init.method, init.body]).toEqual(["/api/v1/jobs/5/close", "POST", undefined]);
+    expect(new Headers(init.headers).get("Content-Type")).toBeNull();
+  });
+
   it("sends a resume as a multipart file and leaves its Content-Type to the browser", async () => {
     const fetchImpl = respond(200, { id: 5 });
     const client = createClient(fetchImpl);

@@ -32,6 +32,9 @@ export type NewCandidate = Partial<Schemas["CandidateCreate"]> &
 export type NewApplication = Partial<Schemas["ApplicationCreate"]> &
   Pick<Schemas["ApplicationCreate"], "job_id" | "candidate_id">;
 export type ApplicationChange = Schemas["ApplicationUpdate"];
+// A change names only the fields it sets; a null clears one that may be empty.
+export type JobChange = Schemas["JobUpdate"];
+export type CandidateChange = Schemas["CandidateUpdate"];
 export type Page<T> = { items: T[]; total: number; limit: number; offset: number };
 
 type QueryOf<P extends keyof paths> = paths[P] extends {
@@ -175,6 +178,11 @@ export function createClient(fetchImpl: Fetch = (...args) => fetch(...args), bas
       get<Page<Job>>(`/jobs${buildQuery(query)}`, options),
     getJob: (jobId: number, options?: RequestOptions) => get<Job>(`/jobs/${jobId}`, options),
     createJob: (job: NewJob, options?: RequestOptions) => send<Job>("POST", "/jobs", job, options),
+    updateJob: (jobId: number, change: JobChange, options?: RequestOptions) =>
+      send<Job>("PATCH", `/jobs/${jobId}`, change, options),
+    /** Closing takes no body. A job already closed is answered as it stands. */
+    closeJob: (jobId: number, options?: RequestOptions) =>
+      request<Job>("POST", `/jobs/${jobId}/close`, options),
 
     listCandidates: (query?: CandidateQuery, options?: RequestOptions) =>
       get<Page<Candidate>>(`/candidates${buildQuery(query)}`, options),
@@ -182,6 +190,8 @@ export function createClient(fetchImpl: Fetch = (...args) => fetch(...args), bas
       get<Candidate>(`/candidates/${candidateId}`, options),
     createCandidate: (candidate: NewCandidate, options?: RequestOptions) =>
       send<Candidate>("POST", "/candidates", candidate, options),
+    updateCandidate: (candidateId: number, change: CandidateChange, options?: RequestOptions) =>
+      send<Candidate>("PATCH", `/candidates/${candidateId}`, change, options),
     /** The text and skills the API reads from a resume file, storing nothing. */
     previewResume: (resume: File, options?: RequestOptions) =>
       send<ResumePreview>("POST", "/candidates/resume-preview", file(resume), options),
