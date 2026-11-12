@@ -217,6 +217,111 @@ test("posts a job, adds a candidate from a resume file and moves their applicati
   }
 });
 
+test("changes a job and a candidate through their forms, and closes and reopens the job", async ({
+  page,
+  request,
+}) => {
+  const title = `Site Reliability Engineer ${RUN}`;
+  const name = `Dara Okoye ${RUN}`;
+  const email = `dara.${RUN}@example.com`;
+  const outdated = page.getByText("The job was changed after these candidates were scored.");
+  let jobId: number | undefined;
+  let candidateId: number | undefined;
+  try {
+    jobId = (
+      await ok<{ id: number }>(
+        await request.post(`${API}/jobs`, {
+          data: {
+            title,
+            location: "Ottawa, ON",
+            description: "Keep the deploy pipeline and the clusters behind it running.",
+            required_skills: ["Python"],
+            salary_min: "90000.00",
+          },
+        }),
+        201,
+      )
+    ).id;
+    candidateId = (
+      await ok<{ id: number }>(
+        await request.post(`${API}/candidates`, {
+          data: {
+            full_name: name,
+            email,
+            resume_text: "Site reliability engineer: Python, Kubernetes and Terraform for six years.",
+            skills: ["Go"],
+          },
+        }),
+        201,
+      )
+    ).id;
+    await ok(await request.post(`${API}/jobs/${jobId}/score`, { data: { candidate_ids: [candidateId] } }));
+    const stored = async () =>
+      ok<Record<string, unknown>>(await request.get(`${API}/jobs/${jobId}`));
+
+    await page.goto(`/jobs/${jobId}`);
+    await page.getByRole("link", { name: "Edit", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Edit job" })).toBeVisible();
+    await expect(page.getByLabel("Salary from")).toHaveValue("90000.00");
+    await page.getByLabel("Title", { exact: true }).fill(`${title} II`);
+    await page.getByLabel("Location").fill("");
+    await page.getByLabel("Required skills").fill("Python, Kubernetes");
+    await page.getByRole("button", { name: "Save changes" }).click();
+
+    await expect(page.getByRole("heading", { name: `${title} II` })).toBeVisible();
+    expect(await stored()).toMatchObject({
+      title: `${title} II`,
+      location: null,
+      required_skills: ["Python", "Kubernetes"],
+      // Untouched, so as it was.
+      salary_min: "90000.00",
+      status: "open",
+    });
+    // The ranking is from before the skills changed, and says so until scored again.
+    await expect(page.getByRole("table").getByRole("link", { name, exact: true })).toBeVisible();
+    await expect(outdated).toBeVisible();
+    await page.getByRole("button", { name: "Score all candidates" }).click();
+    await expect(page.getByText(/^Scored \d+ candidates? in \d+ ms\.$/)).toBeVisible();
+    await expect(outdated).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Close job" }).click();
+    await expect(page.locator(".badge")).toHaveText("Closed");
+    await expect(page.getByRole("button", { name: "Close job" })).toHaveCount(0);
+    expect(await stored()).toMatchObject({ status: "closed" });
+
+    // Opened again by its status, which the matcher does not read.
+    await page.getByRole("link", { name: "Edit", exact: true }).click();
+    await page.getByLabel("Status", { exact: true }).selectOption("open");
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect(page.locator(".badge")).toHaveText("Open");
+    await expect(page.getByRole("table")).toBeVisible();
+    await expect(outdated).toHaveCount(0);
+    expect(await stored()).toMatchObject({ status: "open", title: `${title} II` });
+
+    await page.goto(`/candidates/${candidateId}`);
+    await page.getByRole("link", { name: "Edit", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Edit candidate" })).toBeVisible();
+    // Another candidate's address, in capitals: the API folds it and refuses the duplicate.
+    await page.getByLabel("Email").fill(`IMANI.CLARKE.OKONKWO.${RUN}.0@peopleoperations.example.com`);
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect(page.getByRole("alert")).toContainText("conflicts with an existing record");
+
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Full name").fill(`${name} Jr`);
+    // Emptied, the skills are read from the resume again.
+    await page.getByLabel("Skills", { exact: true }).fill("");
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect(page.getByRole("heading", { name: `${name} Jr` })).toBeVisible();
+    for (const skill of ["Python", "Kubernetes", "Terraform"]) {
+      await expect(page.locator(".tags").getByText(skill, { exact: true })).toBeVisible();
+    }
+    await expect(page.locator(".tags").getByText("Go", { exact: true })).toHaveCount(0);
+  } finally {
+    if (jobId) await request.delete(`${API}/jobs/${jobId}`);
+    if (candidateId) await request.delete(`${API}/candidates/${candidateId}`);
+  }
+});
+
 for (const colorScheme of ["light", "dark"] as const) {
   test(`has no serious accessibility violations on any page, ${colorScheme}`, async ({
     page,
@@ -248,7 +353,12 @@ for (const colorScheme of ["light", "dark"] as const) {
     await expect(page.getByRole("combobox", { name: "Job", exact: true })).toBeVisible();
     expect(await seriousViolations(page)).toEqual([]);
 
-    for (const path of ["/jobs/new", "/candidates/new"]) {
+    for (const path of [
+      "/jobs/new",
+      "/candidates/new",
+      `/jobs/${created.job}/edit`,
+      `/candidates/${created.applicant.id}/edit`,
+    ]) {
       await page.goto(path);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       expect(await seriousViolations(page), path).toEqual([]);
@@ -263,6 +373,8 @@ test("never scrolls the page sideways", async ({ page }) => {
     `/candidates/${created.applicant.id}`,
     "/jobs/new",
     "/candidates/new",
+    `/jobs/${created.job}/edit`,
+    `/candidates/${created.applicant.id}/edit`,
   ]) {
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
