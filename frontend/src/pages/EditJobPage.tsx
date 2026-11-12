@@ -10,6 +10,23 @@ import { JOB_STATUSES } from "../options";
 import { parseId } from "../params";
 import { NotFound } from "./NotFound";
 
+/**
+ * The fields the matcher reads. Scores are kept as they were made, so a change
+ * to one of these leaves a ranking that describes the job as it was.
+ */
+const SCORED_FIELDS = [
+  "title",
+  "description",
+  "seniority",
+  "education_required",
+  "min_years_experience",
+  "required_skills",
+  "preferred_skills",
+] as const;
+
+/** What the job's page is told on the way back from a change the matcher reads. */
+export type AfterEdit = { rescore: true };
+
 function EditJobForm({ job }: { job: Job }) {
   const client = useApi();
   const navigate = useNavigate();
@@ -25,8 +42,11 @@ function EditJobForm({ job }: { job: Job }) {
     event.preventDefault();
     const changes = changed(jobAsChange(formFromJob(job)), jobAsChange(form));
     // With nothing changed there is nothing to ask of the API.
-    if (Object.keys(changes).length === 0 || (await run(() => client.updateJob(job.id, changes)))) {
+    if (Object.keys(changes).length === 0) {
       navigate(back);
+    } else if (await run(() => client.updateJob(job.id, changes))) {
+      const state: AfterEdit | null = SCORED_FIELDS.some((field) => field in changes) ? { rescore: true } : null;
+      navigate(back, { state });
     }
   }
 
