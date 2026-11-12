@@ -294,6 +294,23 @@ level when a label wraps. CI runs them in Chromium,
 Firefox, WebKit and a phone-sized Chromium, and the client's own job on Node
 22.22.0 and 24.
 
+CI runs the backend suite with the newest versions `pyproject.toml` allows,
+on Python 3.11 and 3.14, and once more with the versions in
+`constraints.txt`, the ones installed in the development environment. A new
+release of a
+Python dependency that breaks the suite therefore shows on the next push,
+with nobody having asked for it. Nothing does that for the client, whose
+`package.json` pins exact versions, or for the actions the workflows use, so
+Dependabot (`.github/dependabot.yml`) opens pull requests for those once a
+week, and CI runs on each. Updates that are not a new major come in one pull
+request and a new major on its own; React and its types always move
+together; and an npm release is proposed once it is a week old. Python gets
+no such pull requests, since moving `constraints.txt` by bot would make it a
+second "newest" and no longer what is installed. Its entry is there for
+security updates: once Dependabot alerts and security updates are turned on
+in the repository's settings, a version with a published advisory gets a
+pull request whatever the schedule.
+
 The resume normaliser's unit tests need no database:
 
 ```bash
