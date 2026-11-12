@@ -38,6 +38,13 @@ updates:
       - dependency-name: "@types/node"
         update-types:
           - version-update:semver-major
+      # openapi-typescript, which writes src/api/schema.ts, asks for
+      # TypeScript 5 (peer "^5.x" in 7.13.0, its newest), so npm refuses to
+      # install TypeScript 6 or later beside it. Remove this when a release
+      # of it accepts the newer compiler.
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
 
   # The actions the workflows use.
   - package-ecosystem: github-actions
