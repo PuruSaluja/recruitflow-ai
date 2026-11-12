@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router";
 
 import { ApiError, type Job, type MatchPage, type RankedCandidate } from "../api/client";
 import { useApi, useLoad } from "../api/context";
+import { useSubmit } from "../components/Form";
 import { Pager } from "../components/Pager";
 import { SkillList } from "../components/SkillList";
 import { ErrorMessage, Loaded } from "../components/Status";
@@ -12,7 +13,14 @@ import { NotFound } from "./NotFound";
 
 export const MATCHES_PAGE_SIZE = 25;
 
-function JobFacts({ job }: { job: Job }) {
+function JobFacts({ job, onChanged }: { job: Job; onChanged: () => void }) {
+  const client = useApi();
+  const closing = useSubmit();
+
+  async function close() {
+    if (await closing.run(() => client.closeJob(job.id))) onChanged();
+  }
+
   return (
     <>
       <header className="page-head">
@@ -25,8 +33,15 @@ function JobFacts({ job }: { job: Job }) {
         <div className="actions">
           <span className={`badge status-${job.status}`}>{label(job.status)}</span>
           <Link to={`/jobs/${job.id}/edit`}>Edit</Link>
+          {/* A closed job is opened again by editing its status. */}
+          {job.status !== "closed" && (
+            <button type="button" onClick={close} disabled={closing.pending}>
+              {closing.pending ? "Closing…" : "Close job"}
+            </button>
+          )}
         </div>
       </header>
+      {closing.error && <ErrorMessage error={closing.error} />}
 
       {job.requirement_notes.length > 0 && (
         <div className="note" role="note">
@@ -211,7 +226,7 @@ export function JobDetailPage() {
         {(data) =>
           data && (
             <>
-              <JobFacts job={data} />
+              <JobFacts job={data} onChanged={reload} />
               <Shortlist jobId={data.id} />
             </>
           )
