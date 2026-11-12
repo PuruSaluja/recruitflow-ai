@@ -40,7 +40,7 @@ cannot show.
 | Fairness, qualified women against men, top 5 | Equal-opportunity gap −0.140 in the past decisions, −0.050 for a matcher trained plainly on them, **−0.011** for the served matcher, whose interval includes zero in all 17 audit runs | [Fairness audit](#fairness-audit) |
 | Fairness, what remains | Over-40s shortlisted more often than under-40s (+0.042 at top 5 over 8 fresh runs), mostly through the jobs' minimum years; disclosed, and long minimums are flagged to the recruiter | same |
 | Scoring 4,000 candidates for a job | 3,061 ms median for a first scoring, the ranking cached, timed before the matcher was reweighed (about 3% slower since); a page of 50 read back in 25.8 ms median | [Scoring](#measured-on-the-default-corpus-4) |
-| Tests | 1,773 backend tests and 68 client tests; 99.0% of lines and branches covered when last measured in full; end-to-end in Chromium, Firefox, WebKit and a phone-sized Chromium on every push to `main` and every pull request | [Tests](#tests) |
+| Tests | 1,773 backend tests and 94 client tests; 99.0% of lines and branches covered when last measured in full; end-to-end in Chromium, Firefox, WebKit and a phone-sized Chromium on every push to `main` and every pull request | [Tests](#tests) |
 
 ## Architecture
 
@@ -181,9 +181,20 @@ the browser talks to one origin.
 | ---- | ------- | ----- |
 | Jobs | `/jobs` | Every requisition, newest first, 20 a page; title search and a status filter, kept in the address; **New job** |
 | New job | `/jobs/new` | A form for a requisition, opened once saved; blanks are left to the API's defaults |
-| Job | `/jobs/{id}` | The job's facts, skills and requirement notes, then its ranking under the current matcher, 25 a page: score, required skills held, experience, links to each scorecard and to the shortlist PDF. **Score all candidates** scores everyone on file and reloads the ranking |
+| Job | `/jobs/{id}` | The job's facts, skills and requirement notes, then its ranking under the current matcher, 25 a page: score, required skills held, experience, links to each scorecard and to the shortlist PDF. **Score all candidates** scores everyone on file and reloads the ranking. **Edit** opens the job's form, and **Close job** closes one that is not closed |
+| Edit job | `/jobs/{id}/edit` | The new job form holding the job as stored, with every status on offer, so a closed job is opened again here. Saving sends only the fields that were changed, an emptied box as null |
 | Add a candidate | `/candidates/new` | A form for a candidate; choosing a resume file fills the resume and, if empty, the skills from what the API reads in it |
-| Candidate | `/candidates/{id}` | Contact details, experience, skills, resume text with a file to replace it, and their applications, latest first, linked to each job. Each application offers the stages the API lists for it, and a reopen where it lists one; **Apply to a job** offers the open jobs not yet applied to |
+| Candidate | `/candidates/{id}` | Contact details, experience, skills, resume text with a file to replace it, and their applications, latest first, linked to each job. Each application offers the stages the API lists for it, and a reopen where it lists one; **Apply to a job** offers the open jobs not yet applied to. **Edit** opens the candidate's form |
+| Edit candidate | `/candidates/{id}/edit` | The candidate's fields as stored, saved the same way. Skills left empty are read from the resume again |
+
+Editing a job does not rescore it. After a saved change to something the
+matcher reads (the title, description, seniority, education, minimum
+experience or either skill list) the job's page says its candidates were
+scored before the change, on every page of the ranking and through any later
+edit, until they are scored again. The note travels with the browser's
+history entry, so it is shown to whoever made the edit, in that tab; the API
+does not record which scores an edit has outdated, and a ranking is not
+marked when a candidate on it is edited.
 
 An error from the API is shown with its own message (a missing matcher, a
 database that is down, a scoring run that lost a race), with a button to
@@ -269,7 +280,11 @@ afterwards, and check: finding the job, scoring its candidates, that both PDF
 links return PDFs, opening a candidate, reloading a page address, the
 not-found pages, posting a job and adding a candidate from a resume file
 through the forms, then applying, moving, rejecting and reopening them and
-reading the stage trail the API kept, no serious or critical accessibility
+reading the stage trail the API kept, changing a job and a candidate through
+their edit forms (a cleared box stored as null, the ranking marked as older
+than a change of skills until scored again, the job closed and opened again,
+another candidate's email refused, emptied skills read from the resume
+again), no serious or critical accessibility
 findings from axe-core in light or dark on every page and form, and no
 sideways scroll, at desktop and phone sizes
 (`E2E_BASE_URL` points them at another server). Two more, in

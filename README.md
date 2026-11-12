@@ -32,7 +32,7 @@ intervals and what the figure cannot show.
 | Fairness, qualified women against men, top 5 | Equal-opportunity gap −0.140 in the past decisions, −0.050 for a matcher trained plainly on them, **−0.011** for the served matcher, whose interval includes zero in all 17 audit runs | [audit](docs/guide.md#fairness-audit) |
 | Fairness, what remains | Over-40s shortlisted more often than under-40s (+0.042 at top 5 over 8 fresh runs), mostly through the jobs' minimum years; long minimums are flagged to the recruiter | same |
 | Skills read from resumes | Of the listed skills a resume names, 98.1% to 98.2% found (seeds 42, 5 and 7) | [method](docs/guide.md#skills-from-the-resume) |
-| Tests | 1,773 backend and 68 client tests; 99.0% of lines and branches covered when last measured in full; end to end in Chromium, Firefox, WebKit and a phone-sized Chromium on every push | [tests](docs/guide.md#tests) |
+| Tests | 1,773 backend and 94 client tests; 99.0% of lines and branches covered when last measured in full; end to end in Chromium, Firefox, WebKit and a phone-sized Chromium on every push | [tests](docs/guide.md#tests) |
 
 ## How it fits together
 
@@ -110,8 +110,11 @@ has the development server, the end-to-end tests and every option.
   real applicants.
 - **Scoring runs inside the request**, about 3 s for 4,000 candidates; there
   is no background queue.
-- **The client cannot edit or close** an existing job or candidate; that goes
-  through the API.
+- **An edit does not rescore.** A score is as of when it was made. The client
+  says a job's ranking is from before an edit of that job until it is scored
+  again; a ranking is not marked when a candidate on it is edited.
+- **The client cannot delete** a job or a candidate; that goes through the
+  API.
 
 ## More
 
