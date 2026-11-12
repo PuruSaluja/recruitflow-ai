@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 
 import type { Job } from "../api/client";
 import { useApi, useLoad } from "../api/context";
@@ -24,7 +24,11 @@ const SCORED_FIELDS = [
   "preferred_skills",
 ] as const;
 
-/** What the job's page is told on the way back from a change the matcher reads. */
+/**
+ * What the job's page is told on the way back from a change the matcher reads.
+ * It comes into the form with the reader and goes back with them, so it lasts
+ * through a later change, or none, until the candidates are scored again.
+ */
 export type AfterEdit = { rescore: true };
 
 function EditJobForm({ job }: { job: Job }) {
@@ -33,6 +37,7 @@ function EditJobForm({ job }: { job: Job }) {
   const [form, setForm] = useState<JobForm>(() => formFromJob(job));
   const { pending, error, run } = useSubmit();
   const back = `/jobs/${job.id}`;
+  const before = useLocation().state as AfterEdit | null;
 
   function set<K extends keyof JobForm>(key: K, value: JobForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -43,9 +48,9 @@ function EditJobForm({ job }: { job: Job }) {
     const changes = changed(jobAsChange(formFromJob(job)), jobAsChange(form));
     // With nothing changed there is nothing to ask of the API.
     if (Object.keys(changes).length === 0) {
-      navigate(back);
+      navigate(back, { state: before });
     } else if (await run(() => client.updateJob(job.id, changes))) {
-      const state: AfterEdit | null = SCORED_FIELDS.some((field) => field in changes) ? { rescore: true } : null;
+      const state: AfterEdit | null = SCORED_FIELDS.some((field) => field in changes) ? { rescore: true } : before;
       navigate(back, { state });
     }
   }
@@ -53,7 +58,9 @@ function EditJobForm({ job }: { job: Job }) {
   return (
     <section>
       <p>
-        <Link to={back}>← {job.title}</Link>
+        <Link to={back} state={before}>
+          ← {job.title}
+        </Link>
       </p>
       <h1>Edit job</h1>
       <form className="form" onSubmit={submit}>
@@ -68,7 +75,9 @@ function EditJobForm({ job }: { job: Job }) {
           <button type="submit" className="primary" disabled={pending}>
             {pending ? "Saving…" : "Save changes"}
           </button>
-          <Link to={back}>Cancel</Link>
+          <Link to={back} state={before}>
+            Cancel
+          </Link>
         </div>
       </form>
     </section>

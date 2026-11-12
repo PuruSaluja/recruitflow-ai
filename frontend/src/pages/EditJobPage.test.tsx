@@ -120,6 +120,31 @@ describe("editing a job", () => {
     expect(await screen.findByText(OUTDATED)).toBeTruthy();
   });
 
+  it("keeps saying so through a later change the matcher does not read, a save of nothing and a cancel", async () => {
+    const api = apiWith(STORED, [makeRanked(1, { id: 10, full_name: "Amara Okafor" }, 0.874)]);
+    renderAt("/jobs/42/edit", api.client);
+    await userEvent.type(await screen.findByLabelText("Description"), " On call one week in six.");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(await screen.findByText(OUTDATED)).toBeTruthy();
+
+    await userEvent.click(screen.getByRole("link", { name: "Edit" }));
+    await userEvent.selectOptions(await screen.findByLabelText("Status"), "paused");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await screen.findByText("Paused");
+    expect(await screen.findByText(OUTDATED)).toBeTruthy();
+
+    await userEvent.click(screen.getByRole("link", { name: "Edit" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Save changes" }));
+    expect(await screen.findByText(OUTDATED)).toBeTruthy();
+
+    for (const way of ["Cancel", "← Data Engineer"]) {
+      await userEvent.click(screen.getByRole("link", { name: "Edit" }));
+      await userEvent.click(await screen.findByRole("link", { name: way }));
+      expect(await screen.findByText(OUTDATED), way).toBeTruthy();
+    }
+    expect(sent(api)).toHaveLength(2);
+  });
+
   it("says nothing about the ranking after a change the matcher does not read", async () => {
     const api = apiWith(STORED, [makeRanked(1, { id: 10, full_name: "Amara Okafor" }, 0.874)]);
     renderAt("/jobs/42/edit", api.client);

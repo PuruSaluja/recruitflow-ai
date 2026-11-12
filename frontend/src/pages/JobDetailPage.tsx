@@ -17,6 +17,8 @@ export const MATCHES_PAGE_SIZE = 25;
 function JobFacts({ job, onChanged }: { job: Job; onChanged: () => void }) {
   const client = useApi();
   const closing = useSubmit();
+  // Carried into the form and back, so a second edit does not lose what the first one left.
+  const { state } = useLocation();
 
   async function close() {
     if (await closing.run(() => client.closeJob(job.id))) onChanged();
@@ -33,7 +35,9 @@ function JobFacts({ job, onChanged }: { job: Job; onChanged: () => void }) {
         </div>
         <div className="actions">
           <span className={`badge status-${job.status}`}>{label(job.status)}</span>
-          <Link to={`/jobs/${job.id}/edit`}>Edit</Link>
+          <Link to={`/jobs/${job.id}/edit`} state={state}>
+            Edit
+          </Link>
           {/* A closed job is opened again by editing its status. */}
           {job.status !== "closed" && (
             <button type="button" onClick={close} disabled={closing.pending}>
