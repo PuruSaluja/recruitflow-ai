@@ -131,7 +131,7 @@ describe("job detail", () => {
     // Required skills held: 50% for the first, all of them for the second.
     expect(within(rows[0]!).getAllByRole("cell")[3]?.textContent).toBe("50%");
     expect(within(rows[1]!).getAllByRole("cell")[3]?.textContent).toBe("100%");
-    expect(within(rows[1]!).getByRole("link", { name: "Scorecard for Wei Chen" }).getAttribute("href")).toBe(
+    expect(within(rows[1]!).getByRole("link", { name: "PDF scorecard for Wei Chen" }).getAttribute("href")).toBe(
       "/api/v1/jobs/1/candidates/11/scorecard.pdf",
     );
     expect(screen.getByRole("link", { name: "Shortlist PDF" }).getAttribute("href")).toBe(

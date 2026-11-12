@@ -114,7 +114,7 @@ function RankedTable({ jobId, rows }: { jobId: number; rows: RankedCandidate[] }
             <td>
               <a
                 href={client.scorecardPdfUrl(jobId, row.candidate.id)}
-                aria-label={`Scorecard for ${row.candidate.full_name}`}
+                aria-label={`PDF scorecard for ${row.candidate.full_name}`}
               >
                 PDF
               </a>

@@ -114,7 +114,7 @@ test("finds the job, scores its candidates and links working PDFs", async ({ pag
 
   const shortlist = await page.getByRole("link", { name: "Shortlist PDF" }).getAttribute("href");
   const scorecard = await page
-    .getByRole("link", { name: `Scorecard for ${created.applicant.name}` })
+    .getByRole("link", { name: `PDF scorecard for ${created.applicant.name}` })
     .getAttribute("href");
   for (const href of [shortlist, scorecard]) {
     const response = await request.get(href!);
