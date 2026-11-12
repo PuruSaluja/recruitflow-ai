@@ -304,7 +304,9 @@ with nobody having asked for it. Nothing does that for the client, whose
 Dependabot (`.github/dependabot.yml`) opens pull requests for those once a
 week, and CI runs on each. Updates that are not a new major come in one pull
 request and a new major on its own; React and its types always move
-together; and an npm release is proposed once it is a week old. Python gets
+together; and an npm release is proposed once it is a week old. A new major
+of TypeScript is held back: `openapi-typescript` 7.13.0, the newest, asks for
+TypeScript 5, and npm will not install a later one beside it. Python gets
 no such pull requests, since moving `constraints.txt` by bot would make it a
 second "newest" and no longer what is installed. Its entry is there for
 security updates: once Dependabot alerts and security updates are turned on
