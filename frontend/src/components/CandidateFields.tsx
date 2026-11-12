@@ -1,4 +1,4 @@
-import type { NewCandidate } from "../api/client";
+import type { Candidate, CandidateChange, NewCandidate } from "../api/client";
 import { label } from "../format";
 import { EDUCATION_LEVELS, SENIORITY_LEVELS } from "../options";
 import { Field, listFrom, optional } from "./Form";
@@ -49,6 +49,42 @@ export function candidateFrom(form: CandidateForm): NewCandidate {
     resume_text: form.resume_text,
     skills: skills.length > 0 ? skills : undefined,
   };
+}
+
+/** The form showing a candidate as they are stored. */
+export function formFromCandidate(candidate: Candidate): CandidateForm {
+  return {
+    full_name: candidate.full_name,
+    email: candidate.email,
+    phone: candidate.phone ?? "",
+    location: candidate.location ?? "",
+    current_title: candidate.current_title ?? "",
+    years_experience: String(candidate.years_experience),
+    seniority: candidate.seniority,
+    education_level: candidate.education_level,
+    resume_text: candidate.resume_text,
+    skills: (candidate.skills ?? []).join(", "),
+  };
+}
+
+/**
+ * The candidate a form describes, as a change would set them: every field,
+ * with an empty optional one as null, which clears it where leaving it out
+ * would not.
+ */
+export function candidateAsChange(form: CandidateForm) {
+  return {
+    full_name: form.full_name,
+    email: form.email.trim(),
+    phone: optional(form.phone) ?? null,
+    location: optional(form.location) ?? null,
+    current_title: optional(form.current_title) ?? null,
+    years_experience: Number(form.years_experience || 0),
+    seniority: form.seniority,
+    education_level: form.education_level,
+    resume_text: form.resume_text,
+    skills: listFrom(form.skills),
+  } satisfies Required<CandidateChange>;
 }
 
 /** A candidate form's fields, the same for a new candidate and for one being changed. */

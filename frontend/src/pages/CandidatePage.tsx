@@ -286,6 +286,9 @@ function CandidateFacts({ candidate, onChanged }: { candidate: Candidate; onChan
             {[candidate.current_title, candidate.location].filter(Boolean).join(" · ") || "—"}
           </p>
         </div>
+        <div className="actions">
+          <Link to={`/candidates/${candidate.id}/edit`}>Edit</Link>
+        </div>
       </header>
 
       <dl className="facts">
