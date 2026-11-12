@@ -22,7 +22,10 @@ function JobFacts({ job }: { job: Job }) {
             {[job.department, job.location, label(job.employment_type)].filter(Boolean).join(" · ")}
           </p>
         </div>
-        <span className={`badge status-${job.status}`}>{label(job.status)}</span>
+        <div className="actions">
+          <span className={`badge status-${job.status}`}>{label(job.status)}</span>
+          <Link to={`/jobs/${job.id}/edit`}>Edit</Link>
+        </div>
       </header>
 
       {job.requirement_notes.length > 0 && (

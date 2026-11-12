@@ -51,6 +51,19 @@ export function optional(text: string): string | undefined {
 }
 
 /**
+ * The fields of `after` that differ from `before`: what an edit has to send.
+ * Both are built the same way, one from the record as it was read and one
+ * from the form, so a field nobody touched is never sent.
+ */
+export function changed<T extends object>(before: T, after: T): Partial<T> {
+  const different: Partial<T> = {};
+  for (const key of Object.keys(after) as (keyof T)[]) {
+    if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) different[key] = after[key];
+  }
+  return different;
+}
+
+/**
  * Runs a form's request once at a time and keeps its error. While it is
  * pending the form's button is disabled, so a double click sends one request.
  */

@@ -6,16 +6,16 @@ import { useLoad } from "../api/context";
 import { Pager } from "../components/Pager";
 import { Loaded } from "../components/Status";
 import { date, label } from "../format";
+import { JOB_STATUSES } from "../options";
 import { offsetFrom } from "../params";
 
 export const JOBS_PAGE_SIZE = 20;
-const STATUSES = ["open", "paused", "draft", "closed"] as const;
 
 export function JobsPage() {
   const [params, setParams] = useSearchParams();
   const q = params.get("q") ?? "";
   const statusParam = params.get("status");
-  const status = STATUSES.find((s) => s === statusParam);
+  const status = JOB_STATUSES.find((s) => s === statusParam);
   const offset = offsetFrom(params);
   const [search, setSearch] = useState(q);
   // Back and forward change `q` without a keystroke; keep the box in step.
@@ -66,7 +66,7 @@ export function JobsPage() {
           onChange={(event) => update({ status: event.target.value || undefined, offset: undefined })}
         >
           <option value="">Any status</option>
-          {STATUSES.map((s) => (
+          {JOB_STATUSES.map((s) => (
             <option key={s} value={s}>
               {label(s)}
             </option>

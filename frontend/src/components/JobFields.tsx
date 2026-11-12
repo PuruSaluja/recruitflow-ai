@@ -1,4 +1,4 @@
-import type { Job, NewJob } from "../api/client";
+import type { Job, JobChange, NewJob } from "../api/client";
 import { label } from "../format";
 import { EDUCATION_LEVELS, EMPLOYMENT_TYPES, SENIORITY_LEVELS } from "../options";
 import { Field, listFrom, optional } from "./Form";
@@ -54,6 +54,47 @@ export function jobFrom(form: JobForm): NewJob {
     // float could not hold every amount of cents.
     salary_min: optional(form.salary_min),
     salary_max: optional(form.salary_max),
+    status: form.status,
+  };
+}
+
+/** The form showing a job as it is stored. */
+export function formFromJob(job: Job): JobForm {
+  return {
+    title: job.title,
+    department: job.department ?? "",
+    location: job.location ?? "",
+    employment_type: job.employment_type,
+    seniority: job.seniority,
+    education_required: job.education_required,
+    min_years_experience: String(job.min_years_experience),
+    required_skills: (job.required_skills ?? []).join(", "),
+    preferred_skills: (job.preferred_skills ?? []).join(", "),
+    salary_min: job.salary_min ?? "",
+    salary_max: job.salary_max ?? "",
+    status: job.status,
+    description: job.description,
+  };
+}
+
+/**
+ * The job a form describes, as a change would set it: every field, with an
+ * empty optional one as null, which clears it where leaving it out would not.
+ */
+export function jobAsChange(form: JobForm): Required<JobChange> {
+  return {
+    title: form.title,
+    description: form.description,
+    department: optional(form.department) ?? null,
+    location: optional(form.location) ?? null,
+    employment_type: form.employment_type,
+    seniority: form.seniority,
+    education_required: form.education_required,
+    min_years_experience: Number(form.min_years_experience || 0),
+    required_skills: listFrom(form.required_skills),
+    preferred_skills: listFrom(form.preferred_skills),
+    salary_min: optional(form.salary_min) ?? null,
+    salary_max: optional(form.salary_max) ?? null,
     status: form.status,
   };
 }

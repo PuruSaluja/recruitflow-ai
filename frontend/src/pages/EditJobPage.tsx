@@ -1,0 +1,72 @@
+import { type FormEvent, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router";
+
+import type { Job } from "../api/client";
+import { useApi, useLoad } from "../api/context";
+import { changed, useSubmit } from "../components/Form";
+import { formFromJob, jobAsChange, JobFields, type JobForm } from "../components/JobFields";
+import { ErrorMessage, Loaded } from "../components/Status";
+import { JOB_STATUSES } from "../options";
+import { parseId } from "../params";
+import { NotFound } from "./NotFound";
+
+function EditJobForm({ job }: { job: Job }) {
+  const client = useApi();
+  const navigate = useNavigate();
+  const [form, setForm] = useState<JobForm>(() => formFromJob(job));
+  const { pending, error, run } = useSubmit();
+  const back = `/jobs/${job.id}`;
+
+  function set<K extends keyof JobForm>(key: K, value: JobForm[K]) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const changes = changed(jobAsChange(formFromJob(job)), jobAsChange(form));
+    // With nothing changed there is nothing to ask of the API.
+    if (Object.keys(changes).length === 0 || (await run(() => client.updateJob(job.id, changes)))) {
+      navigate(back);
+    }
+  }
+
+  return (
+    <section>
+      <p>
+        <Link to={back}>← {job.title}</Link>
+      </p>
+      <h1>Edit job</h1>
+      <form className="form" onSubmit={submit}>
+        <JobFields
+          form={form}
+          set={set}
+          statuses={JOB_STATUSES}
+          statusHint="Only an open job takes applications."
+        />
+        {error && <ErrorMessage error={error} />}
+        <div className="form-actions">
+          <button type="submit" className="primary" disabled={pending}>
+            {pending ? "Saving…" : "Save changes"}
+          </button>
+          <Link to={back}>Cancel</Link>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+export function EditJobPage() {
+  const jobId = parseId(useParams().jobId);
+  const [job, reload] = useLoad<Job | null>(`job:${jobId}`, (api, signal) =>
+    jobId === null ? Promise.resolve(null) : api.getJob(jobId, { signal }),
+  );
+
+  if (jobId === null) return <NotFound what="job" />;
+  if (job.state === "error" && job.error.status === 404) return <NotFound what="job" />;
+
+  return (
+    <Loaded value={job} what="the job" retry={reload}>
+      {(data) => data && <EditJobForm job={data} />}
+    </Loaded>
+  );
+}

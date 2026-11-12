@@ -292,6 +292,13 @@ button.primary,
   flex-wrap: wrap;
 }
 
+.page-head .actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
 .section-head h2 {
   margin-bottom: 0;
 }

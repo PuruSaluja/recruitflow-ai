@@ -3,6 +3,7 @@ import { NavLink, Navigate, Route, Routes } from "react-router";
 import type { Health } from "./api/client";
 import { useLoad } from "./api/context";
 import { CandidatePage } from "./pages/CandidatePage";
+import { EditJobPage } from "./pages/EditJobPage";
 import { JobDetailPage } from "./pages/JobDetailPage";
 import { JobsPage } from "./pages/JobsPage";
 import { NewCandidatePage } from "./pages/NewCandidatePage";
@@ -40,6 +41,7 @@ export function AppRoutes() {
           <Route path="/jobs" element={<JobsPage />} />
           <Route path="/jobs/new" element={<NewJobPage />} />
           <Route path="/jobs/:jobId" element={<JobDetailPage />} />
+          <Route path="/jobs/:jobId/edit" element={<EditJobPage />} />
           <Route path="/candidates/new" element={<NewCandidatePage />} />
           <Route path="/candidates/:candidateId" element={<CandidatePage />} />
           <Route path="*" element={<NotFound />} />
