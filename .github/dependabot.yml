@@ -46,9 +46,15 @@ updates:
         update-types:
           - version-update:semver-major
       # Playwright 1.65.0 brings Firefox 159.0 (build v1572), whose page
-      # crashes while axe-core reads the ranking page: "frame.evaluate: Page
+      # crashes while axe-core reads the job page: "frame.evaluate: Page
       # crashed", in two CI runs out of two, where 1.64.1's Firefox finished
-      # the same check. The release after it is proposed as usual.
+      # the same check. On Windows too, in about three test runs of four. It
+      # is the browser: the page crashes under axe's rules that work out
+      # accessible names (landmark-unique, aria-valid-attr-value, link-name
+      # and their like, 6 runs of 6 for each group) and not under
+      # color-contrast, region or the heading rules, nor with the "Ranked
+      # candidates" heading, which labels its section, taken out of the page.
+      # The release after 1.65.0 is proposed as usual.
       - dependency-name: "@playwright/test"
         versions:
           - "1.65.0"
