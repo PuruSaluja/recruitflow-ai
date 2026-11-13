@@ -39,7 +39,7 @@ cannot show.
 | Cross-encoder re-rank of the hybrid's top 20 | NDCG@10 falls to 0.5611 and takes 1.6–1.8 s per slate on a laptop CPU, so the API does not use it | [Re-rank](#cross-encoder-re-rank) |
 | Fairness, qualified women against men, top 5 | Equal-opportunity gap −0.140 in the past decisions, −0.050 for a matcher trained plainly on them, **−0.011** for the served matcher, whose interval includes zero in all 17 audit runs | [Fairness audit](#fairness-audit) |
 | Fairness, what remains | Over-40s shortlisted more often than under-40s (+0.042 at top 5 over 8 fresh runs), mostly through the jobs' minimum years; disclosed, and long minimums are flagged to the recruiter | same |
-| Scoring 4,000 candidates for a job | 3,061 ms median for a first scoring, the ranking cached, timed before the matcher was reweighed (about 3% slower since); a page of 50 read back in 25.8 ms median | [Scoring](#measured-on-the-default-corpus-4) |
+| Scoring 4,000 candidates for a job | 2,270-2,493 ms median for a first scoring over three runs, the ranking cached; a page of 50 read back in 34.2-38.7 ms median | [Scoring](#measured-on-the-default-corpus-4) |
 | Tests | 1,773 backend tests and 94 client tests; 99.0% of lines and branches covered when last measured in full; end-to-end in Chromium, Firefox, WebKit and a phone-sized Chromium on every push to `main` and every pull request | [Tests](#tests) |
 
 ## Architecture
@@ -94,7 +94,7 @@ flowchart LR
 - **Synthetic data only.** The matcher has been trained and measured on
   generated candidates and jobs, never on real applicants.
 - **Scoring runs inside the request.** A job's whole pool is scored before
-  the response returns (about 3 s for 4,000 candidates); there is no
+  the response returns (about 2.5 s for 4,000 candidates); there is no
   background queue.
 - **Embeddings and the cross-encoder are measured, not served.** On this
   corpus both rank below the trained matcher, so the API ranks with the
@@ -1296,8 +1296,25 @@ byte-identical to the old one.
 The timings above were measured on the matcher before it stopped reading
 community lines and started training on reweighed pairs (2026-10-09). Run
 in-process on 4,000 candidates for each of six jobs, alternating, the old
-matcher scored in a median of 915 ms and the new one in 943 ms, so the
-server times above should be read as about 3% low.
+matcher scored in a median of 915 ms and the new one in 943 ms, about 3%
+slower.
+
+The served matcher (`cb0b877b6182d568`) was timed on a live server on
+2026-11-13, on a throwaway database loaded through the API with the same
+4,000 candidates: three runs, each posting three corpus jobs and scoring the
+whole pool for each, then twice more, then reading a page of the first job's
+ranking 11 times.
+
+| | Run 1 | Run 2 | Run 3 | Overall |
+| --- | --- | --- | --- | --- |
+| Scoring all 4,000 for a new job, median server time of 3 jobs | 2,493 ms | 2,472 ms | 2,270 ms | 2,239-2,671 ms |
+| Scoring them again, median of 3 jobs, first and second round | 2,504 and 2,342 ms | 2,417 and 2,443 ms | 2,410 and 2,349 ms | 2,175-2,661 ms |
+| Listing a page of 50, median round trip of 11 requests | 38.7 ms | 38.2 ms | 34.2 ms | 26.0-66.1 ms |
+
+These are a different day's numbers from the tables above, and runs on one
+day there differed by about a quarter, so the lower scoring times are not a
+measured speed-up and the slower page is not a measured slow-down: nothing
+was run side by side.
 
 Timed without a profiler, in-process and without the database, skill
 normalisation was 48-52% of the scoring work on the old code in three runs,

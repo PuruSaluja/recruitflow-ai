@@ -71,8 +71,8 @@ What this shows:
   For 4,000 vectors, `real[]` read in psycopg's default text format took
   about 12 times as long as `bytea`, and binary format about 5 times; in both,
   psycopg hands back a list of Python floats that numpy then has to convert.
-  Set beside the README's latest medians of 2,517-3,061 ms to score 4,000
-  candidates (measured on another day, so only a rough comparison), text
+  Set beside the medians of 2,517-3,061 ms then measured to score 4,000
+  candidates (on another day, so only a rough comparison), text
   `real[]` would add 35-42% and `bytea` 3-4%.
 - **Storage size is not a differentiator.** Per vector, `real[]` took 1,556
   bytes and `bytea` 1,540 (the raw values are 1,536); pgvector's docs give

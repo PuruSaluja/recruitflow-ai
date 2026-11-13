@@ -108,7 +108,7 @@ has the development server, the end-to-end tests and every option.
   something that authenticates.
 - **Synthetic data only.** The matcher has never been trained or measured on
   real applicants.
-- **Scoring runs inside the request**, about 3 s for 4,000 candidates; there
+- **Scoring runs inside the request**, about 2.5 s for 4,000 candidates; there
   is no background queue.
 - **An edit does not rescore.** A score is as of when it was made. The client
   says a job's ranking is from before an edit of that job until it is scored
